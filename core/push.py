@@ -128,3 +128,31 @@ def send_push(title: str, body: str, url: str = "/") -> int:
     except Exception as _e:
         print("[ntfy] err:", str(_e)[:120], flush=True)
     return n
+
+# ===== ntfy 桥 v2：改用 JSON 接口，彻底解决中文标题 =====
+def send_push(title: str, body: str, url: str = "/") -> int:
+    _n = 0
+    try:
+        _n = _orig_send_push(title, body, url)
+    except Exception as _e:
+        print("[push] orig err:", str(_e)[:120], flush=True)
+    try:
+        _topic = (os.environ.get("NTFY_TOPIC", "").strip()
+                  or os.environ.get("NTFY_URL", "").rstrip("/").split("/")[-1])
+        if _topic:
+            import httpx
+            _srv = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+            _pl = {"topic": _topic, "title": title, "message": body, "priority": 5}
+            _hd = {"Content-Type": "application/json"}
+            _tk = os.environ.get("NTFY_TOKEN", "").strip()
+            if _tk:
+                _hd["Authorization"] = "Bearer " + _tk
+            _ck = os.environ.get("NTFY_CLICK", "").strip()
+            if _ck:
+                _pl["click"] = _ck
+            httpx.post(_srv,
+                       content=json.dumps(_pl, ensure_ascii=False).encode("utf-8"),
+                       headers=_hd, timeout=10)
+    except Exception as _e:
+        print("[ntfy] err:", str(_e)[:120], flush=True)
+    return _n
