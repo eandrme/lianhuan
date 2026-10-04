@@ -102,3 +102,29 @@ def send_push(title: str, body: str, url: str = "/") -> int:
     if dead:
         _store.db.commit()
     return sent
+
+# ===== ntfy 桥（只在末尾包一层，不动上文）=====
+_orig_send_push = send_push
+
+
+def send_push(title: str, body: str, url: str = "/") -> int:
+    try:
+        n = _orig_send_push(title, body, url)
+    except Exception as _e:
+        print("[push] orig err:", str(_e)[:120], flush=True)
+        n = 0
+    try:
+        _u = os.environ.get("NTFY_URL", "").strip()
+        if _u:
+            import httpx
+            _h = {"Title": title, "Priority": "5"}
+            _t = os.environ.get("NTFY_TOKEN", "").strip()
+            if _t:
+                _h["Authorization"] = "Bearer " + _t
+            _c = os.environ.get("NTFY_CLICK", "").strip()
+            if _c:
+                _h["Click"] = _c
+            httpx.post(_u, content=body.encode("utf-8"), headers=_h, timeout=10)
+    except Exception as _e:
+        print("[ntfy] err:", str(_e)[:120], flush=True)
+    return n
