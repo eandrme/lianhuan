@@ -18090,3 +18090,32 @@ window._kmMount = function(){
   };
 })();
 </script>
+<!-- 离线自由时段标识 -->
+<script>
+(function () {
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:10px;right:14px;z-index:99999;' +
+    'padding:4px 12px;border-radius:999px;font-size:12px;line-height:1.7;' +
+    'background:rgba(22,22,28,.62);color:#fff;display:none;' +
+    'backdrop-filter:blur(8px);pointer-events:none;letter-spacing:.5px';
+  el.textContent = '🌙 它不在';
+  function mount() { if (!el.parentNode) document.body.appendChild(el); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  var URLS = ['/plays/_offline.json', '/_offline.json', '/api/offline/state'];
+  function poll(i) {
+    i = i || 0;
+    if (i >= URLS.length) return;
+    fetch(URLS[i], { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || typeof j.active !== 'boolean') return poll(i + 1);
+        el.style.display = (j.enabled && j.active) ? 'block' : 'none';
+      })
+      .catch(function () { poll(i + 1); });
+  }
+  setTimeout(function () { poll(0); }, 1500);
+  setInterval(function () { poll(0); }, 20000);
+})();
+</script>
