@@ -18466,3 +18466,35 @@ window._kmMount = function(){
   });
 })();
 </script>
+<!-- 清理重复的「改记忆」按钮 (v4) -->
+<script>
+(function () {
+  function dedup() {
+    var keep = document.getElementById('memBtn');
+    var masks = 0;
+    Array.prototype.slice.call(document.querySelectorAll('div')).forEach(function (d) {
+      var pos = d.style && d.style.position;
+      if (pos !== 'fixed') return;
+      var t = (d.textContent || '').trim();
+
+      // 重复的按钮：只留 id=memBtn 那个（可拖动的）
+      if (t === '✎ 改记忆' && d !== keep) {
+        try { d.remove(); } catch (e) {}
+        return;
+      }
+      // 重复的面板遮罩：只留 id=memMask 那个
+      if (t.indexOf('＋ 新增') >= 0 && t.indexOf('记忆库') >= 0) {
+        masks++;
+        if (d.id !== 'memMask') { try { d.remove(); } catch (e) {} }
+      }
+    });
+  }
+  dedup();
+  var n = 0;
+  var t = setInterval(function () { dedup(); if (++n > 25) clearInterval(t); }, 400);
+  window.addEventListener('load', function () {
+    setTimeout(dedup, 600);
+    setTimeout(dedup, 1500);
+  });
+})();
+</script>
