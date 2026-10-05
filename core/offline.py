@@ -899,3 +899,21 @@ async def tick() -> None:
     st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
     _save_state(st)
     _publish_state()
+# ===== v8：状态文件不再往仓库里塞（前端已改用 /api/offline）=====
+def _publish_state() -> None:
+    st = _state()
+    payload = {
+        "enabled": enabled(), "active": bool(st.get("active")),
+        "started": st.get("started"), "last": st.get("last"),
+        "idle_min": idle_min(), "ts": time.time(),
+    }
+    try:
+        p = DATA_DIR / "plays" / "_offline.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
+    except Exception:
+        pass
+    try:
+        (Path("core/web/_offline.json")).unlink()
+    except Exception:
+        pass
