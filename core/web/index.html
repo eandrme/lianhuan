@@ -18158,3 +18158,107 @@ window._kmMount = function(){
   setInterval(poll, 15000);
 })();
 </script>
+<!-- 记忆手工编辑面板 -->
+<script>
+(function () {
+  var btn = document.createElement('div');
+  btn.textContent = '✎ 改记忆';
+  btn.style.cssText = 'position:fixed;right:14px;bottom:86px;z-index:99998;padding:8px 14px;' +
+    'border-radius:999px;font-size:13px;cursor:pointer;background:rgba(30,30,36,.78);' +
+    'color:#fff;backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.25);user-select:none';
+
+  var mask = document.createElement('div');
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)';
+  mask.innerHTML =
+    '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);' +
+    'width:min(700px,92vw);max-height:84vh;overflow:auto;background:#fff;border-radius:16px;' +
+    'padding:18px;font-size:14px;line-height:1.7;box-shadow:0 12px 40px rgba(0,0,0,.35)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+        '<b style="font-size:16px">记忆库</b>' +
+        '<span><span id="memAdd" style="cursor:pointer;color:#c0392b;margin-right:16px">＋ 新增</span>' +
+        '<span id="memClose" style="cursor:pointer;color:#999">关闭</span></span>' +
+      '</div><div id="memList">加载中…</div></div>';
+
+  function mount() {
+    if (!btn.parentNode) document.body.appendChild(btn);
+    if (!mask.parentNode) document.body.appendChild(mask);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+    });
+  }
+
+  function rowHtml(it) {
+    return '<div data-id="' + it.id + '" style="border:1px solid #eee;border-radius:12px;' +
+      'padding:10px 12px;margin-bottom:10px;transition:border-color .3s">' +
+      '<div style="font-size:12px;color:#999;margin-bottom:6px">#' + it.id + ' · ' + esc(it.layer) + '</div>' +
+      '<textarea style="width:100%;min-height:64px;border:1px solid #ddd;border-radius:8px;' +
+      'padding:8px;font:inherit;box-sizing:border-box;resize:vertical">' + esc(it.content) + '</textarea>' +
+      '<div style="margin-top:8px;text-align:right">' +
+      '<button class="memDel" style="margin-right:8px;padding:5px 14px;border:1px solid #e5b4b4;' +
+      'background:#fff;color:#c0392b;border-radius:8px;cursor:pointer">删除</button>' +
+      '<button class="memSave" style="padding:5px 16px;border:0;background:#c0392b;color:#fff;' +
+      'border-radius:8px;cursor:pointer">保存</button></div></div>';
+  }
+
+  function load() {
+    var box = mask.querySelector('#memList');
+    box.innerHTML = '加载中…';
+    fetch('/api/memory/items', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var items = (j && j.items) || [];
+        box.innerHTML = items.length ? items.map(rowHtml).join('')
+                                     : '<div style="color:#999">还没有记忆</div>';
+      })
+      .catch(function (e) { box.innerHTML = '<div style="color:#c0392b">加载失败：' + esc(e) + '</div>'; });
+  }
+
+  function save(card) {
+    var id = card.getAttribute('data-id');
+    var content = card.querySelector('textarea').value;
+    fetch('/api/memory/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id ? Number(id) : 0, content: content })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('保存失败：' + (j.err || '')); return; }
+      if (!id) { load(); return; }
+      card.style.borderColor = '#7bbf7b';
+      setTimeout(function () { card.style.borderColor = '#eee'; }, 1200);
+    }).catch(function (e) { alert('保存出错：' + e); });
+  }
+
+  function del(card) {
+    var id = card.getAttribute('data-id');
+    if (!id) { card.remove(); return; }
+    if (!confirm('确定删掉这条记忆？')) return;
+    fetch('/api/memory/del', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: Number(id) })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('删除失败：' + (j.err || '')); return; }
+      card.remove();
+    }).catch(function (e) { alert('删除出错：' + e); });
+  }
+
+  mask.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t === mask) { mask.style.display = 'none'; return; }
+    if (t.id === 'memClose') { mask.style.display = 'none'; return; }
+    if (t.id === 'memAdd') {
+      var list = mask.querySelector('#memList');
+      var d = document.createElement('div');
+      d.innerHTML = rowHtml({ id: '', layer: 'L2', content: '' });
+      list.insertBefore(d.firstChild, list.firstChild);
+      return;
+    }
+    if (t.className === 'memSave') { save(t.closest('div[data-id]')); return; }
+    if (t.className === 'memDel') { del(t.closest('div[data-id]')); return; }
+  });
+
+  btn.addEventListener('click', function () { mask.style.display = 'block'; load(); });
+})();
+</script>
