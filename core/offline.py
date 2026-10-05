@@ -762,3 +762,75 @@ async def tick() -> None:
     st["ran_for_seen"] = seen
     st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
     _save_state(st)
+# ===== v6：修时间单位 + 每拍打印真实数字 =====
+
+def _db_user_ts() -> float:
+    import sqlite3
+    for sql in (
+        "SELECT MAX(ts) FROM turns WHERE role='user'",
+        "SELECT MAX(created_at) FROM turns WHERE role='user'",
+        "SELECT MAX(ts) FROM messages WHERE role='user'",
+    ):
+        try:
+            c = sqlite3.connect(_DB)
+            r = c.execute(sql).fetchone()
+            c.close()
+            if r and r[0]:
+                v = float(r[0])
+                if v > 1e11:            # 毫秒 → 秒
+                    v = v / 1000.0
+                return v
+        except Exception:
+            continue
+    return 0.0
+
+
+def last_seen() -> float:
+    a = 0.0
+    try:
+        a = float(json.loads(_seen_path().read_text("utf-8")).get("ts") or 0)
+        if a > 1e11:
+            a = a / 1000.0
+    except Exception:
+        pass
+    return max(a, _db_user_ts())
+
+
+async def tick() -> None:
+    if not enabled():
+        return
+    _ensure_seen_hook()
+    now = time.time()
+    st = _state()
+    seen = last_seen()
+    gap = int((now - seen) / 60) if seen > 0 else -1
+    print(f"[offline] tick｜你已离开约 {gap} 分钟｜seen={seen:.0f}｜idle={idle_min():.0f}分", flush=True)
+
+    if seen > 0 and (now - seen) < idle_min() * 60:
+        return                                  # 你在
+    if st.get("ran_for_seen") == seen:
+        return                                  # 这一轮离开已跑过
+    if now < float(st.get("next_due") or 0):
+        return                                  # 冷却
+    if in_quiet(now):
+        return
+
+    st["active"] = True
+    st["started"] = now
+    _save_state(st)
+    print(f"[offline] 开始一场（你已离开约 {gap} 分钟）", flush=True)
+
+    ok = True
+    try:
+        text = await run_session()
+        print(f"[offline] 自由时段结束（{len(text)} 字）", flush=True)
+    except Exception as e:
+        ok = False
+        print("[offline] 这一场失败:", e, flush=True)
+        await _alert("离线时段出错：" + str(e)[:160])
+
+    st["active"] = False
+    st["last"] = now
+    st["ran_for_seen"] = seen
+    st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
+    _save_state(st)
