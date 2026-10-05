@@ -290,3 +290,64 @@ async def _api_offline_state():
     except Exception as e:
         return {"enabled": False, "active": False, "started": 0, "last": 0,
                 "err": str(e)[:120]}
+# ===== 记忆手工编辑：读 / 存 / 删 =====
+def _mem_fix_fts() -> None:
+    """全文索引兜底重建（正常由触发器维护）"""
+    try:
+        _store.db.execute("INSERT INTO memories_fts(memories_fts) VALUES('rebuild')")
+    except Exception:
+        pass
+
+
+@router.get("/api/memory/items")
+async def _api_memory_items(limit: int = 500):
+    try:
+        rows = _store.db.execute(
+            "SELECT id, content, layer, tags, ts FROM memories ORDER BY ts DESC LIMIT ?",
+            (int(limit),)).fetchall()
+        return {"items": [{"id": r["id"], "content": r["content"], "layer": r["layer"],
+                           "tags": r["tags"], "ts": r["ts"]} for r in rows]}
+    except Exception as e:
+        return {"items": [], "err": str(e)[:160]}
+
+
+@router.post("/api/memory/save")
+async def _api_memory_save(req: Request):
+    try:
+        b = await req.json()
+    except Exception:
+        return {"ok": False, "err": "bad json"}
+    content = (b.get("content") or "").strip()
+    layer = (b.get("layer") or "L1").strip() or "L1"
+    tags = b.get("tags") or "[]"
+    mid = int(b.get("id") or 0)
+    if not content:
+        return {"ok": False, "err": "内容不能为空"}
+    try:
+        if mid:
+            _store.db.execute("UPDATE memories SET content=?, layer=?, tags=? WHERE id=?",
+                              (content, layer, tags, mid))
+        else:
+            import time as _t
+            _store.db.execute("INSERT INTO memories(content, layer, tags, ts) VALUES(?,?,?,?)",
+                              (content, layer, tags, _t.time()))
+        _mem_fix_fts()
+        _store.db.commit()
+        return {"ok": True, "id": mid}
+    except Exception as e:
+        return {"ok": False, "err": str(e)[:200]}
+
+
+@router.post("/api/memory/del")
+async def _api_memory_del(req: Request):
+    try:
+        b = await req.json()
+        mid = int(b.get("id") or 0)
+        if not mid:
+            return {"ok": False, "err": "缺 id"}
+        _store.db.execute("DELETE FROM memories WHERE id=?", (mid,))
+        _mem_fix_fts()
+        _store.db.commit()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "err": str(e)[:200]}
