@@ -497,3 +497,26 @@ async def run_session() -> str:
 
     save_private("session", text)
     return text
+# ===== v3：strict 模式（默认）—— 它碰不到你们的世界 =====
+STRICT_TOOLS = {"list_my_tools", "list_packs"}
+
+
+def _allowed_tools():
+    """OFFLINE_TOOLS = strict（默认）| readonly | all | 逗号白名单"""
+    from . import hands
+    allt = hands.all_tools()
+    builtin = {t["function"]["name"] for t in hands.TOOLS}
+    spec = (os.environ.get("OFFLINE_TOOLS", "strict") or "strict").strip()
+    low = spec.lower()
+    if low in ("all", "*"):
+        return allt
+    if low in ("strict", "none", "off"):
+        keep = STRICT_TOOLS
+    elif low in ("readonly", "ro", "read"):
+        keep = READONLY_TOOLS
+    else:
+        keep = {x.strip() for x in spec.split(",") if x.strip()}
+    # 白名单内的内置手 + 全部外接 MCP 工具（MCP 永远放行）
+    return [t for t in allt
+            if t["function"]["name"] in keep
+            or t["function"]["name"] not in builtin]
