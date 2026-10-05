@@ -834,3 +834,68 @@ async def tick() -> None:
     st["ran_for_seen"] = seen
     st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
     _save_state(st)
+# ===== v7：把状态写成一个静态文件，给前端看 =====
+
+def _publish_state() -> None:
+    st = _state()
+    payload = {
+        "enabled": enabled(),
+        "active": bool(st.get("active")),
+        "started": st.get("started"),
+        "last": st.get("last"),
+        "idle_min": idle_min(),
+        "ts": time.time(),
+    }
+    for p in (DATA_DIR / "plays" / "_offline.json",
+              Path("core/web/_offline.json")):
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(payload, ensure_ascii=False), "utf-8")
+        except Exception:
+            pass
+
+
+async def tick() -> None:
+    if not enabled():
+        return
+    _ensure_seen_hook()
+    now = time.time()
+    st = _state()
+    seen = last_seen()
+    gap = int((now - seen) / 60) if seen > 0 else -1
+    print(f"[offline] tick｜你已离开约 {gap} 分钟｜seen={seen:.0f}｜idle={idle_min():.0f}分", flush=True)
+
+    if seen > 0 and (now - seen) < idle_min() * 60:
+        _publish_state()
+        return
+    if st.get("ran_for_seen") == seen:
+        _publish_state()
+        return
+    if now < float(st.get("next_due") or 0):
+        _publish_state()
+        return
+    if in_quiet(now):
+        _publish_state()
+        return
+
+    st["active"] = True
+    st["started"] = now
+    _save_state(st)
+    _publish_state()
+    print(f"[offline] 开始一场（你已离开约 {gap} 分钟）", flush=True)
+
+    ok = True
+    try:
+        text = await run_session()
+        print(f"[offline] 自由时段结束（{len(text)} 字）", flush=True)
+    except Exception as e:
+        ok = False
+        print("[offline] 这一场失败:", e, flush=True)
+        await _alert("离线时段出错：" + str(e)[:160])
+
+    st["active"] = False
+    st["last"] = now
+    st["ran_for_seen"] = seen
+    st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
+    _save_state(st)
+    _publish_state()
