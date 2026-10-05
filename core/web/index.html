@@ -18119,3 +18119,42 @@ window._kmMount = function(){
   setInterval(function () { poll(0); }, 20000);
 })();
 </script>
+<!-- 离线自由时段标识 v2 -->
+<script>
+(function () {
+  var el = document.createElement('div');
+  el.id = 'offline-badge';
+  el.style.cssText = 'position:fixed;top:10px;right:14px;z-index:99999;' +
+    'padding:4px 12px;border-radius:999px;font-size:12px;line-height:1.7;' +
+    'color:#fff;display:none;backdrop-filter:blur(8px);' +
+    'pointer-events:none;letter-spacing:.5px;transition:opacity .4s';
+  function mount() { if (!el.parentNode) document.body.appendChild(el); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  function poll() {
+    fetch('/api/offline', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.enabled) { el.style.display = 'none'; return; }
+        var now = Date.now() / 1000;
+        if (j.active) {
+          el.textContent = '🌙 它不在';
+          el.style.background = 'rgba(22,22,28,.62)';
+          el.style.opacity = '1';
+          el.style.display = 'block';
+        } else if (j.last && (now - j.last) < 1800) {
+          el.textContent = '🌙 它刚才有过一段自己的时间';
+          el.style.background = 'rgba(22,22,28,.30)';
+          el.style.opacity = '.78';
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      })
+      .catch(function () {});
+  }
+  setTimeout(poll, 1500);
+  setInterval(poll, 15000);
+})();
+</script>
