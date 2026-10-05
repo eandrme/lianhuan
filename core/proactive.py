@@ -264,3 +264,6 @@ async def run_forever() -> None:
         except Exception as e:
             print("[proactive] tick fail:", e, flush=True)
         await asyncio.sleep(TICK_S)
+# ===== 离线自由时段：挂在这个模块的循环上 =====
+from . import offline as _offline
+_offline.install()
