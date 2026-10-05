@@ -348,3 +348,6 @@ def install() -> None:
         print("[offline] 渗透注入没装上:", e, flush=True)
 
     print("[offline] 已挂上（enabled=%s）" % ("1" if enabled() else "0"), flush=True)
+# ===== 补丁：run_session 里用到了 SAY，v1 漏了导入 =====
+# 追加在模块末尾 —— run_session 在调用时才解析全局名，所以放最后也能生效
+from .protocol import SAY as SAY  # noqa: E402,F401
