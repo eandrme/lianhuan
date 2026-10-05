@@ -274,3 +274,19 @@ def memory_layer(layer: str):
     mems = [m for m in _store.all_memories() if m.layer == layer]
     mems.sort(key=lambda m: (-(m.ts or 0), -(m.id or 0)))
     return JSONResponse({"items": [_mem_row(m) for m in mems[:200]]})
+# ===== 离线自由时段：状态接口 =====
+@router.get("/api/offline")
+async def _api_offline_state():
+    try:
+        from . import offline as _off
+        st = _off._state()
+        return {
+            "enabled": _off.enabled(),
+            "active": bool(st.get("active")),
+            "started": float(st.get("started") or 0),
+            "last": float(st.get("last") or 0),
+            "idle_min": _off.idle_min(),
+        }
+    except Exception as e:
+        return {"enabled": False, "active": False, "started": 0, "last": 0,
+                "err": str(e)[:120]}
