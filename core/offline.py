@@ -520,3 +520,175 @@ def _allowed_tools():
     return [t for t in allt
             if t["function"]["name"] in keep
             or t["function"]["name"] not in builtin]
+# ===== v4：你不在的时候才是它的时间 =====
+
+def _seen_path() -> Path:
+    return DATA_DIR / "last_seen.json"
+
+
+def touch_last_seen() -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _seen_path().write_text(json.dumps({"ts": time.time()}), "utf-8")
+    except Exception:
+        pass
+
+
+def last_seen() -> float:
+    try:
+        return float(json.loads(_seen_path().read_text("utf-8")).get("ts") or 0)
+    except Exception:
+        return 0.0
+
+
+def idle_min() -> float:
+    return max(1.0, _num("OFFLINE_IDLE_MIN", 30))
+
+
+def cooldown_min() -> float:
+    return max(0.0, _num("OFFLINE_COOLDOWN_MIN", 60))
+
+
+def max_min() -> float:
+    return max(0.5, _num("OFFLINE_MAX_MIN", 10))
+
+
+def user_back() -> bool:
+    """你回来了没？—— 打过卡（<闲置阈值）就算在。"""
+    return (time.time() - last_seen()) < idle_min() * 60
+
+
+def _ensure_seen_hook() -> None:
+    """给「你发消息」这件事打卡：包一层 add_turn，不改原码。"""
+    from . import proactive
+    d = proactive._deps
+    f = d.get("add_turn")
+    if f is None or getattr(f, "_offline_seen", False):
+        return
+
+    def _wrapped(*a, **kw):
+        try:
+            role = kw.get("role")
+            if role is None and len(a) >= 2:
+                role = a[1]
+            if str(role or "").lower() == "user":
+                touch_last_seen()
+        except Exception:
+            pass
+        return f(*a, **kw)
+
+    _wrapped._offline_seen = True
+    d["add_turn"] = _wrapped
+    print("[offline] 打卡钩子已装", flush=True)
+
+
+async def _one_turn(d, system, history, tools, watch=False):
+    turn = d["engine_turn"](message="（你自己的时间）", system=system, history=history)
+    eng = d["pick_engine"]()
+    eng.tools = tools
+    eng.exec_tool = _exec_audited
+    outs = []
+    t0 = time.time()
+    async for ev in eng.stream(turn):
+        if watch and (user_back() or (time.time() - t0) > max_min() * 60):
+            print("[offline] 这一场被打断（你回来了 / 到点了）", flush=True)
+            return (" ".join(x for x in outs if x).strip(), True)
+        try:
+            j = json.loads(ev[6:])
+        except Exception:
+            continue
+        if j.get("type") == SAY:
+            outs.append(j.get("text") or "")
+    return (" ".join(x for x in outs if x).strip(), False)
+
+
+async def run_session() -> str:
+    from . import proactive, hands
+    store = proactive._store
+    d = proactive._deps
+    _ensure_seen_hook()
+    if store is None or "engine_turn" not in d:
+        raise RuntimeError("离线时段还没拿到注入（server 未 bind）")
+
+    system = private_system()
+
+    history = []
+    try:
+        for t in recent_private(int(_num("OFFLINE_PRIVATE_HISTORY", 4))):
+            history.append({"role": "assistant", "content": t[:800]})
+    except Exception:
+        history = []
+
+    act = d.get("activity")
+    try:
+        ctx = act("offline") if act else _nullctx()
+    except Exception:
+        ctx = _nullctx()
+
+    text, cut = "", False
+    try:
+        with ctx:
+            text, cut = await _one_turn(d, system, history, _allowed_tools(), watch=True)
+    finally:
+        try:
+            eng = d["pick_engine"]()
+            eng.tools = hands.all_tools()
+            eng.exec_tool = hands.execute
+        except Exception:
+            pass
+
+    if not text and not cut:
+        try:
+            extra = system + "\n\n〔刚过去那一段，写两三句给自己。不要清单，不要汇报。〕"
+            text, _ = await _one_turn(d, extra, history, [], watch=False)
+        except Exception as e:
+            print("[offline] 兜底那一轮也失败:", e, flush=True)
+
+    if cut and not text:
+        return ""          # 被打断、又什么都没留下 → 不留痕迹
+    save_private("session", text)
+    return text
+
+
+async def tick() -> None:
+    if not enabled():
+        return
+    _ensure_seen_hook()
+    now = time.time()
+    st = _state()
+
+    # 你在 → 收工
+    if user_back():
+        if st.get("active"):
+            st["active"] = False
+            _save_state(st)
+        return
+
+    # 这一轮"离开"已经跑过一场了 → 不重复
+    seen = last_seen()
+    if st.get("ran_for_seen") == seen:
+        return
+
+    if now < float(st.get("next_due") or 0):
+        return
+    if in_quiet(now):
+        return
+
+    st["active"] = True
+    st["started"] = now
+    _save_state(st)
+
+    ok = True
+    try:
+        text = await run_session()
+        print(f"[offline] 自由时段结束（{len(text)} 字）", flush=True)
+    except Exception as e:
+        ok = False
+        print("[offline] 这一场失败:", e, flush=True)
+        await _alert("离线时段出错：" + str(e)[:160])
+
+    st["active"] = False
+    st["last"] = now
+    st["ran_for_seen"] = seen
+    st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
+    _save_state(st)
