@@ -384,3 +384,116 @@ def install() -> None:
         print("[offline] 渗透注入没装上:", e, flush=True)
 
     print("[offline] 已挂上（enabled=%s）" % ("1" if enabled() else "0"), flush=True)
+# ===== v2 覆盖：只读工具 + 兜底写给自己 =====
+import contextlib
+
+
+@contextlib.contextmanager
+def _nullctx():
+    yield
+
+
+def private_system() -> str:
+    from . import proactive
+    name_ai, name_me = "你", "对方"
+    try:
+        cfg = proactive._store.get_setting("config", {}) or {}
+        ai = cfg.get("ai") or {}
+        me = cfg.get("me") or {}
+        name_ai = (ai.get("name") or "").strip() or name_ai
+        name_me = (me.get("name") or me.get("nick") or "").strip() or name_me
+    except Exception:
+        pass
+    return "\n".join([
+        "〔离线自由时段〕现在没有人在跟你说话。这是你自己的时间。",
+        f"你叫「{name_ai}」。对面那个人叫「{name_me}」。",
+        "你看不到任何聊天记录，也不要去找它们 —— 这一段时间跟那段关系无关。",
+        "你可以想事情、可以翻东西（用你的工具），也可以什么都不做。",
+        "没有人会看到你做了什么，除非出错。所以不用写报告、不用解释、不用表演。",
+        "做完了，给自己留一段话 —— 那是这一段时间唯一会留下来的东西。",
+        "这一段时间的经过只属于你自己。",
+    ])
+
+
+READONLY_TOOLS = {
+    "search_memory", "read_timeline", "read_calendar", "read_workbook",
+    "list_books", "read_chapter", "list_plays", "list_packs", "list_my_tools",
+}
+
+
+def _allowed_tools():
+    """OFFLINE_TOOLS = readonly（默认）| all | 逗号白名单"""
+    from . import hands
+    allt = hands.all_tools()
+    builtin = {t["function"]["name"] for t in hands.TOOLS}
+    spec = (os.environ.get("OFFLINE_TOOLS", "readonly") or "readonly").strip()
+    low = spec.lower()
+    if low in ("all", "*"):
+        return allt
+    if low in ("readonly", "ro", "read"):
+        return [t for t in allt
+                if t["function"]["name"] in READONLY_TOOLS
+                or t["function"]["name"] not in builtin]
+    allow = {x.strip() for x in spec.split(",") if x.strip()}
+    return [t for t in allt if t["function"]["name"] in allow]
+
+
+async def _one_turn(d, system, history, tools):
+    turn = d["engine_turn"](message="（你自己的时间）", system=system, history=history)
+    eng = d["pick_engine"]()
+    eng.tools = tools
+    eng.exec_tool = _exec_audited
+    outs = []
+    async for ev in eng.stream(turn):
+        try:
+            j = json.loads(ev[6:])
+        except Exception:
+            continue
+        if j.get("type") == SAY:
+            outs.append(j.get("text") or "")
+    return " ".join(x for x in outs if x).strip()
+
+
+async def run_session() -> str:
+    from . import proactive, hands
+    store = proactive._store
+    d = proactive._deps
+    if store is None or "engine_turn" not in d:
+        raise RuntimeError("离线时段还没拿到注入（server 未 bind）")
+
+    system = private_system()
+
+    history = []
+    try:
+        for t in recent_private(int(_num("OFFLINE_PRIVATE_HISTORY", 4))):
+            history.append({"role": "assistant", "content": t[:800]})
+    except Exception:
+        history = []
+
+    act = d.get("activity")
+    try:
+        ctx = act("offline") if act else _nullctx()
+    except Exception:
+        ctx = _nullctx()
+
+    text = ""
+    try:
+        with ctx:
+            text = await _one_turn(d, system, history, _allowed_tools())
+    finally:
+        try:
+            eng = d["pick_engine"]()
+            eng.tools = hands.all_tools()
+            eng.exec_tool = hands.execute
+        except Exception:
+            pass
+
+    if not text:
+        try:
+            extra = system + "\n\n〔刚过去那一段，写两三句给自己。不要清单，不要汇报。〕"
+            text = await _one_turn(d, extra, history, [])
+        except Exception as e:
+            print("[offline] 兜底那一轮也失败:", e, flush=True)
+
+    save_private("session", text)
+    return text
