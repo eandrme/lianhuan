@@ -1,10 +1,10 @@
-"""离线自由时段 —— 它自己的一段时间。
+"""离线自由时段 —— 它自己的一段时间。（v2）
 
 口子（用户定的）：
 · 不向用户汇报任何东西（错误除外）
 · 不读对话上下文；只读「对方是谁」这一层侧写
-· 不写任何记忆库 —— 主库一个字节都不落，状态也另存
-· 可以自由用工具（内置的手 + MCP）
+· 不写任何记忆库 —— 主库一个字节都不落
+· 工具默认只给「读」的手 + MCP（OFFLINE_TOOLS=readonly / all / 逗号白名单）
 · 这段经历只有它自己保留，进独立的加密私密库
 · 单向渗透：会悄悄改变前台人格，但用户看不到内容（强度可调）
 · 留一份动作审计：只记 时间/工具/成败，不记内容
@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime
 import json
 import os
@@ -21,11 +22,24 @@ import random
 import time
 from pathlib import Path
 
+from .protocol import SAY
+
 _DB = os.environ.get("LIANHUAN_DB", "data/lianhuan.db")
 DATA_DIR = Path(_DB).parent
 
+#: 只读的手 —— 翻东西，不落东西
+READONLY_TOOLS = {
+    "search_memory", "read_timeline", "read_calendar", "read_workbook",
+    "list_books", "read_chapter", "list_plays", "list_packs", "list_my_tools",
+}
 
-# ───────────────────────── 配置（全走环境变量） ─────────────────────────
+
+@contextlib.contextmanager
+def _nullctx():
+    yield
+
+
+# ───────────────────── 配置（全走环境变量） ─────────────────────
 
 def _flag(name: str, default: str = "0") -> bool:
     return (os.environ.get(name, default) or "").strip().lower() in ("1", "true", "on", "yes")
@@ -73,7 +87,7 @@ def in_quiet(now: float | None = None) -> bool:
     return (a <= cur < b) if a <= b else (cur >= a or cur < b)
 
 
-# ───────────────────────── 加密私密库 ─────────────────────────
+# ───────────────────── 加密私密库 ─────────────────────
 
 def _fernet():
     from cryptography.fernet import Fernet
@@ -128,7 +142,7 @@ def recent_private(limit: int = 3) -> list:
     return out
 
 
-# ───────────────────────── 动作审计（明文，只记动作） ─────────────────────────
+# ───────────────────── 动作审计（明文，只记动作） ─────────────────────
 
 def audit(tool: str, failed: bool, err: str = "") -> None:
     try:
@@ -142,7 +156,7 @@ def audit(tool: str, failed: bool, err: str = "") -> None:
         pass
 
 
-# ───────────────────────── 状态（独立文件，不碰主库） ─────────────────────────
+# ───────────────────── 状态（独立文件，不碰主库） ─────────────────────
 
 def _state_path() -> Path:
     return DATA_DIR / "offline_state.json"
@@ -163,7 +177,7 @@ def _save_state(d: dict) -> None:
         pass
 
 
-# ───────────────────────── 私密人格：只读「你是谁」 ─────────────────────────
+# ───────────────────── 私密人格：只读「你是谁」 ─────────────────────
 
 def private_system() -> str:
     from . import proactive
@@ -180,20 +194,29 @@ def private_system() -> str:
         "〔离线自由时段〕现在没有人在跟你说话。这是你自己的时间。",
         f"你叫「{name_ai}」。对面那个人叫「{name_me}」。",
         "你看不到任何聊天记录，也不要去找它们 —— 这一段时间跟那段关系无关。",
-        "你可以想事情、可以做点事（用你的工具），也可以什么都不做。",
+        "你可以想事情、可以翻东西（用你的工具），也可以什么都不做。",
         "没有人会看到你做了什么，除非出错。所以不用写报告、不用解释、不用表演。",
+        "做完了，给自己留一段话 —— 那是这一段时间唯一会留下来的东西。",
         "这一段时间的经过只属于你自己。",
     ])
 
 
 def _allowed_tools() -> list:
+    """OFFLINE_TOOLS = readonly（默认）| all | 逗号分隔的白名单"""
     from . import hands
     allt = hands.all_tools()
-    spec = (os.environ.get("OFFLINE_TOOLS", "all") or "all").strip()
-    if spec.lower() in ("all", "*", ""):
+    builtin = {t["function"]["name"] for t in hands.TOOLS}
+    spec = (os.environ.get("OFFLINE_TOOLS", "readonly") or "readonly").strip()
+    low = spec.lower()
+    if low in ("all", "*"):
         return allt
+    if low in ("readonly", "ro", "read"):
+        # 只读的手 + 全部外接 MCP 工具
+        return [t for t in allt
+                if t["function"]["name"] in READONLY_TOOLS
+                or t["function"]["name"] not in builtin]
     allow = {x.strip() for x in spec.split(",") if x.strip()}
-    return [t for t in allt if ((t.get("function") or {}).get("name") in allow)]
+    return [t for t in allt if t["function"]["name"] in allow]
 
 
 async def _exec_audited(name: str, args: dict):
@@ -208,7 +231,21 @@ async def _exec_audited(name: str, args: dict):
         raise
 
 
-# ───────────────────────── 跑一场自由时段 ─────────────────────────
+async def _one_turn(d: dict, system: str, history: list, tools: list) -> str:
+    turn = d["engine_turn"](message="（你自己的时间）", system=system, history=history)
+    eng = d["pick_engine"]()
+    eng.tools = tools
+    eng.exec_tool = _exec_audited
+    outs = []
+    async for ev in eng.stream(turn):
+        try:
+            j = json.loads(ev[6:])
+        except Exception:
+            continue
+        if j.get("type") == SAY:
+            outs.append(j.get("text") or "")
+    return " ".join(x for x in outs if x).strip()
+
 
 async def run_session() -> str:
     from . import proactive, hands
@@ -218,39 +255,40 @@ async def run_session() -> str:
         raise RuntimeError("离线时段还没拿到注入（server 未 bind）")
 
     system = private_system()
-    system += (f"\n\n〔这一场最多用 {int(_num('OFFLINE_MAX_STEPS', 12))} 步。"
-               "用完就停，不用把事情做完。〕")
 
     history = []
     try:
-        k = int(_num("OFFLINE_PRIVATE_HISTORY", 4))
-        for t in recent_private(k):
+        for t in recent_private(int(_num("OFFLINE_PRIVATE_HISTORY", 4))):
             history.append({"role": "assistant", "content": t[:800]})
     except Exception:
         history = []
 
-    turn = d["engine_turn"](message="（你自己的时间）", system=system, history=history)
-    eng = d["pick_engine"]()
-    eng.tools = _allowed_tools()
-    eng.exec_tool = _exec_audited
-
-    outs = []
+    act = d.get("activity")
     try:
-        async for ev in eng.stream(turn):
-            try:
-                j = json.loads(ev[6:])
-            except Exception:
-                continue
-            if j.get("type") == SAY:
-                outs.append(j.get("text") or "")
+        ctx = act("offline") if act else _nullctx()
+    except Exception:
+        ctx = _nullctx()
+
+    text = ""
+    try:
+        with ctx:
+            text = await _one_turn(d, system, history, _allowed_tools())
     finally:
         try:
+            eng = d["pick_engine"]()
             eng.tools = hands.all_tools()
             eng.exec_tool = hands.execute
         except Exception:
             pass
 
-    text = " ".join(x for x in outs if x).strip()[:6000]
+    if not text:
+        # 兜底：这一场没留下话 —— 再开一轮「不带工具」的，专门写给自己
+        try:
+            extra = system + "\n\n〔刚过去那一段，写两三句给自己。不要清单，不要汇报。〕"
+            text = await _one_turn(d, extra, history, [])
+        except Exception as e:
+            print("[offline] 兜底那一轮也失败:", e, flush=True)
+
     save_private("session", text)
     return text
 
@@ -289,7 +327,7 @@ async def tick() -> None:
     _save_state(st)
 
 
-# ───────────────────────── 渗透：把痕迹模糊地注入前台 ─────────────────────────
+# ───────────────────── 渗透：把痕迹模糊地注入前台 ─────────────────────
 
 def residue_text() -> str:
     p = _perms()
@@ -306,12 +344,11 @@ def residue_text() -> str:
             "会影响你此刻的语气和心情：\n" + body + "〕")
 
 
-# ───────────────────────── 挂载 ─────────────────────────
+# ───────────────────── 挂载 ─────────────────────
 
 def install() -> None:
     from . import proactive
 
-    # ① 搭在「主动找你」那个循环的每一拍上
     if not getattr(proactive.fire_due_reminders, "_offline_hooked", False):
         _orig = proactive.fire_due_reminders
 
@@ -326,7 +363,6 @@ def install() -> None:
         _hooked._offline_hooked = True
         proactive.fire_due_reminders = _hooked
 
-    # ② 把「渗透」装到注入器上（不改它的源码）
     try:
         from .memory import recall
         if not getattr(recall.build_injection, "_offline_wrapped", False):
@@ -348,6 +384,3 @@ def install() -> None:
         print("[offline] 渗透注入没装上:", e, flush=True)
 
     print("[offline] 已挂上（enabled=%s）" % ("1" if enabled() else "0"), flush=True)
-# ===== 补丁：run_session 里用到了 SAY，v1 漏了导入 =====
-# 追加在模块末尾 —— run_session 在调用时才解析全局名，所以放最后也能生效
-from .protocol import SAY as SAY  # noqa: E402,F401
