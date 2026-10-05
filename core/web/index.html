@@ -18391,3 +18391,78 @@ window._kmMount = function(){
   btn.addEventListener('click', function () { mask.style.display = 'block'; load(); });
 })();
 </script>
+<!-- 改记忆按钮：可拖动 (v3) -->
+<script>
+(function () {
+  var KEY = 'memBtnPos';
+
+  function whenReady(cb) {
+    var n = 0;
+    var t = setInterval(function () {
+      var b = document.getElementById('memBtn');
+      if (b) { clearInterval(t); cb(b); return; }
+      if (++n > 60) clearInterval(t);
+    }, 300);
+  }
+
+  whenReady(function (btn) {
+    // 恢复上次拖到的位置
+    try {
+      var p = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (p && typeof p.left === 'number') {
+        btn.style.left = p.left + 'px';
+        btn.style.top = p.top + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+      }
+    } catch (e) {}
+
+    btn.style.touchAction = 'none';
+    btn.style.cursor = 'move';
+
+    var dragging = false, moved = false;
+    var sx = 0, sy = 0, ox = 0, oy = 0;
+
+    btn.addEventListener('pointerdown', function (ev) {
+      dragging = true; moved = false;
+      var r = btn.getBoundingClientRect();
+      sx = ev.clientX; sy = ev.clientY; ox = r.left; oy = r.top;
+      btn.style.left = r.left + 'px';
+      btn.style.top = r.top + 'px';
+      btn.style.right = 'auto';
+      btn.style.bottom = 'auto';
+      try { btn.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+
+    btn.addEventListener('pointermove', function (ev) {
+      if (!dragging) return;
+      var dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      var w = window.innerWidth, h = window.innerHeight;
+      var nl = Math.max(4, Math.min(w - btn.offsetWidth - 4, ox + dx));
+      var nt = Math.max(4, Math.min(h - btn.offsetHeight - 4, oy + dy));
+      btn.style.left = nl + 'px';
+      btn.style.top = nt + 'px';
+    });
+
+    btn.addEventListener('pointerup', function (ev) {
+      if (!dragging) return;
+      dragging = false;
+      try { btn.releasePointerCapture(ev.pointerId); } catch (e) {}
+      if (moved) {
+        try {
+          localStorage.setItem(KEY, JSON.stringify({
+            left: parseInt(btn.style.left, 10) || 0,
+            top: parseInt(btn.style.top, 10) || 0
+          }));
+        } catch (e) {}
+      }
+    });
+
+    // 拖动过 → 不要误触发"打开面板"
+    btn.addEventListener('click', function (ev) {
+      if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
+    }, true);
+  });
+})();
+</script>
