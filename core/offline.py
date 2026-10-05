@@ -692,3 +692,73 @@ async def tick() -> None:
     st["ran_for_seen"] = seen
     st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
     _save_state(st)
+# ===== v5：换掉 last_seen —— 直接问主库，不靠钩子 =====
+
+def _db_user_ts() -> float:
+    """主库里「用户最后一次说话」的时间戳。"""
+    import sqlite3
+    for sql in (
+        "SELECT MAX(ts) FROM turns WHERE role='user'",
+        "SELECT MAX(created_at) FROM turns WHERE role='user'",
+        "SELECT MAX(ts) FROM messages WHERE role='user'",
+    ):
+        try:
+            c = sqlite3.connect(_DB)
+            r = c.execute(sql).fetchone()
+            c.close()
+            if r and r[0]:
+                return float(r[0])
+        except Exception:
+            continue
+    return 0.0
+
+
+def last_seen() -> float:
+    """两条路取最大值：文件打卡（如果有）+ 主库真实记录（主）"""
+    a = 0.0
+    try:
+        a = float(json.loads(_seen_path().read_text("utf-8")).get("ts") or 0)
+    except Exception:
+        pass
+    return max(a, _db_user_ts())
+
+
+async def tick() -> None:
+    if not enabled():
+        return
+    _ensure_seen_hook()
+    now = time.time()
+    st = _state()
+    seen = last_seen()
+
+    if (now - seen) < idle_min() * 60:
+        return                                  # 你在，它不开始
+
+    if st.get("ran_for_seen") == seen:
+        return                                  # 这一轮离开，已经跑过一场
+
+    if now < float(st.get("next_due") or 0):
+        return                                  # 冷却中
+
+    if in_quiet(now):
+        return
+
+    st["active"] = True
+    st["started"] = now
+    _save_state(st)
+    print(f"[offline] 开始一场（你已离开约 {int((now - seen) / 60)} 分钟）", flush=True)
+
+    ok = True
+    try:
+        text = await run_session()
+        print(f"[offline] 自由时段结束（{len(text)} 字）", flush=True)
+    except Exception as e:
+        ok = False
+        print("[offline] 这一场失败:", e, flush=True)
+        await _alert("离线时段出错：" + str(e)[:160])
+
+    st["active"] = False
+    st["last"] = now
+    st["ran_for_seen"] = seen
+    st["next_due"] = now + (cooldown_min() * 60 if ok else 1200)
+    _save_state(st)
