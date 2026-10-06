@@ -241,7 +241,7 @@ class OpenAICompatEngine(Engine):
                         msgs.append({"role": "tool", "tool_call_id": c.get("id"),
                                      "content": json.dumps(result, ensure_ascii=False)[:2000]})
                 if not said:
-                    yield sse("error", text="它光动手没说话……再叫它一声？")
+                    yield sse("error", text="它光动手没说话 —— 看顶上的 🧠 面板")
             except Exception as e:
                 yield sse("error", text=f"跟模型说话时出事了：{type(e).__name__}"[:160])
             finally:
