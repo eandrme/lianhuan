@@ -1589,3 +1589,8 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+# ── 巢（Nest）：全新自包含前端，不改造任何旧代码 ──
+@app.get("/nest")
+def nest_page():
+    html = (WEB / "nest.html").read_text(encoding="utf-8")
+    return Response(html, media_type="text/html", headers=_STATIC_HEADERS)
