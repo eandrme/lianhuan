@@ -378,3 +378,8 @@ async def api_mcp_toggle(payload: dict = Body(...)):
         return {"ok": False, "err": "没有这个 MCP"}
     await _mcp.start_all()              # 立刻连上 / 断开
     return {"ok": True, "servers": _mcp.status()}
+# ===== 工具调用记录 =====
+@router.get("/api/tools/log")
+async def api_tools_log(limit: int = 50):
+    from . import toollog as _tl
+    return {"ok": True, "calls": _tl.recent(limit)}
