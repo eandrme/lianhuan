@@ -19036,3 +19036,161 @@ window._kmMount = function(){
   console.log('[console] 控制台已挂上');
 })();
 </script>
+<script>
+/* ===== 控制台·实时板块：思考链 + 工具 + 诊断（追加式）===== */
+(function () {
+  if (window.__liveBoard) return;
+  window.__liveBoard = 1;
+
+  const con = document.getElementById('con');
+  if (!con) { console.warn('[live] 没找到控制台（先把 🧰 那段粘上）'); return; }
+  const chips = con.querySelector('.chips');
+  const body = con.querySelector('#conBody');
+
+  const st = document.createElement('style');
+  st.textContent = '#con .think-box{white-space:pre-wrap;color:#a9b6cd;max-height:34vh;overflow:auto;'
+    + 'background:#11151d;border-radius:8px;padding:6px 8px;font-size:12px;word-break:break-word}';
+  document.head.appendChild(st);
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+  const events = [], reqs = [];
+  function note(type, text) { events.push({ t: new Date().toLocaleTimeString(), type: type, text: String(text).slice(0, 3000) }); if (events.length > 300) events.shift(); }
+  function noteReq(m, url, ct, how) { reqs.push({ t: new Date().toLocaleTimeString(), m: m, url: url, ct: ct, how: how }); if (reqs.length > 80) reqs.shift(); }
+
+  /* 认识 protocol.py 里那套事件 */
+  function handleLine(raw, how) {
+    let line = String(raw || '').trim();
+    if (!line) return;
+    if (line.startsWith('data:')) line = line.slice(5).trim();
+    if (line[0] !== '{') return;
+    let d; try { d = JSON.parse(line); } catch (e) { return; }
+    if (!d || !d.type) return;
+    const t = d.type;
+    if (t === 'recv') { events.length = 0; note('recv', '（新请求）'); return; }
+    if (t === 'stage') { note('stage', d.text || ''); return; }
+    if (t === 'os') { note('think', d.delta || d.text || ''); return; }
+    if (t === 'tool_live') { note('tool', '▶ ' + (d.name || '?')); return; }
+    if (t === 'tool') { note('tool', '🔧 ' + (d.name || '?') + ' ' + String(d.args || d.params || '').slice(0, 140)); return; }
+    if (t === 'tool_done') { note('tool', (d.err ? '❌ ' : '✅ ') + (d.name || '?') + (d.ms ? ' ' + d.ms + 'ms' : '') + (d.err ? ' ' + d.err : '')); return; }
+    if (t === 'say') { note('say', String(d.text || '').slice(0, 140)); return; }
+    if (t === 'error') { note('error', String(d.text || d.error || '').slice(0, 300)); return; }
+    note(t, JSON.stringify(d).slice(0, 200));
+  }
+  function handleBlock(text, how) { String(text || '').split('\n').forEach(l => handleLine(l, how)); }
+
+  /* ── 钩子 1：fetch ── */
+  if (window.fetch) {
+    const _f = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      const res = await _f(input, init);
+      try {
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        noteReq((init && init.method) || 'GET', url, ct, 'fetch');
+        if (res.body && typeof res.body.tee === 'function' &&
+            (ct.includes('event-stream') || ct.includes('ndjson') || ct.includes('text/plain'))) {
+          const pair = res.body.tee();
+          pumpLines(pair[0], 'fetch');
+          return new Response(pair[1], { status: res.status, statusText: res.statusText, headers: res.headers });
+        }
+      } catch (e) {}
+      return res;
+    };
+  }
+  async function pumpLines(stream, how) {
+    const rd = stream.getReader(); const dec = new TextDecoder(); let buf = '';
+    try {
+      for (;;) {
+        const r = await rd.read(); if (r.done) break;
+        buf += dec.decode(r.value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) { handleLine(buf.slice(0, i), how); buf = buf.slice(i + 1); }
+        if (buf.length > 100000) buf = '';
+      }
+      if (buf.trim()) handleLine(buf, how);
+    } catch (e) {}
+  }
+
+  /* ── 钩子 2：XHR ── */
+  (function () {
+    const _open = XMLHttpRequest.prototype.open, _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u) { try { this.__lm = { m: m, u: u, n: 0 }; } catch (e) {} return _open.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () {
+      try {
+        const tap = () => {
+          try {
+            if (this.responseType && this.responseType !== 'text') return;
+            const t = this.responseText || '';
+            const cut = t.lastIndexOf('\n');
+            const from = (this.__lm && this.__lm.n) || 0;
+            if (cut <= from) return;
+            handleBlock(t.slice(from, cut), 'xhr');
+            if (this.__lm) this.__lm.n = cut + 1;
+          } catch (e) {}
+        };
+        this.addEventListener('progress', tap);
+        this.addEventListener('load', () => {
+          try { noteReq((this.__lm && this.__lm.m) || '?', (this.__lm && this.__lm.u) || '', this.getResponseHeader('content-type') || '', 'xhr'); } catch (e) {}
+          tap();
+        });
+      } catch (e) {}
+      return _send.apply(this, arguments);
+    };
+  })();
+
+  /* ── 钩子 3：WebSocket ── */
+  if (window.WebSocket) {
+    const _W = window.WebSocket;
+    const W = function (url, p) {
+      const ws = new _W(url, p);
+      try { noteReq('WS', String(url), '', 'websocket'); ws.addEventListener('message', ev => handleBlock(String(ev.data), 'ws')); } catch (e) {}
+      return ws;
+    };
+    W.prototype = _W.prototype;
+    ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(k => { try { W[k] = _W[k]; } catch (e) {} });
+    window.WebSocket = W;
+  }
+
+  /* ── 钩子 4：ServiceWorker 转发过来的消息 ── */
+  if (navigator.serviceWorker) {
+    try { navigator.serviceWorker.addEventListener('message', ev => { try { handleBlock(JSON.stringify(ev.data), 'sw'); } catch (e) {} }); } catch (e) {}
+  }
+
+  /* ── 画板子 ── */
+  function draw() {
+    const think = events.filter(e => e.type === 'think').map(e => e.text).join('').slice(-6000);
+    const others = events.filter(e => e.type !== 'think').slice(-40);
+    body.innerHTML =
+      '<div class="card"><div class="sub">思考链（' + think.length + ' 字）</div>'
+      + '<div class="think-box">' + esc(think || '（还没有。如果一直是空的，看下面「捕获的请求」）') + '</div></div>'
+      + '<div class="card"><div class="sub">其他事件（stage / tool / say / error）</div>'
+      + (others.map(e => '<div class="row"><div style="flex:1;min-width:0"><div class="nm">'
+          + esc(e.type) + ' <span class="sub">' + esc(e.t) + '</span></div><div class="sub">' + esc(e.text) + '</div></div></div>').join('')
+         || '<div class="sub">还没有</div>') + '</div>'
+      + '<div class="card"><div class="sub">捕获的请求（诊断：一直空 = 流在 Worker 内部）</div>'
+      + (reqs.slice().reverse().map(r => '<div class="row"><div style="flex:1;min-width:0"><div class="nm">'
+          + esc(r.m) + ' <span class="sub">' + esc(r.how) + ' · ' + esc(r.t) + '</span></div>'
+          + '<div class="sub">' + esc(r.url) + ' · ' + esc(r.ct) + '</div></div></div>').join('')
+         || '<div class="sub">还没有</div>') + '</div>'
+      + '<div class="bar"><button id="lvRe">刷新</button><button id="lvClr">清空</button>'
+      + '<span class="sub">换一句聊天后回来点「刷新」</span></div>';
+    const r = body.querySelector('#lvRe'); if (r) r.onclick = draw;
+    const c = body.querySelector('#lvClr'); if (c) c.onclick = () => { events.length = 0; reqs.length = 0; draw(); };
+  }
+
+  const chip = document.createElement('span');
+  chip.className = 'chip'; chip.textContent = '实时';
+  chip.onclick = () => {
+    con.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+    chip.classList.add('on');
+    const ab = con.querySelector('.chip[data-v="about"]');
+    if (ab) ab.click();                 /* 借它把别的板块轮询停掉 */
+    setTimeout(draw, 0);
+  };
+  chips.appendChild(chip);
+
+  window.__liveDump = () => ({ events: events.slice(-60), reqs: reqs.slice(-20) });
+  console.log('[live] 实时板块已挂上');
+})();
+</script>
