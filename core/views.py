@@ -362,3 +362,19 @@ async def api_offline_run(dry: int = 0):
     except Exception as e:
         return {"ok": False, "err": str(e)}
     return {"ok": True, "dry": bool(dry), "note": "看 journalctl -u lianhuan -f | grep -i offline"}
+# ===== MCP 开关：列表 + 拨动 =====
+from fastapi import Body
+from . import mcp_client as _mcp
+
+@router.get("/api/mcp")
+async def api_mcp_list():
+    return {"ok": True, "servers": _mcp.status()}
+
+@router.post("/api/mcp/toggle")
+async def api_mcp_toggle(payload: dict = Body(...)):
+    name = str(payload.get("name") or "")
+    on = bool(payload.get("enabled"))
+    if not name or not _mcp.set_enabled(name, on):
+        return {"ok": False, "err": "没有这个 MCP"}
+    await _mcp.start_all()              # 立刻连上 / 断开
+    return {"ok": True, "servers": _mcp.status()}
