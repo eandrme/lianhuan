@@ -18876,3 +18876,163 @@ window._kmMount = function(){
   console.log('[live] 活动面板已挂上');
 })();
 </script>
+<script>
+/* ===== 控制台（追加式全屏浮层）：把散落的小气泡收成一处 ===== */
+(function () {
+  if (window.__console) return;
+  window.__console = 1;
+
+  /* 把老的浮层按钮收掉（功能都搬进来了） */
+  ['mcpBtn', 'mcpPanel', 'tlBtn', 'tlPanel', 'lvBtn', 'lvPill', 'lvPanel', 'memBtn', 'memBtnPanel']
+    .forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  document.querySelectorAll('[id^="memBtn"], [id^="tlBtn"], [id^="mcpBtn"], [id^="lvBtn"], [id^="lvPill"]')
+    .forEach(e => e.remove());
+
+  const st = document.createElement('style');
+  st.textContent = `
+#conBtn{position:fixed;right:12px;bottom:104px;z-index:10050;width:48px;height:48px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer}
+#con{position:fixed;inset:0;z-index:10060;background:#0f1218;color:#e3e9f5;display:none;font-size:13.5px;line-height:1.5}
+#con .hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #232a38;background:#12161f}
+#con .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#con .chip{padding:4px 10px;border:1px solid #39415a;border-radius:999px;color:#9db0d4;cursor:pointer;font-size:12.5px}
+#con .chip.on{background:#2b3550;color:#eaf0ff;border-color:#54648f}
+#con .x{padding:4px 12px;cursor:pointer;color:#9db0d4;font-size:16px}
+#con .body{padding:12px 14px 40px;overflow:auto;height:calc(100vh - 50px)}
+#con .card{background:#141924;border:1px solid #262e3e;border-radius:12px;padding:10px 12px;margin-bottom:10px}
+#con .row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #212838}
+#con .row:first-child{border-top:0}
+#con .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#con .sub{color:#8b97ad;font-size:11.5px;word-break:break-all}
+#con .ok{color:#7fd18b} #con .bad{color:#e18a7c} #con .run{color:#e0c07a}
+#con .sw{flex:0 0 auto;width:44px;height:24px;border-radius:12px;background:#39415a;position:relative;transition:.15s;cursor:pointer}
+#con .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#e8edf7;transition:.15s}
+#con .sw.on{background:#3d8b5f} #con .sw.on i{left:23px}
+#con button{background:#27304a;color:#dbe4f7;border:1px solid #3d4a6b;border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;margin-right:8px}
+#con .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+#con .kv{display:flex;gap:8px;padding:3px 0}
+#con .kv b{color:#9db0d4;font-weight:600;min-width:92px;flex:0 0 auto}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'conBtn'; btn.textContent = '🧰'; btn.title = '控制台';
+  const box = document.createElement('div');
+  box.id = 'con';
+  box.innerHTML = '<div class="hd"><b>控制台</b><div class="chips">'
+    + '<span class="chip on" data-v="mcp">MCP</span>'
+    + '<span class="chip" data-v="tools">工具记录</span>'
+    + '<span class="chip" data-v="offline">离线时段</span>'
+    + '<span class="chip" data-v="about">说明</span></div><span class="x" id="conX">✕</span></div>'
+    + '<div class="body" id="conBody"></div>';
+  document.body.appendChild(btn); document.body.appendChild(box);
+
+  const body = box.querySelector('#conBody');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const cut = (s, n) => { s = typeof s === 'string' ? s : JSON.stringify(s); s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
+  const api = async (u, o) => (await fetch(u, o || { cache: 'no-store' })).json();
+  let view = 'mcp', timer = null;
+
+  async function viewMcp() {
+    try {
+      const j = await api('/api/mcp');
+      const items = j.servers || [];
+      if (!items.length) { body.innerHTML = '<div class="card">还没有登记任何 MCP。<div class="sub">下一步这里会有「登记表单」（stdio / Streamable HTTP / SSE + 自定义请求头）。现在也可以手写 data/mcp.json。</div></div>'; return; }
+      body.innerHTML = '<div class="card">' + items.map(s => {
+        const where = s.url || s.command || '';
+        const tools = (s.tools && s.tools.length) ? ('工具 ' + s.tools.length + '：' + esc(s.tools.slice(0, 6).join('、')) + (s.tools.length > 6 ? '…' : '')) : '没有工具';
+        const state = s.ok ? '<span class="ok">已连上</span>'
+          : (s.enabled ? '<span class="bad">连不上' + (s.err ? '：' + esc(cut(s.err, 80)) : '') + '</span>' : '<span class="sub">已关闭</span>');
+        return '<div class="row"><div style="flex:1;min-width:0"><div class="nm">' + esc(s.name) + '</div>'
+          + '<div class="sub">' + esc(where) + ' · ' + esc(s.type) + '</div>'
+          + '<div class="sub">' + state + ' · ' + tools + '</div></div>'
+          + '<div class="sw ' + (s.enabled ? 'on' : '') + '" data-name="' + esc(s.name) + '" data-on="' + (s.enabled ? 1 : 0) + '"><i></i></div></div>';
+      }).join('') + '</div>';
+    } catch (e) { body.innerHTML = '<div class="card bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  async function viewTools() {
+    body.innerHTML = '<div class="bar"><button id="tR">刷新</button>'
+      + '<label class="sub"><input id="tB" type="checkbox"> 只看失败</label>'
+      + '<span class="sub">最近 100 条 · data/tool_calls.jsonl</span></div><div class="card" id="tL">读取中…</div>';
+    const draw = async () => {
+      try {
+        const j = await api('/api/tools/log?limit=100');
+        let items = j.calls || [];
+        if (body.querySelector('#tB').checked) items = items.filter(c => !c.ok);
+        body.querySelector('#tL').innerHTML = items.length ? items.map(c =>
+          '<div class="row"><div style="flex:1;min-width:0">'
+          + '<div class="nm">' + (c.ok ? '<span class="ok">✅</span> ' : '<span class="bad">❌</span> ') + esc(c.tool)
+          + '<span class="sub"> ' + esc(c.t) + (c.ms ? ' · ' + c.ms + 'ms' : '') + '</span></div>'
+          + (c.args && c.args !== '{}' ? '<div class="sub">入参：' + esc(c.args) + '</div>' : '')
+          + (c.err ? '<div class="sub bad">错误：' + esc(c.err) + '</div>'
+                   : (c.res ? '<div class="sub">结果：' + esc(cut(c.res, 180)) + '</div>' : ''))
+          + '</div></div>').join('') : '<div class="sub">还没有记录</div>';
+      } catch (e) { body.querySelector('#tL').innerHTML = '<span class="bad">读不到：' + esc(e.message) + '</span>'; }
+    };
+    body.querySelector('#tR').onclick = draw;
+    body.querySelector('#tB').onchange = draw;
+    await draw();
+  }
+
+  async function viewOffline() {
+    try {
+      const j = await api('/api/offline');
+      const d = j.state || j.data || j || {};
+      const t = v => { const n = Number(v); if (!n) return '—'; return new Date((n > 1e11 ? n / 1000 : n) * 1000).toLocaleString(); };
+      body.innerHTML = '<div class="card">'
+        + '<div class="kv"><b>开关</b><span>' + (d.enabled ? '已启用' : '未启用') + '</span></div>'
+        + '<div class="kv"><b>状态</b><span>' + (d.active ? '<span class="run">正在自由</span>' : '空闲') + '</span></div>'
+        + '<div class="kv"><b>本场开始</b><span>' + t(d.started) + '</span></div>'
+        + '<div class="kv"><b>上次结束</b><span>' + t(d.last) + '</span></div>'
+        + '<div class="kv"><b>下次可跑</b><span>' + t(d.next_due) + '</span></div>'
+        + '<div class="kv"><b>静默门槛</b><span>' + (d.idle_min || '?') + ' 分钟</span></div>'
+        + '<div class="kv"><b>单场上限</b><span>' + (d.max_min || '?') + ' 分钟</span></div>'
+        + '<div class="kv"><b>上次成绩</b><span>' + (d.turns != null ? (d.turns + ' 轮 · ' + (d.chars || 0) + ' 字 · ' + (d.dur || 0) + ' 秒') : '—') + '</span></div></div>'
+        + '<div class="bar"><button id="oD">试跑一场（不留痕）</button><button id="oR">真跑一场</button>'
+        + '<span class="sub">真跑会占掉「这一轮离开」的名额</span></div>';
+      body.querySelector('#oD').onclick = async () => { await api('/api/offline/run?dry=1', { method: 'POST' }); alert('已开跑（试跑）'); };
+      body.querySelector('#oR').onclick = async () => { if (confirm('真跑一场？会写进私密库，并占掉这一轮离开的名额。')) { await api('/api/offline/run', { method: 'POST' }); alert('已开跑'); } };
+    } catch (e) { body.innerHTML = '<div class="card bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  function viewAbout() {
+    body.innerHTML = '<div class="card">'
+      + '<div class="kv"><b>这是什么</b><span>把散落的浮层收成一处：MCP 开关 / 工具记录 / 离线时段。</span></div>'
+      + '<div class="kv"><b>下一步</b><span>MCP 登记表单（stdio · Streamable HTTP · SSE + 自定义请求头）、记忆增删改、聊天里的实时「思考 + 工具」。</span></div>'
+      + '<div class="kv"><b>说明</b><span>老的 🔌 / 🔧 / 🧠 按钮已被接管（还在文件里，但不再显示）。</span></div></div>';
+  }
+
+  async function paint() {
+    clearInterval(timer); timer = null;
+    if (view === 'mcp') { await viewMcp(); timer = setInterval(viewMcp, 15000); }
+    else if (view === 'tools') { await viewTools(); }
+    else if (view === 'offline') { await viewOffline(); timer = setInterval(viewOffline, 10000); }
+    else viewAbout();
+  }
+
+  box.querySelectorAll('.chip').forEach(c => {
+    c.onclick = () => {
+      box.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on'); view = c.dataset.v; paint();
+    };
+  });
+  box.querySelector('#conX').onclick = () => { box.style.display = 'none'; clearInterval(timer); };
+  btn.onclick = () => { box.style.display = 'block'; paint(); };
+
+  body.addEventListener('click', async ev => {
+    const sw = ev.target.closest && ev.target.closest('.sw');
+    if (!sw || view !== 'mcp') return;
+    sw.style.opacity = .5;
+    try {
+      await api('/api/mcp/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: sw.dataset.name, enabled: sw.dataset.on !== '1' })
+      });
+      await viewMcp();
+    } catch (e) { alert('切换失败：' + e.message); }
+  });
+
+  console.log('[console] 控制台已挂上');
+})();
+</script>
