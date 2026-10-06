@@ -71,6 +71,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     pane.hidden=false;
     ptitle.textContent=(TABS.find(x=>x[0]===k)||[])[2]||"";
     pbody.innerHTML="";
+         if(window.NEST_PANES&&window.NEST_PANES[k]){try{window.NEST_PANES[k](pbody);}catch(e){console.error("pane:",e);}return;}
     const info={memory:["🧠 记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性（仅某助手 / 全部助手）"],
                 study:["📖 书房","书架 · 在读进度 · 边读边聊的小窗"],
                 notes:["📝 记事","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包（都要带编辑 / 删除）"],
