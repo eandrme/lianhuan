@@ -408,3 +408,48 @@ if callable(_orig_execute):
                 pass
 else:
     print("[toollog] 没找到 hands.execute，留痕没装上", flush=True)
+# ===== 工具调用留痕（自包含版：不依赖任何新文件）=====
+# 上面那版依赖 core.toollog（文件没建成）。这里改用最原始的 _orig_execute，并自己写日志文件。
+_orig_execute2 = globals().get("_orig_execute") or globals().get("execute")
+
+if callable(_orig_execute2):
+    async def execute(name, args=None, *a, **kw):          # noqa: F811
+        import datetime as _dt
+        import json as _j
+        import os as _os
+        import time as _t
+        from pathlib import Path as _P
+
+        def _s(v, n):
+            try:
+                s = v if isinstance(v, str) else _j.dumps(v, ensure_ascii=False)
+            except Exception:
+                s = str(v)
+            return " ".join(str(s).split())[:n]
+
+        t0 = _t.time()
+        ok, err, res = True, "", None
+        try:
+            r = await _orig_execute2(name, args, *a, **kw)
+            res = r
+            if isinstance(r, dict) and r.get("ok") is False:
+                ok = False
+                err = str(r.get("err") or r.get("error") or "")[:200]
+            return r
+        except Exception as e:
+            ok, err = False, f"{type(e).__name__}: {e}"[:200]
+            raise
+        finally:
+            try:
+                p = _P(_os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "tool_calls.jsonl"
+                p.parent.mkdir(parents=True, exist_ok=True)
+                rec = {"t": _dt.datetime.now().strftime("%m-%d %H:%M:%S"),
+                       "tool": str(name)[:80], "ok": 1 if ok else 0,
+                       "ms": int((_t.time() - t0) * 1000), "err": _s(err, 200),
+                       "args": _s(args, 160), "res": _s(res, 240)}
+                with open(p, "a", encoding="utf-8") as fh:
+                    fh.write(_j.dumps(rec, ensure_ascii=False) + "\n")
+            except Exception:
+                pass
+else:
+    print("[toollog] 没找到可包装的 execute", flush=True)
