@@ -18498,3 +18498,125 @@ window._kmMount = function(){
   });
 })();
 </script>
+<script>
+/* ===== MCP 开关面板（追加式，自包含，不依赖页面样式）===== */
+(function () {
+  if (window.__mcpPanel) return;
+  window.__mcpPanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#mcpBtn{position:fixed;right:12px;bottom:158px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:21px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#mcpPanel{position:fixed;right:12px;bottom:214px;z-index:9999;width:min(88vw,300px);max-height:62vh;overflow:auto;
+  background:#141821;color:#e2e8f4;border:1px solid #3a4360;border-radius:14px;padding:10px 12px;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);display:none;font-size:13px;line-height:1.45}
+#mcpPanel .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:move}
+#mcpPanel .hd b{font-size:13px;color:#9db0d4;font-weight:600}
+#mcpPanel .hd span{color:#7f8ba3;font-size:12px;padding:2px 6px;cursor:pointer}
+#mcpPanel .row{padding:8px 0;border-top:1px solid #242b3a}
+#mcpPanel .top{display:flex;align-items:center;gap:8px}
+#mcpPanel .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mcpPanel .sub{color:#8b97ad;font-size:11px;margin-top:2px;word-break:break-all}
+#mcpPanel .ok{color:#7fd18b} #mcpPanel .bad{color:#e18a7c}
+#mcpPanel .sw{flex:0 0 auto;width:44px;height:24px;border-radius:12px;background:#39415a;position:relative;transition:.15s}
+#mcpPanel .sw.on{background:#3d8b5f}
+#mcpPanel .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#e8edf7;transition:.15s}
+#mcpPanel .sw.on i{left:23px}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'mcpBtn'; btn.textContent = '🔌'; btn.title = 'MCP 开关';
+  const panel = document.createElement('div');
+  panel.id = 'mcpPanel';
+  panel.innerHTML = '<div class="hd"><b>MCP 开关</b><span id="mcpReload">刷新</span></div><div id="mcpList">…</div>';
+  document.body.appendChild(btn); document.body.appendChild(panel);
+
+  const listEl = panel.querySelector('#mcpList');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+  function draw(items) {
+    if (!items || !items.length) {
+      listEl.innerHTML = '<div class="sub" style="padding:8px 0">还没有登记任何 MCP。</div>';
+      return;
+    }
+    listEl.innerHTML = items.map(s => {
+      const where = s.url || s.command || '';
+      const tools = (s.tools && s.tools.length)
+        ? '工具 ' + s.tools.length + '：' + esc(s.tools.slice(0, 4).join('、')) + (s.tools.length > 4 ? '…' : '')
+        : '没有工具';
+      const state = s.ok ? '<span class="ok">已连上</span>'
+        : (s.enabled ? '<span class="bad">连不上' + (s.err ? '：' + esc(String(s.err).slice(0, 60)) : '') + '</span>'
+                     : '<span style="color:#8b97ad">已关闭</span>');
+      return '<div class="row"><div class="top"><div class="nm">' + esc(s.name) + '</div>'
+        + '<div class="sw ' + (s.enabled ? 'on' : '') + '" data-name="' + esc(s.name) + '" data-on="' + (s.enabled ? 1 : 0) + '"><i></i></div></div>'
+        + '<div class="sub">' + esc(where) + ' · ' + esc(s.type) + '</div>'
+        + '<div class="sub">' + state + ' · ' + tools + '</div></div>';
+    }).join('');
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/mcp', { cache: 'no-store' });
+      const j = await r.json();
+      draw(j.servers || []);
+    } catch (e) {
+      listEl.innerHTML = '<div class="sub bad">读不到：' + esc(e.message) + '</div>';
+    }
+  }
+
+  btn.onclick = () => {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) load();
+  };
+  panel.querySelector('#mcpReload').onclick = load;
+
+  panel.addEventListener('click', async ev => {
+    const sw = ev.target.closest('.sw');
+    if (!sw) return;
+    const name = sw.dataset.name, on = sw.dataset.on !== '1';
+    sw.style.opacity = .5;
+    try {
+      const r = await fetch('/api/mcp/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, enabled: on })
+      });
+      const j = await r.json();
+      if (j.servers) draw(j.servers); else load();
+    } catch (e) { alert('切换失败：' + e.message); load(); }
+  });
+
+  /* 面板可拖动，位置记在 localStorage（想复位：localStorage.removeItem('mcpPanelPos')）*/
+  (function () {
+    const hd = panel.querySelector('.hd');
+    let ox = 0, oy = 0, dragging = false;
+    const saved = JSON.parse(localStorage.getItem('mcpPanelPos') || 'null');
+    if (saved) {
+      panel.style.left = saved.l + 'px'; panel.style.top = saved.t + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    }
+    const start = (x, y) => { dragging = true; const b = panel.getBoundingClientRect(); ox = x - b.left; oy = y - b.top; };
+    const move = (x, y) => {
+      if (!dragging) return;
+      panel.style.left = (x - ox) + 'px'; panel.style.top = (y - oy) + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    };
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      const b = panel.getBoundingClientRect();
+      localStorage.setItem('mcpPanelPos', JSON.stringify({ l: b.left, t: b.top }));
+    };
+    hd.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    window.addEventListener('mouseup', end);
+    hd.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    hd.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+    hd.addEventListener('touchend', end);
+  })();
+
+  console.log('[mcp] 开关面板已挂上');
+})();
+</script>
