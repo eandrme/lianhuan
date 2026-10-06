@@ -19194,3 +19194,16 @@ window._kmMount = function(){
   console.log('[live] 实时板块已挂上');
 })();
 </script>
+<script>
+/* 紧急卸载：把我们加过的副作用全撤回，页面恢复原样 */
+(function () {
+  try { delete window.fetch; } catch (e) {}          /* 交还给浏览器原生 fetch */
+  try { delete window.WebSocket; } catch (e) {}      /* 交还给原生 WebSocket */
+  window.__console = 1; window.__liveBoard = 1;      /* 防止旧脚本重新装 */
+  ['conBtn', 'con', 'lvBtn', 'lvPill', 'lvPanel', 'tlBtn', 'tlPanel', 'mcpBtn', 'mcpPanel',
+   'memBtn', 'memBtnPanel'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  document.querySelectorAll('[id^="tlBtn"], [id^="mcpBtn"], [id^="lvBtn"], [id^="lvPill"], [id^="conBtn"]')
+    .forEach(e => e.remove());
+  console.log('[kill] 已卸载');
+})();
+</script>
