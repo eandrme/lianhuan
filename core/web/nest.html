@@ -385,6 +385,208 @@ $("#btnSide").onclick=()=>$("#app").classList.toggle("side-off");
 
 /* ══ 第二批（消息操作 · 侧栏）追加区 ══ */
 boot();
+  /* ══════════ 第二批补丁 A：消息操作 · 工具参数 · 调试面板 ══════════ */
+(function(){
+  const css=document.createElement("style");
+  css.textContent=`
+  .dots{margin-left:4px}
+  .toast{position:fixed;left:50%;bottom:78px;transform:translate(-50%,10px);z-index:80;
+    background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:9px 14px;font-size:13px;opacity:0;transition:.18s;pointer-events:none;max-width:86vw}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  #raw{position:fixed;left:10px;right:10px;bottom:10px;max-height:46vh;overflow:auto;z-index:70;
+    background:#0b0e13f2;border:1px solid var(--line);border-radius:var(--r);padding:10px;
+    font:12px/1.5 var(--mono);color:var(--dim)}
+  #raw .rh{display:flex;gap:6px;align-items:center;margin-bottom:6px;color:var(--fg)}
+  #raw .rh .sp{flex:1}
+  .menu{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);
+    border-radius:var(--r-sm);padding:4px;min-width:168px;box-shadow:0 10px 30px #0009}
+  .menu button{display:block;width:100%;text-align:left;padding:9px 11px;border-radius:7px;font-size:14px}
+  .menu button:hover{background:var(--panel2)}
+  .menu button.danger{color:var(--err)}
+  `;
+  document.head.append(css);
+
+  let tEl=null,tT=0;
+  window.toast=function(t){
+    if(!tEl){tEl=el("div","toast");document.body.append(tEl);}
+    tEl.textContent=t;tEl.classList.add("on");
+    clearTimeout(tT);tT=setTimeout(()=>tEl.classList.remove("on"),2600);
+  };
+
+  /* ── 🐞 原始事件面板 ── */
+  let RAW=[],RAW_ON=false,box=null,body=null;
+  function rawToggle(on){
+    RAW_ON=(on===undefined)?!RAW_ON:on;
+    if(!box){
+      box=el("div");box.id="raw";
+      const h=el("div","rh");
+      h.append(el("b",null,"原始事件"),el("span","sp"));
+      const cp=el("button","cp","复制全部");
+      cp.onclick=async()=>{try{await navigator.clipboard.writeText(RAW.map(x=>JSON.stringify(x)).join("\n"));
+        cp.textContent="已复制";setTimeout(()=>cp.textContent="复制全部",1200);}catch(e){}};
+      const cl=el("button","cp","清空");cl.onclick=()=>{RAW=[];body.innerHTML="";};
+      const x=el("button","cp","关");x.onclick=()=>rawToggle(false);
+      h.append(cp,cl,x);
+      body=el("div");box.append(h,body);document.body.append(box);
+    }
+    box.hidden=!RAW_ON;
+  }
+  function rawPush(ev){
+    RAW.push(ev);if(RAW.length>300)RAW.shift();
+    if(RAW_ON&&body){body.append(el("div",null,JSON.stringify(ev)));box.scrollTop=box.scrollHeight;}
+  }
+  const dbg=el("button","ibtn","🐞");
+  dbg.title="看这一轮收到的原始事件";
+  dbg.onclick=()=>rawToggle();
+  $("#bar").insertBefore(dbg,$("#btnSide"));
+
+  /* ── 工具卡片：任何 tool* 事件都画，字段全摊开 ── */
+  function extraOf(ev){
+    const r=Object.assign({},ev);
+    delete r.type;delete r.name;delete r.tool;delete r.ms;delete r.ok;delete r.err;
+    return r;
+  }
+  function fillParams(c,ev,running){
+    const b=c.querySelector(".tbody");
+    let p=b.querySelector(".targ");
+    if(!p){p=el("pre","targ");b.prepend(p);}
+    const x=extraOf(ev),ks=Object.keys(x);
+    p.textContent=ks.length?JSON.stringify(x,null,1):(running?"（跑着呢…）":"（后端这次没带参数）");
+  }
+  function toolCard(L,ev,running){
+    const name=ev.name||ev.tool||"tool";
+    const c=el("div","tool");c.dataset.state="run";c.dataset.name=name;
+    const h=el("div","thead");
+    h.append(el("span","ticon","⏳"),el("span","tname",name),el("span","tcar","▾"));
+    c.append(h,el("div","tbody"));
+    h.onclick=()=>c.classList.toggle("open");
+    L.tl.append(c);L.tools.push(c);toBottom();
+    fillParams(c,ev,running);
+    return c;
+  }
+  function bump(c,ok,ms,err){
+    c.dataset.state=ok?"ok":"err";
+    c.querySelector(".ticon").textContent=ok?"✅":"❌";
+    if(ms!=null)c.querySelector(".thead").insertBefore(el("span","tms",ms+"ms"),c.querySelector(".tcar"));
+    if(err)c.querySelector(".tbody").append(el("pre","terr",err));
+  }
+
+  /* ── 新版事件处理（整体替换旧的 handle） ── */
+  window.handle=function(ev,L){
+    rawPush(ev);
+    switch(ev.type){
+      case "recv": JOB=ev.job||JOB; break;
+      case "stage": L.st.hidden=false;L.st.textContent=ev.text||"";toBottom();break;
+      case "os":
+        if(!L.t0)L.t0=Date.now();
+        L.think+=ev.delta||"";
+        if(L.th.open)L.th.querySelector("pre").textContent=L.think;
+        break;
+      case "s":
+        if(L.st&&!L.st.hidden){L.st.hidden=true;L.st.textContent="";}
+        L.bs.append(el("div","bubble",(ev.text||"").trim()));toBottom();break;
+      case "tool_live":{
+        const name=ev.name||ev.tool||"tool";
+        if(!lastTool(L,name))toolCard(L,ev,true);
+        break;}
+      case "tool":
+      case "tool_call":{
+        const name=ev.name||ev.tool||"tool";
+        const c=lastTool(L,name)||toolCard(L,ev,false);
+        fillParams(c,ev,false);
+        break;}
+      case "tool_done":{
+        const c=lastTool(L,ev.name)||toolCard(L,ev,false);
+        bump(c,ev.ok!==false,ev.ms,ev.err);
+        break;}
+      case "usage": L.usage={tin:ev.tin||0,tout:ev.tout||0}; break;
+      case "done":
+        if(ev.session_id){SID=ev.session_id;localStorage.setItem("nest_sid",SID);}
+        break;
+      case "error":
+        L.bs.append(el("div","errbox",ev.text||"出错了"));toBottom();
+        rawToggle(true);
+        break;
+      default: break;
+    }
+  };
+
+  /* ── 每条消息的 ⋯ 菜单 ── */
+  function turnText(w){
+    return [...w.querySelectorAll(":scope > .bubbles > .bubble")].map(b=>b.textContent).join("|||");
+  }
+  async function ensureId(w){
+    if(w.dataset.id)return true;
+    try{
+      const r=await fetch("/api/chat/day/"+dayStr(),{credentials:"same-origin"});
+      const j=await r.json();
+      const role=w.classList.contains("me")?"user":"assistant";
+      const want=turnText(w).replace(/\|\|\|/g,"");
+      const hit=(j.items||[]).filter(x=>x.role===role&&String(x.content).replace(/\|\|\|/g,"")===want).pop();
+      if(hit){w.dataset.id=hit.id;return true;}
+    }catch(e){}
+    return false;
+  }
+  async function doCopy(w){
+    try{await navigator.clipboard.writeText(turnText(w).split("|||").join("\n"));toast("已复制");}
+    catch(e){toast("复制失败");}
+  }
+  async function doDel(w){
+    if(!await ensureId(w)){toast("这条还没落库，等它说完再来");return;}
+    if(!confirm("真的删掉这条？删了就没了"))return;
+    const r=await fetch("/api/chat/"+w.dataset.id+"/del",{method:"POST",credentials:"same-origin"});
+    if(r.ok){w.remove();toast("删了");}else toast("删除失败");
+  }
+  async function doEdit(w){
+    const ta=$("#ta");ta.value=turnText(w).split("|||").join("\n");ta.focus();grow();
+    toast("改完按发送 —— 作为新的一条发出，原话保留");
+  }
+  async function doRegen(w){
+    let p=w.previousElementSibling;
+    while(p&&!p.classList.contains("me"))p=p.previousElementSibling;
+    if(!p){toast("找不到它回应的那句话");return;}
+    const ta=$("#ta");ta.value=turnText(p).split("|||").join("\n");await send();
+    toast("重新生成中 —— 原来那条还在，新的接在下面");
+  }
+  async function doShare(w){
+    const t=turnText(w).split("|||").join("\n");
+    try{
+      if(navigator.share){await navigator.share({text:t});return;}
+      await navigator.clipboard.writeText(t);toast("已复制到剪贴板");
+    }catch(e){}
+  }
+  function openMenu(w,btn){
+    document.querySelectorAll(".menu").forEach(m=>m.remove());
+    const m=el("div","menu");
+    const add=(label,fn,danger)=>{
+      const b=el("button",danger?"danger":null,label);
+      b.onclick=async()=>{m.remove();await fn();};
+      m.append(b);
+    };
+    add("复制",()=>doCopy(w));
+    if(w.classList.contains("me"))add("编辑后重发",()=>doEdit(w));
+    else add("编辑它的回复",()=>toast("改写它的历史回复要后端接口，第三批给你"));
+    add("重新生成",()=>doRegen(w));
+    add("分享",()=>doShare(w));
+    add("删除本版本",()=>doDel(w),true);
+    document.body.append(m);
+    const r=btn.getBoundingClientRect();
+    m.style.top=(r.bottom+6+scrollY)+"px";
+    m.style.left=Math.max(8,Math.min(r.left-140,innerWidth-m.offsetWidth-8))+"px";
+    setTimeout(()=>document.addEventListener("click",()=>m.remove(),{once:true}),0);
+  }
+  function ensureDots(w){
+    const meta=w.querySelector(":scope > .meta");
+    if(!meta||meta.querySelector(".dots"))return;
+    const d=el("button","cp dots","⋯");
+    d.onclick=e=>{e.stopPropagation();openMenu(w,d);};
+    meta.append(d);
+  }
+  const mo=new MutationObserver(()=>document.querySelectorAll("#stream .turn").forEach(ensureDots));
+  mo.observe($("#stream"),{childList:true,subtree:true});
+  document.querySelectorAll("#stream .turn").forEach(ensureDots);
+})();
 </script>
 </body>
 </html>
