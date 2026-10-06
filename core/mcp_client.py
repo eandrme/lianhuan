@@ -481,3 +481,20 @@ async def call_tool(server: str, tool: str, args: dict) -> dict | None:
         return await s.call(tool, args)
     except Exception as e:
         return {"ok": False, "err": f"{type(e).__name__}: {e}"[:200]}
+# ── 补丁：装配单编码兜底（手写文件里混进非 UTF-8 字符时不至于整个读不出来）
+def _read_text_any(f) -> str:
+    raw = f.read_bytes()
+    for enc in ("utf-8", "utf-8-sig", "gb18030"):
+        try:
+            return raw.decode(enc)
+        except Exception:
+            continue
+    return raw.decode("utf-8", "replace")
+
+
+def load_cfg() -> dict:          # 覆盖上面那版，其余逻辑不变
+    import json as _j
+    try:
+        return _j.loads(_read_text_any(_cfg_file())).get("mcpServers") or {}
+    except Exception:
+        return {}
