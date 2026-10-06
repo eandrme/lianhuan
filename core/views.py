@@ -396,3 +396,56 @@ async def api_tools_log(limit: int = 50):
         except Exception:
             continue
     return {"ok": True, "calls": out}
+
+# ══════════ 巢（Nest）前端专用：多窗口会话 ══════════
+def _nest_sid(r) -> str:
+    return (r["session_id"] or "").strip() or "main"
+
+
+@router.get("/api/nest/threads")
+def nest_threads(limit: int = 80):
+    """所有对话窗口（按 session_id 分组）。空 session_id = 老数据 = 主窗口。"""
+    lim = max(1, min(int(limit or 80), 300))
+    rows = list(_store.db.execute("SELECT * FROM turns ORDER BY id DESC LIMIT 4000"))
+    seen, out = {}, []
+    for r in reversed(rows):
+        s = _nest_sid(r)
+        it = seen.get(s)
+        if it is None:
+            seen[s] = it = {"sid": s, "n": 0, "t0": r["ts"], "t1": r["ts"], "title": ""}
+            out.append(it)
+        it["n"] += 1
+        it["t1"] = r["ts"]
+        if not it["title"] and r["role"] == "user" and (r["content"] or "").strip():
+            it["title"] = (r["content"] or "").replace("|||", " ").strip()[:26]
+    out.sort(key=lambda x: -(x["t1"] or 0))
+    for it in out:
+        it["title"] = it["title"] or "（空窗口）"
+    return JSONResponse({"items": out[:lim]})
+
+
+@router.get("/api/nest/thread")
+def nest_thread(sid: str = "main", limit: int = 80, before: int = 0):
+    """某个窗口的历史（带 think / tools / ts / 隐藏标记）。"""
+    lim = max(1, min(int(limit or 80), 400))
+    key = (sid or "main").strip() or "main"
+    sql = ("SELECT * FROM turns WHERE COALESCE(NULLIF(TRIM(session_id),''),'main')=? "
+           + ("AND id<? " if before else "") + "ORDER BY id DESC LIMIT ?")
+    args = (key, int(before), lim) if before else (key, lim)
+    rows = list(_store.db.execute(sql, args))
+    rows.reverse()
+    items = []
+    for r in rows:
+        try:
+            tools = json.loads(r["tools"]) if r["tools"] else []
+        except Exception:
+            tools = []
+        try:
+            parts = json.loads(r["hidden_parts"]) if r["hidden_parts"] else None
+        except Exception:
+            parts = None
+        items.append({"id": r["id"], "role": r["role"], "content": r["content"],
+                      "think": r["think"] or "", "tools": tools,
+                      "starred": bool(r["starred"]), "ts": r["ts"],
+                      "hidden": bool(r["hidden"]), "parts": parts})
+    return JSONResponse({"items": items, "sid": key})
