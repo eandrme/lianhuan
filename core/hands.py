@@ -382,3 +382,29 @@ async def execute(name: str, args: dict) -> dict:
         _store.set_setting("now_playing", cur)
         return {"ok": True, "name": nm}
     return {"ok": False, "err": f"没有「{name}」这只手"}
+# ===== 工具调用留痕：包一层 execute，前台 / 离线 / MCP 全部记下来 =====
+_orig_execute = globals().get("execute")
+
+if callable(_orig_execute):
+    async def execute(name, args=None, *a, **kw):          # noqa: F811
+        import time as _t
+        from . import toollog as _tl
+        t0 = _t.time()
+        ok, err, res = True, "", None
+        try:
+            r = await _orig_execute(name, args, *a, **kw)
+            res = r
+            if isinstance(r, dict) and r.get("ok") is False:
+                ok = False
+                err = str(r.get("err") or r.get("error") or "")[:200]
+            return r
+        except Exception as e:
+            ok, err = False, f"{type(e).__name__}: {e}"[:200]
+            raise
+        finally:
+            try:
+                _tl.record(name, ok, err, args, res, _t.time() - t0)
+            except Exception:
+                pass
+else:
+    print("[toollog] 没找到 hands.execute，留痕没装上", flush=True)
