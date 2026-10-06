@@ -18620,3 +18620,95 @@ window._kmMount = function(){
   console.log('[mcp] 开关面板已挂上');
 })();
 </script>
+<script>
+/* ===== 工具调用记录面板（追加式，自包含）===== */
+(function () {
+  if (window.__toolPanel) return;
+  window.__toolPanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#tlBtn{position:fixed;left:12px;bottom:104px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#tlBtn.bad{border-color:#a8503f}
+#tlPanel{position:fixed;left:12px;bottom:160px;z-index:9999;width:min(90vw,340px);max-height:60vh;overflow:auto;
+  background:#141821;color:#e2e8f4;border:1px solid #3a4360;border-radius:14px;padding:10px 12px;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);display:none;font-size:12.5px;line-height:1.4}
+#tlPanel .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;cursor:move}
+#tlPanel .hd b{color:#9db0d4;font-size:13px}
+#tlPanel .hd span{color:#7f8ba3;font-size:12px;padding:2px 6px;cursor:pointer}
+#tlPanel .c{padding:7px 0;border-top:1px solid #242b3a}
+#tlPanel .l1{display:flex;align-items:center;gap:6px}
+#tlPanel .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tlPanel .tm{color:#6f7b93;font-size:11px}
+#tlPanel .ok{color:#7fd18b} #tlPanel .bad{color:#e18a7c}
+#tlPanel .l2{color:#8b97ad;font-size:11px;margin-top:2px;word-break:break-all}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'tlBtn'; btn.textContent = '🔧'; btn.title = '工具调用记录';
+  const panel = document.createElement('div');
+  panel.id = 'tlPanel';
+  panel.innerHTML = '<div class="hd"><b>工具调用</b><span id="tlRefresh">刷新</span></div>'
+    + '<div style="margin:2px 0 4px"><label style="color:#8b97ad;font-size:12px">'
+    + '<input id="tlOnlyBad" type="checkbox"> 只看失败</label></div><div id="tlList">…</div>';
+  document.body.appendChild(btn); document.body.appendChild(panel);
+
+  const listEl = panel.querySelector('#tlList');
+  const onlyBad = panel.querySelector('#tlOnlyBad');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  let timer = null;
+
+  function draw(items) {
+    if (!items.length) { listEl.innerHTML = '<div class="l2" style="padding:8px 0">还没有调用记录。</div>'; return; }
+    listEl.innerHTML = items.map(c =>
+      '<div class="c"><div class="l1"><span class="' + (c.ok ? 'ok' : 'bad') + '">' + (c.ok ? '✅' : '❌') + '</span>'
+      + '<span class="nm">' + esc(c.tool) + '</span><span class="tm">' + esc(c.t)
+      + (c.ms ? ' · ' + c.ms + 'ms' : '') + '</span></div>'
+      + (c.args ? '<div class="l2">入参：' + esc(c.args) + '</div>' : '')
+      + (c.err ? '<div class="l2 bad">错误：' + esc(c.err) + '</div>'
+               : (c.res ? '<div class="l2">结果：' + esc(c.res) + '</div>' : ''))
+      + '</div>').join('');
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/tools/log?limit=40', { cache: 'no-store' });
+      const j = await r.json();
+      let items = j.calls || [];
+      btn.classList.toggle('bad', items.slice(0, 5).some(c => !c.ok));
+      if (onlyBad.checked) items = items.filter(c => !c.ok);
+      draw(items);
+    } catch (e) { listEl.innerHTML = '<div class="l2 bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  btn.onclick = () => {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!open) { load(); timer = setInterval(load, 5000); }
+  };
+  panel.querySelector('#tlRefresh').onclick = load;
+  onlyBad.onchange = load;
+
+  /* 可拖动（记住位置；复位：localStorage.removeItem('tlPanelPos')）*/
+  (function () {
+    const hd = panel.querySelector('.hd');
+    let ox = 0, oy = 0, d = false;
+    const saved = JSON.parse(localStorage.getItem('tlPanelPos') || 'null');
+    if (saved) { panel.style.left = saved.l + 'px'; panel.style.top = saved.t + 'px'; panel.style.bottom = 'auto'; }
+    const s0 = (x, y) => { d = true; const b = panel.getBoundingClientRect(); ox = x - b.left; oy = y - b.top; };
+    const m0 = (x, y) => { if (!d) return; panel.style.left = (x - ox) + 'px'; panel.style.top = (y - oy) + 'px'; panel.style.bottom = 'auto'; };
+    const e0 = () => { if (!d) return; d = false; const b = panel.getBoundingClientRect(); localStorage.setItem('tlPanelPos', JSON.stringify({ l: b.left, t: b.top })); };
+    hd.addEventListener('mousedown', e => s0(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => m0(e.clientX, e.clientY));
+    window.addEventListener('mouseup', e0);
+    hd.addEventListener('touchstart', e => { const t = e.touches[0]; s0(t.clientX, t.clientY); }, { passive: true });
+    hd.addEventListener('touchmove', e => { const t = e.touches[0]; m0(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+    hd.addEventListener('touchend', e0);
+  })();
+
+  console.log('[toollog] 面板已挂上');
+})();
+</script>
