@@ -18712,3 +18712,167 @@ window._kmMount = function(){
   console.log('[toollog] 面板已挂上');
 })();
 </script>
+<script>
+/* ===== 实时活动面板：思考 / 在干嘛 / 工具调用（拦 SSE 流；追加式，自包含）===== */
+(function () {
+  if (window.__livePanel) return;
+  window.__livePanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#lvPill{position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:10000;max-width:92vw;
+  background:#151a24;color:#dfe6f3;border:1px solid #3a4360;border-radius:999px;padding:5px 12px;
+  font-size:12.5px;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.45);display:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+#lvBtn{position:fixed;left:12px;bottom:158px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;
+  justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#lvPanel{position:fixed;left:50%;transform:translateX(-50%);top:44px;z-index:10001;
+  width:min(92vw,430px);max-height:56vh;overflow:auto;background:#141821;color:#e2e8f4;
+  border:1px solid #3a4360;border-radius:14px;padding:10px 12px;box-shadow:0 12px 34px rgba(0,0,0,.55);
+  display:none;font-size:12.5px;line-height:1.5}
+#lvPanel h5{margin:0 0 6px;font-size:12.5px;color:#9db0d4;font-weight:600}
+#lvPanel .sec{margin-top:8px;border-top:1px solid #242b3a;padding-top:8px}
+#lvPanel .think{white-space:pre-wrap;color:#a9b6cd;max-height:22vh;overflow:auto;
+  background:#11151d;border-radius:8px;padding:6px 8px;font-size:12px}
+#lvPanel .trow{display:flex;gap:6px;align-items:baseline;margin-top:3px}
+#lvPanel .tname{flex:0 0 auto;font-weight:600}
+#lvPanel .targs{color:#8b97ad;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lvPanel .ok{color:#7fd18b} #lvPanel .bad{color:#e18a7c} #lvPanel .run{color:#e0c07a}
+#lvPanel .raw{color:#6f7b93;font-size:11px;word-break:break-all}`;
+  document.head.appendChild(st);
+
+  const pill = document.createElement('div'); pill.id = 'lvPill';
+  const btn = document.createElement('div'); btn.id = 'lvBtn'; btn.textContent = '🧠'; btn.title = '看它在干嘛';
+  const panel = document.createElement('div'); panel.id = 'lvPanel';
+  panel.innerHTML = '<h5>这一轮</h5><div id="lvStage" class="raw">（空）</div>'
+    + '<div class="sec"><h5>思考</h5><div id="lvThink" class="think">（还没有）</div></div>'
+    + '<div class="sec"><h5>工具</h5><div id="lvTools" class="raw">（还没有）</div></div>'
+    + '<div class="sec"><h5>原始事件（调试用，字段名对不上时把它截图给我）</h5><div id="lvRaw" class="raw">—</div></div>';
+  document.body.appendChild(pill); document.body.appendChild(btn); document.body.appendChild(panel);
+
+  let stage = '', think = '', tools = [], lastRaw = '', hideTimer = null;
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const cut = (s, n) => { s = typeof s === 'string' ? s : JSON.stringify(s); s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
+  const pick = (o, keys) => { for (const k of keys) { if (o[k] != null && o[k] !== '') return o[k]; } return ''; };
+  const el = id => document.getElementById(id);
+
+  function reset() { stage = ''; think = ''; tools = []; render(); }
+
+  function addTool(name, note, cls) {
+    const i = tools.findIndex(t => t.name === name && t.cls === 'run');
+    if (i >= 0) {
+      tools[i].note = note || tools[i].note;
+      tools[i].cls = cls || tools[i].cls;
+      tools[i].mark = cls === 'bad' ? '❌' : cls === 'ok' ? '✅' : '⏳';
+      return;
+    }
+    tools.push({ name: name || '?', note: note || '', cls: cls || 'run',
+                 mark: cls === 'bad' ? '❌' : cls === 'ok' ? '✅' : '⏳' });
+  }
+
+  function render() {
+    if (el('lvStage')) el('lvStage').textContent = stage || '（空）';
+    if (el('lvThink')) { el('lvThink').textContent = think || '（还没有）'; el('lvThink').scrollTop = 1e6; }
+    if (el('lvTools')) {
+      el('lvTools').innerHTML = tools.length ? tools.map(t =>
+        '<div class="trow"><span class="' + t.cls + '">' + t.mark + '</span>'
+        + '<span class="tname">' + esc(t.name) + '</span>'
+        + '<span class="targs">' + esc(cut(t.note, 90)) + '</span></div>').join('') : '（还没有）';
+    }
+    if (el('lvRaw')) el('lvRaw').textContent = cut(lastRaw, 220) || '—';
+
+    const running = tools.filter(t => t.cls === 'run').length;
+    const bad = tools.filter(t => t.cls === 'bad').length;
+    const bits = [];
+    if (stage) bits.push('🎬 ' + stage);
+    if (running) bits.push('🔧 ' + running + ' 个工具在跑');
+    else if (tools.length) bits.push('🔧 ' + tools.length + ' 个工具' + (bad ? '（' + bad + ' 失败）' : ' ✅'));
+    if (!tools.length && think) bits.push('🧠 在想…');
+    if (!bits.length) bits.push('⏳ 出手中…');
+    pill.textContent = bits.join(' · ');
+    pill.style.display = 'block';
+    pill.style.borderColor = bad ? '#a8503f' : '#3a4360';
+
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { pill.style.display = 'none'; }, 20000);
+  }
+
+  function onEvent(d, raw) {
+    lastRaw = raw;
+    const t = d.type;
+    if (t === 'recv') { reset(); }
+    else if (t === 'stage') { stage = String(pick(d, ['text', 't', 'msg', 's', 'content', 'stage']) || ''); }
+    else if (t === 'os') {
+      const x = pick(d, ['text', 'delta', 'content', 's', 'os', 't']);
+      if (x) { think += String(x); if (think.length > 20000) think = think.slice(-20000); }
+    }
+    else if (t === 'tool_live') {
+      addTool(String(pick(d, ['name', 'tool', 'fn', 'function']) || '?'), '启动…', 'run');
+    }
+    else if (t === 'tool') {
+      const n = String(pick(d, ['name', 'tool', 'fn', 'function']) || '?');
+      const a = pick(d, ['args', 'arg', 'params', 'arguments']);
+      addTool(n, a ? cut(a, 90) : '跑着…', 'run');
+    }
+    else if (t === 'tool_done') {
+      const n = String(pick(d, ['name', 'tool', 'fn', 'function']) || '?');
+      const bad = !!(d.err || d.error || d.fail || d.failed || d.isError)
+                || d.ok === 0 || d.ok === false || d.success === false;
+      const ms = d.ms || d.dur || d.elapsed || d.duration || '';
+      const note = (ms ? ms + 'ms' : '') + (d.err ? ' ' + cut(d.err, 60) : '');
+      const i = tools.findIndex(x => x.name === n && x.cls === 'run');
+      if (i >= 0) { tools[i].cls = bad ? 'bad' : 'ok'; tools[i].mark = bad ? '❌' : '✅'; tools[i].note = note || tools[i].note; }
+      else addTool(n, note, bad ? 'bad' : 'ok');
+    }
+    render();
+  }
+
+  /* ---- 拦流：只挑 text/event-stream 的响应，其它一律原样放行 ---- */
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const res = await _fetch(input, init);
+    try {
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('text/event-stream') && res.body && typeof res.body.tee === 'function') {
+        const [forUs, forThem] = res.body.tee();
+        pump(forUs);
+        return new Response(forThem, { status: res.status, statusText: res.statusText, headers: res.headers });
+      }
+    } catch (e) { /* 出任何问题都不打断聊天 */ }
+    return res;
+  };
+
+  async function pump(stream) {
+    const rd = stream.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    try {
+      for (;;) {
+        const { value, done } = await rd.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (!line.startsWith('data:')) continue;
+          const raw = line.slice(5).trim();
+          if (!raw) continue;
+          try { onEvent(JSON.parse(raw), raw); } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+
+  function toggle() {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) render();
+  }
+  pill.onclick = toggle;
+  btn.onclick = toggle;
+  console.log('[live] 活动面板已挂上');
+})();
+</script>
