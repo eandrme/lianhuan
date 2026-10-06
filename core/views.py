@@ -351,3 +351,14 @@ async def _api_memory_del(req: Request):
         return {"ok": True}
     except Exception as e:
         return {"ok": False, "err": str(e)[:200]}
+# ===== offline：手动跑一场（?dry=1 只试跑，不落库、不改状态）=====
+from . import offline as _offline
+
+@router.post("/api/offline/run")
+async def api_offline_run(dry: int = 0):
+    import asyncio
+    try:
+        asyncio.ensure_future(_offline.tick(force=True, dry=bool(dry)))
+    except Exception as e:
+        return {"ok": False, "err": str(e)}
+    return {"ok": True, "dry": bool(dry), "note": "看 journalctl -u lianhuan -f | grep -i offline"}
