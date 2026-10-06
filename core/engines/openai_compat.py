@@ -238,7 +238,7 @@ class OpenAICompatEngine(Engine):
                         if not ok:
                             err = str(result.get("err") or result.get("error") or "没成")[:120]
                         yield sse("tool", name=name,
-                                  args=str((c.get("function") or {}).get("arguments") or "")[:400]     
+                                  args=str((c.get("function") or {}).get("arguments") or "")[:400])    
                         yield sse("tool_done", name=name, ok=ok, err=err)
                         msgs.append({"role": "tool", "tool_call_id": c.get("id"),
                                      "content": json.dumps(result, ensure_ascii=False)[:2000]})
