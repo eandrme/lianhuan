@@ -219,3 +219,232 @@ async def book_del(bid: int):
     _store.db.execute("DELETE FROM books WHERE id=?", (bid,))
     _store.db.commit()
     return JSONResponse({"ok": True})
+
+# ══════════════════ 创造：世界观 / 角色 / 故事 ══════════════════
+_CREATED = {"ok": False}
+
+
+def _ct() -> None:
+    """第一次用到时建表（幂等）。"""
+    if _CREATED["ok"]:
+        return
+    for ddl in (
+        "CREATE TABLE IF NOT EXISTS worlds (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " name TEXT NOT NULL, note TEXT DEFAULT '', ts REAL)",
+        "CREATE TABLE IF NOT EXISTS casts (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " wid INTEGER DEFAULT 0, name TEXT NOT NULL, note TEXT DEFAULT '', ts REAL)",
+        "CREATE TABLE IF NOT EXISTS stories (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " wid INTEGER DEFAULT 0, title TEXT DEFAULT '', body TEXT DEFAULT '', ts REAL)",
+        "CREATE TABLE IF NOT EXISTS story_notes (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " sid INTEGER NOT NULL, quote TEXT DEFAULT '', note TEXT DEFAULT '',"
+        " author TEXT DEFAULT 'me', ts REAL)",
+        "CREATE TABLE IF NOT EXISTS story_chat (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " sid INTEGER NOT NULL, role TEXT, content TEXT, ts REAL)",
+    ):
+        _store.db.execute(ddl)
+    _store.db.commit()
+    _CREATED["ok"] = True
+
+
+def _t(ts) -> str:
+    return datetime.fromtimestamp(ts or 0).strftime("%m-%d %H:%M")
+
+
+@router.get("/api/worlds")
+def worlds():
+    """世界观列表 + 每个下面挂了多少角色/故事。"""
+    _ct()
+    out = []
+    for r in _store.db.execute("SELECT * FROM worlds ORDER BY id DESC"):
+        nc = _store.db.execute("SELECT count(*) n FROM casts WHERE wid=?", (r["id"],)).fetchone()["n"]
+        ns = _store.db.execute("SELECT count(*) n FROM stories WHERE wid=?", (r["id"],)).fetchone()["n"]
+        out.append({"id": r["id"], "name": r["name"], "note": r["note"] or "",
+                    "casts": nc, "stories": ns, "t": _t(r["ts"])})
+    orphan = _store.db.execute(
+        "SELECT count(*) n FROM stories WHERE COALESCE(wid,0)=0").fetchone()["n"]
+    return JSONResponse({"items": out, "orphan": orphan})
+
+
+@router.post("/api/worlds/save")
+async def world_save(req: Request):
+    _ct()
+    b = await req.json()
+    name = (b.get("name") or "").strip()[:40]
+    if not name:
+        return JSONResponse({"ok": False, "err": "得有个名字"}, status_code=400)
+    note = (b.get("note") or "")[:3000]
+    wid = int(b.get("id") or 0)
+    if wid:
+        _store.db.execute("UPDATE worlds SET name=?, note=? WHERE id=?", (name, note, wid))
+    else:
+        wid = _store.db.execute("INSERT INTO worlds(name,note,ts) VALUES(?,?,?)",
+                                (name, note, time.time())).lastrowid
+    _store.db.commit()
+    return JSONResponse({"ok": True, "id": wid})
+
+
+@router.post("/api/worlds/{wid}/del")
+def world_del(wid: int):
+    """删世界观 —— 里面的角色和故事**不会**跟着删，变成「未归类」。"""
+    _ct()
+    _store.db.execute("UPDATE stories SET wid=0 WHERE wid=?", (wid,))
+    _store.db.execute("UPDATE casts SET wid=0 WHERE wid=?", (wid,))
+    _store.db.execute("DELETE FROM worlds WHERE id=?", (wid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/worlds/{wid}")
+def world_one(wid: int):
+    _ct()
+    w = _store.db.execute("SELECT * FROM worlds WHERE id=?", (wid,)).fetchone()
+    casts = [{"id": r["id"], "name": r["name"], "note": r["note"] or "", "wid": r["wid"] or 0}
+             for r in _store.db.execute("SELECT * FROM casts WHERE wid=? ORDER BY id", (wid,))]
+    sts = [{"id": r["id"], "wid": r["wid"] or 0, "title": r["title"] or "",
+            "excerpt": (r["body"] or "").replace("\n", " ")[:70], "t": _t(r["ts"])}
+           for r in _store.db.execute("SELECT * FROM stories WHERE wid=? ORDER BY id DESC", (wid,))]
+    return JSONResponse({"world": {"id": wid, "name": (w["name"] if w else ""),
+                                   "note": (w["note"] if w else "")},
+                         "casts": casts, "stories": sts})
+
+
+@router.post("/api/casts/save")
+async def cast_save(req: Request):
+    _ct()
+    b = await req.json()
+    name = (b.get("name") or "").strip()[:40]
+    if not name:
+        return JSONResponse({"ok": False, "err": "角色得有个名字"}, status_code=400)
+    cid, wid = int(b.get("id") or 0), int(b.get("wid") or 0)
+    note = (b.get("note") or "")[:6000]
+    if cid:
+        _store.db.execute("UPDATE casts SET name=?, note=?, wid=? WHERE id=?", (name, note, wid, cid))
+    else:
+        cid = _store.db.execute("INSERT INTO casts(wid,name,note,ts) VALUES(?,?,?,?)",
+                                (wid, name, note, time.time())).lastrowid
+    _store.db.commit()
+    return JSONResponse({"ok": True, "id": cid})
+
+
+@router.post("/api/casts/{cid}/del")
+def cast_del(cid: int):
+    _ct()
+    _store.db.execute("DELETE FROM casts WHERE id=?", (cid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/stories")
+def stories(wid: int = -1, q: str = ""):
+    """wid >= 0 只看某个世界观下面的；不传 = 全部。"""
+    _ct()
+    sql = "SELECT * FROM stories"
+    args = []
+    if wid >= 0:
+        sql += " WHERE COALESCE(wid,0)=?"
+        args.append(wid)
+    sql += " ORDER BY id DESC LIMIT 200"
+    out = []
+    for r in _store.db.execute(sql, args):
+        if q and q not in (r["title"] or "") and q not in (r["body"] or ""):
+            continue
+        out.append({"id": r["id"], "wid": r["wid"] or 0, "title": r["title"] or "",
+                    "excerpt": (r["body"] or "").replace("\n", " ")[:70],
+                    "n": len(r["body"] or ""), "t": _t(r["ts"])})
+    return JSONResponse({"items": out})
+
+
+@router.get("/api/stories/{sid}")
+def story_one(sid: int):
+    _ct()
+    r = _store.db.execute("SELECT * FROM stories WHERE id=?", (sid,)).fetchone()
+    if not r:
+        return JSONResponse({"ok": False, "err": "没有这篇"}, status_code=404)
+    return JSONResponse({"ok": True, "id": r["id"], "wid": r["wid"] or 0,
+                         "title": r["title"] or "", "body": r["body"] or ""})
+
+
+@router.post("/api/stories/save")
+async def story_save(req: Request):
+    """id 为空 = 新写一篇；带 id = 改。wid=0 表示先不归类。"""
+    _ct()
+    b = await req.json()
+    sid, wid = int(b.get("id") or 0), int(b.get("wid") or 0)
+    title = (b.get("title") or "").strip()[:60] or "没起名"
+    body = (b.get("body") or "")[:200000]
+    if sid:
+        _store.db.execute("UPDATE stories SET wid=?, title=?, body=? WHERE id=?",
+                          (wid, title, body, sid))
+    else:
+        sid = _store.db.execute("INSERT INTO stories(wid,title,body,ts) VALUES(?,?,?,?)",
+                                (wid, title, body, time.time())).lastrowid
+    _store.db.commit()
+    return JSONResponse({"ok": True, "id": sid})
+
+
+@router.post("/api/stories/{sid}/del")
+def story_del(sid: int):
+    _ct()
+    for sql in ("DELETE FROM story_notes WHERE sid=?", "DELETE FROM story_chat WHERE sid=?"):
+        _store.db.execute(sql, (sid,))
+    _store.db.execute("DELETE FROM stories WHERE id=?", (sid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/stories/{sid}/notes")
+def story_notes(sid: int):
+    _ct()
+    rows = [{"id": r["id"], "quote": r["quote"] or "", "note": r["note"] or "",
+             "author": r["author"] or "me", "t": _t(r["ts"])}
+            for r in _store.db.execute("SELECT * FROM story_notes WHERE sid=? ORDER BY id", (sid,))]
+    return JSONResponse({"items": rows})
+
+
+@router.post("/api/stories/{sid}/notes")
+async def story_note_add(sid: int, req: Request):
+    _ct()
+    b = await req.json()
+    _store.db.execute("INSERT INTO story_notes(sid,quote,note,author,ts) VALUES(?,?,?,?,?)",
+                      (sid, (b.get("quote") or "")[:500], (b.get("note") or "")[:500],
+                       b.get("author") or "me", time.time()))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/api/stories/{sid}/chat")
+def story_chat_get(sid: int):
+    _ct()
+    rows = [{"role": r["role"], "content": r["content"], "t": _t(r["ts"])}
+            for r in _store.db.execute("SELECT * FROM story_chat WHERE sid=? ORDER BY id", (sid,))]
+    return JSONResponse({"items": rows})
+
+
+@router.post("/api/stories/{sid}/chat")
+async def story_chat_post(sid: int, req: Request):
+    """创作小窗：不带工具、和主聊天无关，只认这个故事。"""
+    _ct()
+    b = await req.json()
+    q = (b.get("message") or "").strip()
+    if not q:
+        return JSONResponse({"ok": False}, status_code=400)
+    st = _store.db.execute("SELECT * FROM stories WHERE id=?", (sid,)).fetchone()
+    _store.db.execute("INSERT INTO story_chat(sid,role,content,ts) VALUES(?,?,?,?)",
+                      (sid, "user", q, time.time()))
+    _store.db.commit()
+    body = (st["body"] if st else "") or ""
+    title = (st["title"] if st else "") or "没起名"
+    try:
+        a = await _say("你们在一起写一个故事，题目叫《" + title + "》。"
+                       "目前写到的内容：\n" + body[:2400] + "\n\n"
+                       "对方说：「" + q + "」\n"
+                       "就着这个故事接着聊 —— 像一起写东西的搭档，"
+                       "一两段，可以提建议、接一句、或者顺着往下想，别写成文学评论。")
+    except Exception:
+        a = ""
+    if not (a or "").strip():
+        return JSONResponse({"ok": False, "err": "这回没接上话"}, status_code=502)
+    _store.db.execute("INSERT INTO story_chat(sid,role,content,ts) VALUES(?,?,?,?)",
+                      (sid, "assistant", a.strip(), time.time()))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "reply": a.strip()})
