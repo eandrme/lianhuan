@@ -120,6 +120,20 @@ try{
       const aiPct=b.chapters?Math.round(100*((b.ai_idx||0)+1)/b.chapters):0;
       c.append(bar("它",aiPct,"ai"));
       c.append(el("div","st-meta",(b.chapters||0)+" 章"));
+             const ops=el("div"); ops.style.cssText="display:flex;gap:6px;margin-top:8px";
+      const rn=el("button",null,"改名");
+      rn.style.cssText="flex:1;padding:4px;border-radius:7px;border:1px solid var(--line);background:none;font-size:12px;color:var(--dim)";
+      rn.onclick=(e)=>{e.stopPropagation();
+        const t=prompt("新书名：",b.title||"");if(!t||!t.trim())return;
+        jpost("/api/books/"+b.id+"/rename",{title:t.trim()}).then(r=>{if(r.ok){say("改好了");shelf();}else say("改不了："+(r.err||"?"));});
+      };
+      const dl=el("button",null,"删");
+      dl.style.cssText="padding:4px 9px;border-radius:7px;border:1px solid var(--err);background:none;font-size:12px;color:var(--err)";
+      dl.onclick=(e)=>{e.stopPropagation();
+        if(!confirm("删掉《"+(b.title||"")+"》？书、批注、聊天记录都会一起没"))return;
+        jpost("/api/books/"+b.id+"/del",{}).then(r=>{if(r.ok){say("删了");shelf();}else say("删不掉");});
+      };
+      ops.append(rn,dl); c.append(ops);
       c.onclick=async()=>{
         await jpost("/api/books/"+b.id+"/current");
         open(b,Math.max(0,b.my_idx||0));
