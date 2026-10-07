@@ -82,9 +82,11 @@ try{
       view.innerHTML="";
       const top=el("div","st-top");
       const tabs=el("div","st-tabs");
-      const b1=el("button","on","书架");
+            const b1=el("button","on","书架");
+      b1.onclick=()=>shelf();
       const b2=el("button",null,"创造");
-      b2.onclick=()=>say("「创造」是 ⑤C，还没接上");
+      b2.onclick=()=>{ b1.classList.remove("on"); b2.classList.add("on");
+        if(window.NEST_CREATION)window.NEST_CREATION(view); else say("「创造」还没接上"); };
       tabs.append(b1,b2);
       const up=el("button","st-up","＋ 放书");
       up.onclick=pickFile;
