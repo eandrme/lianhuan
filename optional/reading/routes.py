@@ -197,3 +197,25 @@ def book_notes(bid: int):
     return JSONResponse({"title": bk["title"] if bk else "",
                          "annotations": _j.loads(bytes(annos.body))["items"],
                          "chat": _j.loads(bytes(chat.body))["items"]})
+
+@router.post("/api/books/{bid}/rename")
+async def book_rename(bid: int, req: Request):
+    b = await req.json()
+    t = (b.get("title") or "").strip()[:60]
+    if not t:
+        return JSONResponse({"ok": False, "err": "名字不能空"}, status_code=400)
+    _store.db.execute("UPDATE books SET title=? WHERE id=?", (t, bid))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "title": t})
+
+
+@router.post("/api/books/{bid}/del")
+async def book_del(bid: int):
+    """删一本书，连它的章节 / 批注 / 小窗记录一起删。"""
+    for sql in ("DELETE FROM book_chapters WHERE bid=?",
+                "DELETE FROM book_annotations WHERE bid=?",
+                "DELETE FROM book_chat WHERE bid=?"):
+        _store.db.execute(sql, (bid,))
+    _store.db.execute("DELETE FROM books WHERE id=?", (bid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
