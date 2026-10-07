@@ -127,7 +127,7 @@ try{
   async function loadChat(){
     listEl.innerHTML=""; listEl.append(el("div","hint","读着…"));
     try{
-      const j=await jget("/api/books/"+cur.bid+"/chat");
+      const j=await jget("/api/books/"+cur.id+"/chat");
       listEl.innerHTML="";
       const its=j.items||[];
       if(!its.length)listEl.append(el("div","hint","还没聊过这本书。说点什么？"));
@@ -146,7 +146,7 @@ try{
     busy=true;
     const th=addMsg("thinking","它在想…");
     try{
-      const r=await jpost("/api/books/"+cur.bid+"/chat",{message:full});
+      const r=await jpost("/api/books/"+cur.id+"/chat",{message:full});
       th.remove();
       if(r.ok)addMsg("assistant",r.reply||"");
       else addMsg("err","没接上话："+(r.err||"?"));
