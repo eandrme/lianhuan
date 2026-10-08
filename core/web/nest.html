@@ -50,6 +50,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .turn.sup .meta{opacity:.6}
 .supnote{font-size:12px;color:var(--dim2);border-left:2px solid var(--line);
   padding:1px 0 1px 8px;margin-top:7px;max-width:88%}
+/* 气泡里的附件：图直接看得见，文件给名字（点开是原文件） */
+.atts{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 7px}
+.turn.me .atts{justify-content:flex-end}
+.att-img img{display:block;max-width:min(230px,62vw);max-height:230px;
+  border-radius:11px;border:1px solid var(--line)}
+.att-file{display:inline-flex;align-items:center;gap:6px;text-decoration:none;
+  font-size:13px;color:var(--dim);background:var(--panel);border:1px solid var(--line);
+  border-radius:9px;padding:7px 11px;max-width:76vw}
+.att-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 details.think{margin:0 0 7px;background:var(--panel);border:1px solid var(--line);
   border-radius:var(--r-sm);overflow:hidden}
@@ -208,7 +217,7 @@ async function loadHistory(){
     if(!items.length){S.append(el("div","hint","这里是你和它的家。说点什么。"));}
     items.forEach(it=>addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
                                tools:it.tools,t:hm2(it.ts),ts:it.ts,
-                               superseded:it.superseded}));
+                               files:it.files,superseded:it.superseded}));
     toBottom(true);
   }catch(e){S.append(el("div","errbox","历史读不出来："+e.message));}
 }
@@ -235,6 +244,25 @@ function toolEl(name,state,ms,err,args){
   h.onclick=()=>d.classList.toggle("open");
   return d;
 }
+/* 附件：图直接看，文件给个名字，点开是原文件 */
+function attachEl(fs){
+  const box=el("div","atts");
+  (fs||[]).forEach(f=>{
+    if(!f||!f.url)return;
+    const a=el("a",f.kind==="img"?"att-img":"att-file");
+    a.href=f.url;a.target="_blank";a.rel="noreferrer";
+    if(f.kind==="img"){
+      const im=el("img");im.src=f.url;im.alt=f.name||"";
+      // 取不到（没登录 / 文件被清了）就整块摘掉，别在气泡里留个破图标
+      im.onerror=()=>a.remove();
+      a.append(im);
+    }else{
+      a.append(el("span","ic","📎"),el("span","nm",f.name||"文件"));
+    }
+    box.append(a);
+  });
+  return box.children.length?box:null;
+}
 function addTurn(it){
   const w=el("div","turn "+(it.role==="user"?"me":"ai")+(it.superseded?" sup":""));
   if(it.id)w.dataset.id=it.id;
@@ -251,6 +279,8 @@ function addTurn(it){
   w.append(m);
   if(it.think)w.append(thinkEl(it.think));
   (it.tools||[]).forEach(t=>w.append(toolEl(t.name,t.ok===false?"err":"ok",null,t.err||"","")));
+  const at=attachEl(it.files);
+  if(at)w.append(at);
   const bs=el("div","bubbles");
   splitSay(it.content).forEach(x=>bs.append(el("div","bubble",x)));
   w.append(bs);
@@ -354,15 +384,26 @@ async function stream(url,opt,onEv){
 /* ══════ 发送 / 停止 / 续读 ══════ */
 async function send(){
   const ta=$("#ta");const text=ta.value.trim();
-  if(!text||BUSY)return;
+  const att=(window.nestAttach?window.nestAttach.count():0);
+  if((!text&&!att)||BUSY)return;
+  /* ★ 附件先送上去，送不上去就整批不发 —— 半批发出去，你不知道少了哪一张。
+     暂存区原样留着（含你刚打的那句话），再按一次发送就行。 */
+  let files=[];
+  if(att){
+    setBusy(true);stat("正在送 "+att+" 样过去…");
+    try{ files=await window.nestAttach.collect(); }catch(e){ files=null; }
+    setBusy(false);
+    if(!files){ stat("没送上去，都还留着，再按一次发送");return; }
+  }
   ta.value="";grow();
-  addTurn({role:"user",content:text,t:nowHM()});toBottom(true);
+  addTurn({role:"user",content:text,t:nowHM(),files:files});toBottom(true);
   setBusy(true);stat("在想…");
   const L=liveTurn();
   try{
     await stream("/chat",
       {method:"POST",headers:{"Content-Type":"application/json"},
-       body:JSON.stringify({message:text,session_id:SID||undefined})},
+       body:JSON.stringify({message:text,session_id:SID||undefined,
+                            files:files.length?files:undefined})},
       ev=>handle(ev,L));
   }catch(e){
     if(e.message!=="unauthorized")L.bs.append(el("div","errbox","断了："+e.message));
@@ -650,5 +691,6 @@ boot();
   <script src="/nest-creation.js?v=1"></script>
   <script src="/nest-notes.js?v=1"></script>
   <script src="/nest-threads.js?v=1"></script>
+  <script src="/nest-files.js?v=1"></script>
 </body>
 </html>

@@ -51,7 +51,7 @@ try{
         if(typeof addTurn==="function")
           addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
                    tools:it.tools,t:hm2(it.ts),ts:it.ts,
-                   superseded:it.superseded});
+                   files:it.files,superseded:it.superseded});
       });
       try{toBottom(true);}catch(e){}
     }catch(e){ S.append(el("div","errbox","历史读不出来："+e.message)); }
