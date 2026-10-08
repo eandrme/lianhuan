@@ -1470,8 +1470,13 @@ async def api_push_unsubscribe(req: Request):
 
 @app.get("/api/push/status")
 def api_push_status():
-    """现在有几个端订着。问「会不会发两次」时，这个数就是答案。"""
-    return JSONResponse({"subs": _push.sub_count(),
+    """现在有几个端订着。问「会不会发两次」时，这个数就是答案。
+
+    ★ `ntfy`：这一份还带一条 ntfy 桥（NTFY_URL / NTFY_TOPIC），配了的话
+      `send_push` 会**同时**发一份到那边。不把这件事说出来，界面上
+      「0 个端」配着「手机明明收到了」，没人解释得清。"""
+    ntfy = bool((os.environ.get("NTFY_URL") or os.environ.get("NTFY_TOPIC") or "").strip())
+    return JSONResponse({"subs": _push.sub_count(), "ntfy": ntfy,
                          "note": "安卓浏览器直接能推；iPhone 要 iOS 16.4+、把这页添加到主屏幕、"
                                  "从主屏图标打开，站点要 HTTPS（本机除外）"})
 
@@ -1481,7 +1486,8 @@ async def api_push_test():
     cfg = store.get_setting("config", {}) or {}
     name = (cfg.get("ai") or {}).get("name") or "他"
     n = await asyncio.to_thread(_push.send_push, name, "这是一条测试提醒", "/")
-    return JSONResponse({"sent": n})
+    ntfy = bool((os.environ.get("NTFY_URL") or os.environ.get("NTFY_TOPIC") or "").strip())
+    return JSONResponse({"ok": True, "sent": n, "ntfy": ntfy})
 
 
 def _proactive_add_turn(role: str, content: str, session_id=None) -> None:
@@ -1705,18 +1711,32 @@ def _fingerprint(rel: str) -> str:
     return fp
 
 
-_ASSET = re.compile(r'(?:src|href)="(/(?:blocks/[^"]+|[\w./-]+\.(?:css|js)))"')
+_ASSET = re.compile(r'(?:src|href)="(/(?:blocks/[^"]+|[\w./-]+\.(?:css|js)))(\?[^"]*)?"')
+
+
+def _stamp_assets(html: str) -> str:
+    """把页面里的脚本 / 样式 URL 换成带**内容指纹**的那一份。
+
+    ★ 原来只在 `/` 上做，写法还认不出已经带着 `?v=…` 的标签 —— nest.html 里
+      每一行都写死 `?v=1`。而 `/sw.js` 对静态资源是**缓存优先**（stale-while-
+      revalidate），浏览器内存缓存也会认这同一个 URL。于是自己改了 nest-*.js、
+      手机上刷新多少次跑的还是几小时前那份 —— 症状是「开关还是两个窗口同步」，
+      其实是旧 JS 在跑，跟后端一句关系都没有（真机上撞了一回才想到）。
+      URL 跟着内容走，浏览器 / Service Worker / 反向代理哪一层都自然失配。
+    """
+    def rep(m):
+        path, qs = m.group(1), m.group(2) or ""
+        fp = _fingerprint(path)
+        if not fp:
+            return m.group(0)
+        return m.group(0).replace(path + qs, path + "?v=" + fp)
+    return _ASSET.sub(rep, html)
 
 
 @app.get("/")
 def index():
     html = (WEB / "index.html").read_text(encoding="utf-8")
-
-    def stamp(m):
-        fp = _fingerprint(m.group(1))
-        return m.group(0).replace(m.group(1), m.group(1) + ("?v=" + fp if fp else ""))
-
-    return Response(_ASSET.sub(stamp, html), media_type="text/html", headers=_STATIC_HEADERS)
+    return Response(_stamp_assets(html), media_type="text/html", headers=_STATIC_HEADERS)
 
 
 def _safe(root: Path, name: str) -> Path | None:
@@ -1745,7 +1765,9 @@ def block_file(name: str):
 #:   落到 core/web/nest 上找不到文件 —— 于是回一句「没有这个东西」。
 @app.get("/nest")
 def nest_page():
-    html = (WEB / "nest.html").read_text(encoding="utf-8")
+    # ★ 跟 `/` 一样打内容指纹：这些 nest-*.js 的 URL 原来写死 `?v=1`，
+    #   而静态资源走的是「缓存优先」—— 改了脚本手机上永远跑旧的。
+    html = _stamp_assets((WEB / "nest.html").read_text(encoding="utf-8"))
     return Response(html, media_type="text/html", headers=_STATIC_HEADERS)
 
 

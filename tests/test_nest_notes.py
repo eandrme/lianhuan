@@ -451,6 +451,74 @@ class TestNestFrontendWiring(unittest.TestCase):
         self.assertIn("/api/nest/focus", js)
         self.assertIn("reportFocus", js)
 
+    def test_the_page_loads_the_settings_module(self):
+        self.assertIn('src="/nest-setting.js', self._read("nest.html"))
+        js = self._read("nest-setting.js")
+        for sec in ("secEngine", "secWhisper", "secOffline", "secPush"):
+            self.assertIn("function " + sec, js)
+
+    def test_the_frequency_words_follow_the_backend_not_Math_round(self):
+        """★ 50 的时候 Python 的 round 取偶 → 4 句，JS 的 Math.round → 5 句。
+
+        老界面（index.html）用的是 Math.round —— 在这一个点上说的比真的多一句
+        （那条测试只钉了 `Math.round(lv / 100 * 9)` 这个字符串在不在，没比同一个数）。
+        新设置页不许照着抄，得跟 `proactive.daily_max` 一模一样。
+        """
+        from core import proactive as pa
+        self.assertEqual(4, pa.daily_max(50), "后端在 50 这个点上是 4（取偶）")
+        js = self._read("nest-setting.js")
+        self.assertNotIn("Math.round(lv / 100 * 9)", js)
+        self.assertIn("return (f%2===0)?f:f+1;", js, "补上「.5 取偶」，别用 Math.round")
+
+
+class TestNestAssetsCannotGoStale(unittest.TestCase):
+    """/nest 的脚本 URL 必须**跟着内容走**。
+
+    ★ 真机上撞的：「开关还是两个窗口同步」—— 其实是手机跑的还是几小时前的
+      `nest-window.js`。nest.html 里每一行都写死 `?v=1`，而 `/sw.js` 对静态资源是
+      **缓存优先**，浏览器内存缓存也认这同一个 URL。URL 不带内容指纹，改了等于没改，
+      跟后端一句关系都没有。`/` 早就在打指纹，`/nest` 当时漏了。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import os
+        import tempfile
+        from starlette.testclient import TestClient
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.old = os.environ.get("LIANHUAN_DB")
+        os.environ["LIANHUAN_DB"] = os.path.join(cls.tmp.name, "lianhuan.db")
+        import core.server as sv
+        cls.c = TestClient(sv.app)
+
+    @classmethod
+    def tearDownClass(cls):
+        import os
+        if cls.old is None:
+            os.environ.pop("LIANHUAN_DB", None)
+        else:
+            os.environ["LIANHUAN_DB"] = cls.old
+        cls.tmp.cleanup()
+
+    def test_nest_stamps_every_script(self):
+        import re
+        html = self.c.get("/nest").text
+        for f in ("nest-window.js", "nest-setting.js", "nest-notes.js", "nest-tabs.js"):
+            self.assertRegex(html, re.escape(f) + r"\?v=[0-9a-f]{8}",
+                             f + " 没打上内容指纹")
+        self.assertNotIn('.js?v=1"', html, "写死的 ?v=1 会一直被缓存挡住")
+
+    def test_index_still_stamps_too(self):
+        import re
+        html = self.c.get("/").text
+        self.assertRegex(html, r"/mini-player\.js\?v=[0-9a-f]{8}")
+
+    def test_push_status_says_whether_ntfy_is_in_the_loop(self):
+        """配了 ntfy 会同时发一份；不说清楚，「0 个端」配着「手机明明收到了」没人解释得清。"""
+        j = self.c.get("/api/push/status").json()
+        self.assertIn("ntfy", j)
+        self.assertIn("subs", j)
+
 
 if __name__ == "__main__":
     unittest.main()
