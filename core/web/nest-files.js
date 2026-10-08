@@ -63,7 +63,8 @@ try{
     staged.forEach((s,i)=>{
       const c=el("div","att-chip");
       if(s.kind==="img"){
-        const im=el("img"); im.src=s.dataURL; im.alt="";
+        // ★ 已经传上去的（表情包那种：只有 url，没有 dataURL）也画得出来
+        const im=el("img"); im.src=s.dataURL||s.url||""; im.alt="";
         c.append(im);
       }else{
         c.append(el("span","fic","📄"));
@@ -194,6 +195,8 @@ try{
     const out=[];
     for(let i=0;i<staged.length;i++){
       const s=staged[i];
+      // ★ 已经传上去的（表情包那种只带 url 的）：不再传一遍，直接用。
+      if(s.url){ out.push({kind:s.kind,url:s.url,name:s.name}); continue; }
       let d=null;
       try{
         const r=await fetch(s.kind==="img"?"/api/upload":"/api/upload_file",
@@ -215,9 +218,26 @@ try{
     return out;
   }
 
+  /* ── 别处直接塞几样进来（表情包点一下就用到它）──
+     只收「已经在服务器上」的：服务器不认外部链接，也不会替你重传一遍。 */
+  function stage(items){
+    let added=0, full=false;
+    (items||[]).forEach(s=>{
+      if(!s||!s.url)return;
+      if(staged.length>=MAXN){ full=true; return; }
+      staged.push({kind:s.kind==="img"?"img":"file",url:s.url,
+                   name:(s.name||"文件").slice(0,80),k:++seq});
+      added++;
+    });
+    draw();
+    if(full)say("一次最多 "+MAXN+" 样");
+    return added;
+  }
+
   window.nestAttach={
     count:()=>staged.length,
     collect,
+    stage,
     clear:()=>{ staged=[]; draw(); }
   };
 }catch(e){console.error("nest-files:",e);}

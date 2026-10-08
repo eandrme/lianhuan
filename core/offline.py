@@ -240,6 +240,9 @@ def _payload(st: dict) -> dict:
         "max_min": max_min(), "turns": st.get("turns"), "chars": st.get("chars"),
         "tools": st.get("tools"), "dur": st.get("dur"),
         "next_due": st.get("next_due"), "ts": time.time(),
+        # ★ 这一场记在哪扇窗名下（每扇窗的「离线模式」开关决定的）。
+        #   老状态文件里没有，就老老实实空着，别编一个。
+        "sid": st.get("sid") or "", "window_ok": window_ok(),
     }
 
 
@@ -374,6 +377,29 @@ def user_back() -> bool:
     return seen > 0 and (time.time() - seen) < idle_min() * 60
 
 
+def current_sid() -> str:
+    """你最近待的那扇窗 —— 这一段时间记在谁名下。跟主动消息同一个口径。"""
+    try:
+        from . import proactive, windows
+        return windows.active_sid(proactive._store)
+    except Exception:
+        return "main"
+
+
+def window_ok() -> bool:
+    """你最近待的那扇窗，它的「离线模式」开关开着吗。
+
+    ★ 关掉＝这一拍不给它这段时间。总闸（OFFLINE_ENABLED）之外多这一道，
+      是因为「哪个窗口允许它走神」是随人切窗口变的事，不该写死在 .env 里。
+    ★ 读不出来一律当开着（默认就是开）。
+    """
+    try:
+        from . import proactive, windows
+        return windows.allows_active(proactive._store, "offline")
+    except Exception:
+        return True
+
+
 # ───────────────────── 一轮 / 一场 ─────────────────────
 
 async def _one_turn(d: dict, system: str, history: list, tools: list,
@@ -502,10 +528,13 @@ async def tick(force: bool = False, dry: bool = False) -> None:
         if in_quiet(now):
             _persist(st, dry, save=False)
             return                                        # 夜间静默
+        if not window_ok():
+            _persist(st, dry, save=False)
+            return                                        # 你最近那个窗口关着离线模式
 
     _STAT["tools"] = []
     st = dict(st)
-    st.update({"active": True, "started": now})
+    st.update({"active": True, "started": now, "sid": current_sid()})
     _persist(st, dry)
     _log(f"开始一场（离开约 {gap} 分｜上限 {max_min():.0f} 分 / {max_turns()} 轮"
          + ("｜试跑" if dry else "") + "）")

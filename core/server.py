@@ -349,9 +349,9 @@ async def chat(req: Request):
     #     · 把这条旧回复标成 spoken=0，从**以后**的上下文里永久折起来
     #       （界面上照样看得见，只是它不再记得自己说过这句）
     #     · 把这一轮的备料切到「用户那句话之前」（下面的 before_id）
-    #   ★ 只折**这一条**，不折「它之后的所有行」—— 主动消息也落在同一个窗口里
-    #     （proactive.py 加 turn 时根本不带 session_id），一刀切会把它自己
-    #     发出去的话也折掉，那是新的 bug。
+    #   ★ 只折**这一条**，不折「它之后的所有行」—— 主动消息也落在对话里
+    #     （它现在带你最近待的那扇窗的 session_id，见 windows.active_sid），
+    #     一刀切会把它自己发出去的话也折掉，那是新的 bug。
     try:
         regen_of = int(body.get("regen_of") or 0)
     except (TypeError, ValueError):
@@ -1484,8 +1484,12 @@ async def api_push_test():
     return JSONResponse({"sent": n})
 
 
-def _proactive_add_turn(role: str, content: str) -> None:
-    store.add_turn(StoredTurn(role=role, content=content, ts=time.time()))
+def _proactive_add_turn(role: str, content: str, session_id=None) -> None:
+    # ★ session_id：它这句话落在哪扇窗。proactive 按「你最近待的那扇」挑，
+    #   那扇窗的「主动消息」开关关着就根本不会开口。老写法不带这个参数 ——
+    #   于是永远落主窗口，别的窗口那枚开关也就形同虚设。
+    store.add_turn(StoredTurn(role=role, content=content,
+                              session_id=(session_id or None), ts=time.time()))
 
 
 _proactive.bind(store, engine_turn=EngineTurn, pick_engine=pick_engine,

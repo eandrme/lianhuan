@@ -79,7 +79,33 @@ def _last_said() -> float:
     return r["ts"] if r else 0.0
 
 
+def window_ok(key: str = "push") -> bool:
+    """你最近待的那扇窗，这枚开关开着吗。
+
+    ★ 关掉某扇窗的「主动消息」＝**别在这个窗口里主动找我**。它只会往你最近
+      待的那扇窗说话，所以关掉你最近这扇，它就是安静下来 —— 不会绕到别的
+      窗口里去打扰你（那种「我已经关了它还在说」最让人不信任开关）。
+    ★ 开关读不出来（老库、设置坏了）一律当成开着：默认就是开，宁可照旧。
+    """
+    try:
+        from . import windows
+        return windows.allows_active(_store, key)
+    except Exception:
+        return True
+
+
+def target_sid() -> str:
+    """它这句话说到哪扇窗：你最近待的那扇。主窗口的空会话名统一成 'main'。"""
+    try:
+        from . import windows
+        return windows.active_sid(_store)
+    except Exception:
+        return "main"
+
+
 def may_speak() -> bool:
+    if not window_ok("push"):
+        return False
     cap = daily_max()
     if cap <= 0:
         return False
@@ -98,6 +124,12 @@ async def speak_once(reason: str = "") -> str:
     """
     from .memory.recall import build_injection
     from .protocol import SAY
+
+    # ★ 这扇窗关着「主动消息」就一个字都不说 —— 闹钟那条路也走这儿，
+    #   所以提醒同样受这个开关管（不然关掉了还会被提醒戳到，开关就是假的）。
+    if not window_ok("push"):
+        return ""
+    sid = target_sid()
 
     # ★ 0831 实际用下来发现：骰子发出来的主动消息会翻出已经解决的事、回答过的问题。
     #   两个病根，都在这儿：
@@ -169,7 +201,10 @@ async def speak_once(reason: str = "") -> str:
         text, _ = apply_marker(text, "proactive")
     except Exception:
         pass
-    _deps["add_turn"](role="assistant", content=text)
+    # ★ 落在「你最近待的那扇窗」里（老行为是永远落主窗口）。它说的话跟界面
+    #   看到的是同一个地方，不然关掉某扇窗的主动消息就没意义了。
+    _deps["add_turn"](role="assistant", content=text,
+                      session_id=(None if sid == "main" else sid))
     try:
         _store.db.execute("INSERT INTO notes(kind,content,ts) VALUES('whisper',?,?)",
                           (text, time.time()))
@@ -231,6 +266,10 @@ async def fire_due_reminders() -> int:
     ★ 先盖 `fired_ts` 再去说 —— 说的过程要几秒，中间再进来一拍就重了。
       宁可漏一次也不许重复打扰用户（原项目那边同样是先盖 notified_at）。
     """
+    # ★ 这扇窗关着主动消息时**先不响、也先不盖 fired_ts** —— 盖了就永远丢了。
+    #   等开关拨回来再补（超期太久的那条有 REMIND_GRACE_S 兜着，会自动作废）。
+    if not window_ok("push"):
+        return 0
     n = 0
     for r in due_reminders():
         _store.db.execute("UPDATE reminders SET fired_ts=? WHERE id=?", (time.time(), r["id"]))

@@ -98,6 +98,9 @@ PORTABLE_TABLES = (
     "mood_state", "mood_log", "memes", "workbook", "trips", "calendar",
     "anniversaries", "brain_history", "books", "book_chapters", "book_annotations",
     "book_chat", "latent", "memory_hits", "reminders", "speak_log",
+    # ★ 巢记事补的两样：表情包（用户自己攒的图）和健康账（一天一条）。
+    #   都是「你自己的东西」，搬家必须跟着走 —— 漏在这儿就是换台机器白攒。
+    "stickers", "health_log",
 )
 
 # 设置也属于这份家，但仍用白名单：密钥、设备订阅和本机路径将来即使进了 settings 也不会外带。
@@ -105,6 +108,8 @@ PORTABLE_SETTINGS = (
     "engine", "store", "pet", "blocks", "config", "prefs", "theme", "where",
     "ai_now", "now_playing", "miss", "whisper_freq", "fish_freq", "emote_level",
     "distill", "think", "persona_extra",
+    # ★ 每扇对话窗口的两枚开关（主动消息 / 离线模式）—— 换台机器还得是这个脾气。
+    "nest_window_flags",
 )
 
 

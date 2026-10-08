@@ -16,6 +16,8 @@ from datetime import datetime
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from . import windows as _winflags
+
 router = APIRouter()
 _store = None          # server 启动时注入
 
@@ -285,12 +287,23 @@ async def _api_offline_state():
     try:
         from . import offline as _off
         st = _off._state()
+        # ★ 每扇窗的「离线模式」开关：这几拍轮不到哪扇窗，状态就说哪扇。
+        #   `enabled` 仍是服务端那把总闸（OFFLINE_ENABLED），window_ok 是这一扇的开关，
+        #   两个都开才真的会有它自己的一段时间。前端别拿一个当另一个。
+        try:
+            act_sid = _winflags.active_sid(_store)
+            win_ok = _winflags.allows(_store, act_sid, "offline")
+        except Exception:
+            act_sid, win_ok = "main", True
         return {
             "enabled": _off.enabled(),
             "active": bool(st.get("active")),
             "started": float(st.get("started") or 0),
             "last": float(st.get("last") or 0),
             "idle_min": _off.idle_min(),
+            "window": st.get("sid") or act_sid,      # 这一场是记在哪扇窗名下的
+            "active_window": act_sid,                # 你最近待的那扇窗
+            "window_ok": bool(win_ok),
         }
     except Exception as e:
         return {"enabled": False, "active": False, "started": 0, "last": 0,
@@ -477,3 +490,46 @@ async def nest_thread_del(req: Request):
     n = _store.db.execute("DELETE FROM turns WHERE TRIM(session_id)=?", (sid,)).rowcount
     _store.db.commit()
     return JSONResponse({"ok": True, "n": n})
+
+
+# ══════════ 巢：每个对话窗口的两枚开关（主动消息 · 离线自由时段）══════════
+# ★ 语义、默认值和「哪扇窗算你现在这扇」都在 core/windows.py 里，一个地方定义；
+#   这里只负责读和写。书房小窗走 book_chat，不进这套开关。
+@router.get("/api/nest/window")
+def nest_window_get(sid: str = "main"):
+    try:
+        f = _winflags.flags(_store, sid)
+        act = _winflags.active_sid(_store)
+    except Exception as e:
+        return JSONResponse({"ok": False, "err": str(e)[:160],
+                             "sid": _winflags.norm_sid(sid)}, status_code=500)
+    return JSONResponse({"ok": True, "active": act, "active_sid": act,
+                         "labels": _winflags.LABELS, "hints": _winflags.HINTS, **f})
+
+
+@router.post("/api/nest/window")
+async def nest_window_set(req: Request):
+    try:
+        b = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "err": "读不懂这段 JSON"}, status_code=400)
+    sid = _winflags.norm_sid(b.get("sid"))
+    kw = {k: b[k] for k in _winflags.FLAG_KEYS if k in b}
+    if not kw:
+        return JSONResponse({"ok": False, "err": "没有要拨的开关"}, status_code=400)
+    try:
+        f = _winflags.set_flags(_store, sid, **kw)
+    except Exception as e:
+        return JSONResponse({"ok": False, "err": str(e)[:160]}, status_code=500)
+    return JSONResponse({"ok": True, **f})
+
+
+@router.get("/api/nest/windows")
+def nest_windows_all():
+    """所有被拨过的窗口。界面上给窗口列表画小标用 —— 没拨过的就是默认「开」。"""
+    try:
+        return JSONResponse({"ok": True, "items": _winflags.all_flags(_store),
+                             "active": _winflags.active_sid(_store)})
+    except Exception as e:
+        return JSONResponse({"ok": False, "err": str(e)[:160], "items": {}},
+                            status_code=500)
