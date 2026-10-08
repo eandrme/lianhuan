@@ -208,7 +208,8 @@ class SqliteStore(Store):
 
     def context_turns(self, *, channel: str = "text", call_id: str | None = None,
                       limit: int = 24, exclude_id: int | None = None,
-                      since: float | None = None) -> list[Turn]:
+                      since: float | None = None,
+                      before_id: int | None = None) -> list[Turn]:
         """给模型看的那几句 —— **只有人真说出口的**，而且分频道。
 
         ★ 0831 自查（GPT 上下文专项 P0-01/02/03，真捕获 EngineTurn 复现过）：
@@ -220,6 +221,9 @@ class SqliteStore(Store):
         · `spoken=0` 的一律不要 —— 那是机器拼的指令，不是原话
         · 文字只读文字；电话只读**本通**电话（`call_id` 对得上的那些）
         · 老行没有 call_id（迁移不回填），所以电话那条路老数据自然读不到 —— 正好
+        · `before_id`：「重新生成」那条路用它，只看到被重问的那句**之前**为止
+          （见 server.py 里那段注释 —— 不卡这个上限的话，同一句话会进模型两遍，
+          而且它还看得见自己上一个已经不想要的答案，等于没重新生成）
         """
         sql = ["SELECT * FROM turns WHERE spoken=1 AND channel=?"]
         args: list = [channel]
@@ -235,6 +239,9 @@ class SqliteStore(Store):
             #   「这两天说过什么」比「最近 N 条」更能回答「这事是不是已经聊完了」。
             sql.append("AND ts>=?")
             args.append(since)
+        if before_id is not None:
+            sql.append("AND id<?")
+            args.append(before_id)
         sql.append("ORDER BY id DESC LIMIT ?")
         args.append(limit)
         rows = self.db.execute(" ".join(sql), args).fetchall()

@@ -50,14 +50,15 @@ try{
       its.forEach(it=>{
         if(typeof addTurn==="function")
           addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
-                   tools:it.tools,t:hm2(it.ts),ts:it.ts});
+                   tools:it.tools,t:hm2(it.ts),ts:it.ts,
+                   superseded:it.superseded});
       });
       try{toBottom(true);}catch(e){}
     }catch(e){ S.append(el("div","errbox","历史读不出来："+e.message)); }
   }
 
-  /* ── 静默重发：不画用户气泡，也不让它进模型上下文 ── */
-  async function sendQuiet(text){
+  /* ── 静默重发：不画用户气泡，也不让那句重复进模型上下文 ── */
+  async function sendQuiet(text, regenOf){
     try{ if(typeof BUSY!=="undefined"&&BUSY){ say("等它把上一句说完"); return; } }catch(e){}
     let L=null;
     try{ L=liveTurn(); }catch(e){ say("页面状态不对，刷新一下再试"); return; }
@@ -67,7 +68,11 @@ try{
         {method:"POST",headers:{"Content-Type":"application/json"},
          body:JSON.stringify({message:text,
            session_id:gSid()==="main"?undefined:gSid(),
-           machine:true})},
+           machine:true,
+           // ★ 这条 id 是关键：后端靠它把上文切到「用户那句话之前」，
+           //   并把这条旧回复折起来（见 core/server.py 里那段注释）。
+           //   不带的话就是老毛病：同一句话进模型两遍，旧答案也还在。
+           regen_of:regenOf||undefined})},
         ev=>handle(ev,L));
     }catch(e){
       if(String(e.message)!=="unauthorized"){
@@ -86,8 +91,16 @@ try{
     if(!p){ say("找不到它回应的那句话"); return; }
     const ask=turnText(p).split("|||").join("\n");
     if(!ask){ say("那句话是空的"); return; }
-    say("重新生成中 —— 这次不会把你的话再说一遍");
-    await sendQuiet(ask);
+    /* ★ 先问出「要被换掉的这条回复」在库里是第几行。
+       问不出来就别硬来 —— 硬来的话后端拿不到 id，又会把你那句话发两遍、
+       旧答案也留在它脑子里，等于白点一次。 */
+    let rid=0;
+    if(typeof window.nestEnsureId==="function"){
+      try{ if(await window.nestEnsureId(w)) rid=Number(w.dataset.id)||0; }catch(e){}
+      if(!rid){ say("这条还没落库，等它说完再来"); return; }
+    }
+    say("重新生成中 —— 你的话只发一遍，旧的那条它不再记得");
+    await sendQuiet(ask, rid);
   }
 
   /* ── 窗口列表（带删除）── */

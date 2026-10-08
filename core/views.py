@@ -447,7 +447,13 @@ def nest_thread(sid: str = "main", limit: int = 80, before: int = 0):
         items.append({"id": r["id"], "role": r["role"], "content": r["content"],
                       "think": r["think"] or "", "tools": tools,
                       "starred": bool(r["starred"]), "ts": r["ts"],
-                      "hidden": bool(r["hidden"]), "parts": parts})
+                      "hidden": bool(r["hidden"]), "parts": parts,
+                      # ★ 「重新生成」把它换掉之后，那条旧回复被标成 spoken=0：
+                      #   界面上还看得见，但它自己不再记得说过（前端拿这个画个小标）。
+                      #   只可能是 assistant —— spoken=0 的 user 行是机器拼的指令，
+                      #   那种行 hidden=1，前端根本不画。
+                      "superseded": bool(r["role"] == "assistant"
+                                         and not (r["spoken"] if r["spoken"] is not None else 1))})
     return JSONResponse({"items": items, "sid": key})
 
 # ══════════ 巢：删掉一个对话窗口 ══════════

@@ -331,6 +331,40 @@ async def chat(req: Request):
                                     hidden=1 if machine else 0, spoken=0 if machine else 1,
                                     channel=channel, call_id=call_id, ts=time.time()))
 
+    # ★ 重新生成：前端带 `regen_of` = 被换掉的那条【它自己的回复】的 id。
+    #   不带它的话（老的「重新生成」就是这样）实测出两件错事：
+    #     ① 那句用户原话已经躺在历史里了，message 又发一遍 —— 同一句话进模型两次
+    #     ② 上一版回复（已经不想要的那条）还留在历史里 —— 它看得见，等于没重新生成
+    #   所以这里做两件事：
+    #     · 把这条旧回复标成 spoken=0，从**以后**的上下文里永久折起来
+    #       （界面上照样看得见，只是它不再记得自己说过这句）
+    #     · 把这一轮的备料切到「用户那句话之前」（下面的 before_id）
+    #   ★ 只折**这一条**，不折「它之后的所有行」—— 主动消息也落在同一个窗口里
+    #     （proactive.py 加 turn 时根本不带 session_id），一刀切会把它自己
+    #     发出去的话也折掉，那是新的 bug。
+    try:
+        regen_of = int(body.get("regen_of") or 0)
+    except (TypeError, ValueError):
+        # 前端传了个不认识的形状 —— 当成没带，绝不能因为一个参数把整轮说话打崩
+        regen_of = 0
+    before_id = None
+    if regen_of:
+        _r = store.db.execute("SELECT id, role, session_id FROM turns WHERE id=?",
+                              (regen_of,)).fetchone()
+        if _r is None or _r["role"] != "assistant":
+            # 对不上就当没这回事 —— 宁可退回老行为，也不能拿一个来路不明的 id 去折
+            regen_of = 0
+        else:
+            _key = (_r["session_id"] or "").strip() or "main"
+            _u = store.db.execute(
+                "SELECT id FROM turns WHERE role='user' AND id<? "
+                "AND COALESCE(NULLIF(TRIM(session_id),''),'main')=? ORDER BY id DESC LIMIT 1",
+                (regen_of, _key)).fetchone()
+            if _u:
+                before_id = _u["id"]
+                store.db.execute("UPDATE turns SET spoken=0 WHERE id=?", (regen_of,))
+                store.db.commit()
+
     # ★ 备料时把刚落的这句排掉：它已经作为 message 单独给引擎了，
     #   留在上下文里等于同一句说两遍。落库必须在前（不能丢话），所以只能在这儿排。
     # ★ include_dialogue=False：原话只走下面的 `history`，进一次就够（见 recall 里那段注释）
@@ -358,9 +392,11 @@ async def chat(req: Request):
         print("[mood inject] fail:", e, flush=True)
     # ★ 0831 自查：原来是 `recent_turns(25)` —— 不分频道、不看 spoken，
     #   打电话时读得到三天前的文字聊天和机器拼的场景指令（捕获 EngineTurn 验过）。
+    # ★ 重新生成时再卡一道 before_id：只看到被重问的那句之前（见上面那段注释）。
     history = [{"role": t.role, "content": t.content}
                for t in store.context_turns(channel=channel, call_id=call_id,
-                                            limit=25, exclude_id=uid)]
+                                            limit=25, exclude_id=uid,
+                                            before_id=before_id)]
     # (0906) 引用:挑了上头某一句再说话。引用**就在正文第一行**、跟着消息一起落库
     #        (前端 quoteMark 拼的),所以这儿不用另收字段——翻历史、蒸馏、上下文里全都带着它,
     #        格式本身人和模型都读得懂:「▎引用他说的：…」。这儿只补一句"冲着它来的"。

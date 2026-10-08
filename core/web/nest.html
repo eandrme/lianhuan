@@ -45,6 +45,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .bubble{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);
   padding:9px 13px;max-width:88%;white-space:pre-wrap;word-break:break-word}
 .turn.me .bubble{background:var(--accent);border-color:transparent;color:#0b1020}
+/* 被「重新生成」换掉的旧回复：读得出来、但看得出它已经不是活的那条 */
+.turn.sup .bubble{opacity:.5}
+.turn.sup .meta{opacity:.6}
+.supnote{font-size:12px;color:var(--dim2);border-left:2px solid var(--line);
+  padding:1px 0 1px 8px;margin-top:7px;max-width:88%}
 
 details.think{margin:0 0 7px;background:var(--panel);border:1px solid var(--line);
   border-radius:var(--r-sm);overflow:hidden}
@@ -202,7 +207,8 @@ async function loadHistory(){
     S.innerHTML="";
     if(!items.length){S.append(el("div","hint","这里是你和它的家。说点什么。"));}
     items.forEach(it=>addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
-                               tools:it.tools,t:hm2(it.ts),ts:it.ts}));
+                               tools:it.tools,t:hm2(it.ts),ts:it.ts,
+                               superseded:it.superseded}));
     toBottom(true);
   }catch(e){S.append(el("div","errbox","历史读不出来："+e.message));}
 }
@@ -230,7 +236,7 @@ function toolEl(name,state,ms,err,args){
   return d;
 }
 function addTurn(it){
-  const w=el("div","turn "+(it.role==="user"?"me":"ai"));
+  const w=el("div","turn "+(it.role==="user"?"me":"ai")+(it.superseded?" sup":""));
   if(it.id)w.dataset.id=it.id;
   const m=el("div","meta");
   m.append(el("span","who",it.role==="user"?"我":"它"));
@@ -248,6 +254,12 @@ function addTurn(it){
   const bs=el("div","bubbles");
   splitSay(it.content).forEach(x=>bs.append(el("div","bubble",x)));
   w.append(bs);
+  if(it.superseded){
+    // ★ 这条是「重新生成」换掉的旧回复。它还在，能读、能复制，但它自己
+    //   已经不再记得说过这句（后端把它的 spoken 折成 0 了）—— 说清楚，
+    //   免得过几天你问它「你上次不是这么说的吗」，它一脸茫然。
+    w.append(el("div","supnote","已被重新生成取代 · 它还在这，但它自己不再记得这一条"));
+  }
   S.append(w);
   return w;
 }
@@ -620,6 +632,12 @@ boot();
   const mo=new MutationObserver(()=>document.querySelectorAll("#stream .turn").forEach(ensureDots));
   mo.observe($("#stream"),{childList:true,subtree:true});
   document.querySelectorAll("#stream .turn").forEach(ensureDots);
+
+  /* ★ 让别的模块也能问「这条气泡对应库里哪一行」。
+     nest-threads 的「重新生成」要用它拿到那条旧回复的 id —— 后端靠这个 id
+     才能把上文切干净、把旧回复折起来。不暴露出去的话，那边只能按正文瞎猜，
+     又会猜错行（就是「删了又回来」那个毛病的根子）。 */
+  window.nestEnsureId=ensureId;
 })();
 </script>
   <script src="/nest-skin.js?v=1"></script>
