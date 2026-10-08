@@ -244,7 +244,7 @@ try{
       }
 
       async function load(){
-        body.innerHTML=el("div","hint","读取中…");
+        body.innerHTML=""; body.append(el("div","hint","读取中…"));
         let ch;
         try{ ch=await jget("/api/books/"+b.id+"/chapter/"+cur); }
         catch(e){ body.innerHTML=""; body.append(el("div","errbox","这一章读不出来："+e.message)); return; }

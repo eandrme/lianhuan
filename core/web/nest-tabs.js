@@ -188,11 +188,17 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
           const r=el("div","thr"); r.append(el("div","tt",nm),tn);
           r.onclick=async()=>{
             try{
-              const rr=await fetch("/api/mcp/toggle",{method:"POST",credentials:"same-origin",
+              const resp=await fetch("/api/mcp/toggle",{method:"POST",credentials:"same-origin",
                 headers:{"Content-Type":"application/json"},body:JSON.stringify({name:nm,enabled:!on})});
-              if(rr.ok){ on=!on; tn.textContent=on?"已启用":"已关闭"; say(nm+(on?" 开":" 关")); }
-              else say("开关键失败："+(await rr.text()).slice(0,60));
-            }catch(e){ say("切换失败"); }
+              // ★ 后端拨失败时回的也是 HTTP 200，只是 body 里 ok:false
+              //   —— 只看 resp.ok 的话，没拨成界面照样翻过去，人会以为已经开了。
+              let d=null; try{ d=await resp.json(); }catch(_){}
+              if(resp.ok&&d&&d.ok!==false){
+                on=!on; tn.textContent=on?"已启用":"已关闭"; say(nm+(on?" 开":" 关"));
+              }else{
+                say("没拨成："+String((d&&d.err)||("HTTP "+resp.status)).slice(0,60));
+              }
+            }catch(e){ say("切换失败："+String((e&&e.message)||e).slice(0,60)); }
           };
           out.append(r);
         });

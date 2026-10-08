@@ -358,7 +358,12 @@ async function checkActive(){
   try{
     const r=await fetch("/api/chat/active",{credentials:"same-origin"});
     if(!r.ok)return;
-    const j=await r.json();const list=j.jobs||[];
+    const j=await r.json();
+    // ★ 只看「还没说完的」。后端把说完的任务在寄存器里再留半小时
+    //   （jobs.KEEP_AFTER_DONE = 1800 秒），不过滤的话每次打开巢都会把
+    //   上一条回复从头重播一遍 —— 屏幕上看着像它又把那句话说了第二次。
+    //   旧界面一直有这一步（index.html 里 filter(j => !j.done)），巢漏了。
+    const list=(j.jobs||[]).filter(x=>!x.done);
     if(!list.length)return;
     const o=list[0]||{};
     const id=o.id||o.job||o.job_id;
