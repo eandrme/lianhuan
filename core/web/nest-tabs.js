@@ -224,7 +224,11 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     const app=document.querySelector("#app");
     if(app&&!app.hidden){
       inited=true;
-      setTimeout(()=>{ try{ go("chat"); renderThread(); }catch(e){} },500);
+      // ★ 这里原来还会调 renderThread() 再画一遍历史。基础那份（nest.html 里的
+      //   loadHistory）现在自己会认窗口了，两个画手抢同一块 #stream 会把今天的
+      //   消息重出一截、还会抹掉正在流的回复。初次进入只切到「聊天」格；
+      //   切窗口时才走 renderThread。
+      setTimeout(()=>{ try{ go("chat"); }catch(e){} },500);
     }
   }
   new MutationObserver(maybeInit).observe(document.body,{attributes:true,subtree:true,attributeFilter:["hidden"]});

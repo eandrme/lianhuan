@@ -182,14 +182,27 @@ async function start(){
   await checkActive();
 }
 
+/* ★ 历史只由这一处画（初次进入的时候）。
+   以前这里读的是「今天」的全部记录 —— 不分窗口、也不看有没有被收起来；
+   然后 nest-tabs / nest-threads 会在半秒后再按窗口重画一遍。两个画手抢同一块
+   #stream：网络慢的时候今天的消息会重出一截；正好撞上它还在回答的时候，
+   还会把正在往外流的回复整段抹掉。
+   现在这一处一次读对（认窗口 · 跳过收起来的），后面那几个模块不再重画。 */
+const hm2=ts=>{const d=new Date((ts||0)*1000);
+  return pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes());};
+
 async function loadHistory(){
   try{
-    const r=await fetch("/api/chat/day/"+dayStr(),{credentials:"same-origin"});
+    const sid=SID||"main";
+    const r=await fetch("/api/nest/thread?sid="+encodeURIComponent(sid)+"&limit=120",
+                        {credentials:"same-origin"});
     if(r.status===401){gate("登录过期了");return;}
     const j=await r.json();
-    const items=(j.items||[]).filter(x=>x.role==="user"||x.role==="assistant");
+    const items=(j.items||[]).filter(x=>(x.role==="user"||x.role==="assistant")&&!x.hidden);
+    S.innerHTML="";
     if(!items.length){S.append(el("div","hint","这里是你和它的家。说点什么。"));}
-    items.forEach(it=>addTurn(it));
+    items.forEach(it=>addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
+                               tools:it.tools,t:hm2(it.ts),ts:it.ts}));
     toBottom(true);
   }catch(e){S.append(el("div","errbox","历史读不出来："+e.message));}
 }
@@ -521,15 +534,31 @@ boot();
   function turnText(w){
     return [...w.querySelectorAll(":scope > .bubbles > .bubble")].map(b=>b.textContent).join("|||");
   }
+  /* ★ 这条气泡对应库里哪一行。以前是「在今天全部记录里按正文找，取最后一条」——
+     两个坑：① 只看「今天」，还跨窗口；② 「重新生成」会在库里留一条一模一样的
+     隐藏副本，而「最后一条」正是那条看不见的。于是点「删除本版本」，界面说删了，
+     刷新它又回来 —— 删掉的是副本，原话还在。
+     现在：只在本窗口里找、跳过收起来的；屏幕上条数和库里对得上时直接按位置认。 */
   async function ensureId(w){
     if(w.dataset.id)return true;
     try{
-      const r=await fetch("/api/chat/day/"+dayStr(),{credentials:"same-origin"});
+      const sid=SID||"main";
+      const r=await fetch("/api/nest/thread?sid="+encodeURIComponent(sid)+"&limit=400",
+                          {credentials:"same-origin"});
+      if(!r.ok)return false;
       const j=await r.json();
+      const its=(j.items||[]).filter(x=>(x.role==="user"||x.role==="assistant")&&!x.hidden);
       const role=w.classList.contains("me")?"user":"assistant";
       const want=turnText(w).replace(/\|\|\|/g,"");
-      const hit=(j.items||[]).filter(x=>x.role===role&&String(x.content).replace(/\|\|\|/g,"")===want).pop();
-      if(hit){w.dataset.id=hit.id;return true;}
+      const all=[...S.querySelectorAll(":scope > .turn")];
+      if(all.length===its.length){                        // ① 对得上 → 按位置认，最准
+        const hit=its[all.indexOf(w)];
+        if(hit&&hit.role===role&&String(hit.content).replace(/\|\|\|/g,"")===want){
+          w.dataset.id=hit.id;return true;
+        }
+      }
+      const cands=its.filter(x=>x.role===role&&String(x.content).replace(/\|\|\|/g,"")===want);
+      if(cands.length){w.dataset.id=cands[cands.length-1].id;return true;}   // ② 兜底：按正文
     }catch(e){}
     return false;
   }
