@@ -23,9 +23,17 @@ try{
   const say=t=>{try{if(typeof toast==="function")toast(t);}catch(e){}};
   const jget=async u=>{const r=await fetch(u,{credentials:"same-origin"});if(!r.ok)throw new Error("HTTP "+r.status);return r.json();};
   const jpost=async(u,b)=>{
-    const r=await fetch(u,{method:"POST",credentials:"same-origin",
-      headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
-    try{return await r.json();}catch(e){return {ok:false,err:"HTTP "+r.status};}
+    let r;
+    try{
+      r=await fetch(u,{method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+    }catch(e){ return {ok:false,err:"连不上服务器"}; }
+    let d=null; try{ d=await r.json(); }catch(e){}
+    // ★ 状态码不对＝没成。老服务端回的是 404 {"error":"…"}，没有 ok 字段 ——
+    //   只判 d.ok===false 会把它当成功，界面说「存上了」其实一个字没落库。
+    if(!r.ok||!d||d.ok===false)
+      return {ok:false,status:r.status,err:(d&&(d.err||d.error))||("HTTP "+r.status)};
+    return d;
   };
   const $=(s,r=document)=>r.querySelector(s);
   const pad2=n=>String(n).padStart(2,"0");

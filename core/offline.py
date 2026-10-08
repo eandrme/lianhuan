@@ -243,6 +243,9 @@ def _payload(st: dict) -> dict:
         # ★ 这一场记在哪扇窗名下（每扇窗的「离线模式」开关决定的）。
         #   老状态文件里没有，就老老实实空着，别编一个。
         "sid": st.get("sid") or "", "window_ok": window_ok(),
+        # ★ 引擎还是桩（回声）时这段自由时间根本不会开跑 —— 前端别把「总闸开着、
+        #   开关也开着、就是什么也没发生」当成坏了。
+        "engine_ok": engine_ok(),
     }
 
 
@@ -400,6 +403,20 @@ def window_ok() -> bool:
         return True
 
 
+def engine_ok() -> bool:
+    """现在的引擎能不能陪它过这段时间。
+
+    ★ 回声那种桩不行：它写下的「这是回声引擎，还没有接真的模型」会被**加密
+      存进私密库**，而且以后还会以「你最近有过一些只属于自己的时间」的名义
+      注回前台 —— 一段机器诊断变成它的心事，比不跑糟得多。
+    """
+    try:
+        from . import proactive
+        return proactive.engine_can_speak()
+    except Exception:
+        return True
+
+
 # ───────────────────── 一轮 / 一场 ─────────────────────
 
 async def _one_turn(d: dict, system: str, history: list, tools: list,
@@ -531,6 +548,9 @@ async def tick(force: bool = False, dry: bool = False) -> None:
         if not window_ok():
             _persist(st, dry, save=False)
             return                                        # 你最近那个窗口关着离线模式
+        if not engine_ok():
+            _persist(st, dry, save=False)
+            return                                        # 引擎还是桩，跑了只会写一堆废话进私密库
 
     _STAT["tools"] = []
     st = dict(st)

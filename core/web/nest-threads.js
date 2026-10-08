@@ -123,9 +123,11 @@ try{
     const list=el("div"); bx.append(list);
     list.append(el("div","res","读取中…"));
     /* ★ 每扇窗的两枚开关（主动消息 / 离线模式）。读一次「被拨过的窗口」，
-       没拨过的就是默认「开」—— nest-window.js 是这套语义唯一的出处。 */
-    let WFLAGS={};
-    try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }catch(e){ WFLAGS={}; }
+       没拨过的就是默认「开」—— nest-window.js 是这套语义唯一的出处。
+       读不到（老服务端）就把按钮画成「❓」，别拿默认值冒充服务端的真值。 */
+    let WFLAGS={}, WFLAGS_OK=true;
+    try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }
+    catch(e){ WFLAGS={}; WFLAGS_OK=false; }
     try{
       const j=await jget("/api/nest/threads");
       list.innerHTML="";
@@ -137,7 +139,7 @@ try{
         r.append(el("div","tt",it.title||"（空窗口）"),el("div","tn",it.n+" 条"));
         if(window.nestWinFlags&&window.nestWinFlags.row){
           r.append(window.nestWinFlags.row(it.sid,
-                   Object.assign({push:true,offline:true},WFLAGS[it.sid]||{})));
+                   Object.assign({push:true,offline:true},WFLAGS[it.sid]||{}),WFLAGS_OK));
         }
         const dx=el("button","cp","删");
         dx.style.cssText="color:var(--err);border:1px solid var(--err);border-radius:7px;"+

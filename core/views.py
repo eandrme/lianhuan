@@ -295,6 +295,10 @@ async def _api_offline_state():
             win_ok = _winflags.allows(_store, act_sid, "offline")
         except Exception:
             act_sid, win_ok = "main", True
+        try:
+            eng_ok = _off.engine_ok()
+        except Exception:
+            eng_ok = True
         return {
             "enabled": _off.enabled(),
             "active": bool(st.get("active")),
@@ -304,6 +308,8 @@ async def _api_offline_state():
             "window": st.get("sid") or act_sid,      # 这一场是记在哪扇窗名下的
             "active_window": act_sid,                # 你最近待的那扇窗
             "window_ok": bool(win_ok),
+            # ★ 引擎还是桩（回声）时它不会开跑 —— 前端别把「什么都没发生」当坏了
+            "engine_ok": bool(eng_ok),
         }
     except Exception as e:
         return {"enabled": False, "active": False, "started": 0, "last": 0,
@@ -504,7 +510,30 @@ def nest_window_get(sid: str = "main"):
         return JSONResponse({"ok": False, "err": str(e)[:160],
                              "sid": _winflags.norm_sid(sid)}, status_code=500)
     return JSONResponse({"ok": True, "active": act, "active_sid": act,
+                         "focus": _winflags.focus_sid(_store),
                          "labels": _winflags.LABELS, "hints": _winflags.HINTS, **f})
+
+
+@router.post("/api/nest/focus")
+async def nest_focus_set(req: Request):
+    """界面切窗口时报一声「我现在在哪扇窗」。
+
+    ★ 有了它，那两枚开关才真的是「这一扇窗的」：人切过去还没开口就走了，
+      也按他现在开着的那扇算。报不上来（老前端 / 网络抖）就退回按最后说话的
+      地方猜 —— 是个增强，不是必需。
+    """
+    try:
+        b = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "err": "读不懂这段 JSON"}, status_code=400)
+    sid = b.get("sid")
+    if sid is None:
+        return JSONResponse({"ok": False, "err": "缺 sid"}, status_code=400)
+    try:
+        _winflags.set_focus(_store, sid)
+    except Exception as e:
+        return JSONResponse({"ok": False, "err": str(e)[:160]}, status_code=500)
+    return JSONResponse({"ok": True, "active": _winflags.active_sid(_store)})
 
 
 @router.post("/api/nest/window")

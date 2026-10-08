@@ -107,9 +107,11 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       const list=el("div"); box.append(list);
       list.append(el("div","res","读取中…"));
       /* ★ 每扇窗的两枚开关（主动消息 / 离线模式）—— 列表里直接拨。
-         语义在后端 core/windows.py；这儿只画按钮，别另说一套。 */
-      let WFLAGS={};
-      try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }catch(e){ WFLAGS={}; }
+         语义在后端 core/windows.py；这儿只画按钮，别另说一套。
+         读不到（老服务端）就画「❓」，别拿默认值冒充真值。 */
+      let WFLAGS={}, WFLAGS_OK=true;
+      try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }
+      catch(e){ WFLAGS={}; WFLAGS_OK=false; }
       try{
         const j=await jget("/api/nest/threads");
         list.innerHTML="";
@@ -120,7 +122,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
           r.append(el("div","tt",it.title||"（空窗口）"),el("div","tn",it.n+" 条"));
           if(window.nestWinFlags&&window.nestWinFlags.row){
             r.append(window.nestWinFlags.row(it.sid,
-                     Object.assign({push:true,offline:true},WFLAGS[it.sid]||{})));
+                     Object.assign({push:true,offline:true},WFLAGS[it.sid]||{}),WFLAGS_OK));
           }
           r.onclick=async()=>{ setSid(it.sid); await renderThread(); close(); say("切到这个窗口了"); };
           list.append(r);

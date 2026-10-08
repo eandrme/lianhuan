@@ -2305,7 +2305,10 @@ class TestProactiveReadsWhatWasAlreadySaid(unittest.TestCase):
         cap = {}
 
         class Cap(Engine):
-            name, label, ready, stub = "cap", "捕获", True, True
+            #: ★ stub=False：这条测的是「主动说话带什么上下文」，不是「桩引擎该不该
+            #:   开口」。proactive 现在会拦桩引擎（回声那种不能替它说话），这个桩只是
+            #:   拿来捕获 prompt，别让它被当成回声拦下来。
+            name, label, ready, stub = "cap", "捕获", True, False
 
             async def stream(self, turn):
                 cap["t"] = turn

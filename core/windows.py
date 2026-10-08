@@ -18,6 +18,10 @@ from __future__ import annotations
 #: 存在 settings 表里的键（搬家时跟着走，见 store/sqlite.py 的 PORTABLE_SETTINGS）
 KEY = "nest_window_flags"
 
+#: 界面现在停在哪扇窗。★ **不**进搬家白名单：那是「这台设备上你最后开着的
+#: 那扇窗」，换台机器本来就不该照搬过来（照搬反而会说话说到别的窗口去）。
+FOCUS_KEY = "nest_window_focus"
+
 #: 两枚开关。顺序就是界面上从左到右的顺序。
 FLAG_KEYS = ("push", "offline")
 
@@ -74,16 +78,40 @@ def all_flags(store) -> dict:
     return {s: flags(store, s) for s in _raw(store)}
 
 
-def active_sid(store) -> str:
-    """你最近待的那扇窗。
+def focus_sid(store) -> str:
+    """界面刚刚停在那一扇窗（前端切窗口时报上来的）。
 
-    口径：最后一句**你自己真说的话**（role='user' 且 spoken=1）落在哪个会话。
+    ★ 为什么要单独记一个：人切到某扇窗、**还没开口**就走了，这时候「最后一句话
+      落在哪」还停在上上扇窗上 —— 拿它当「你现在在哪」，你在别处关了开关，
+      这扇窗的开关就跟着失灵（反过来也一样）。人报一声自己现在在哪，最准。
+    """
+    try:
+        v = store.get_setting(FOCUS_KEY, "") or ""
+    except Exception:
+        return ""
+    return norm_sid(v) if str(v).strip() else ""
+
+
+def set_focus(store, sid) -> str:
+    """记下界面现在停在哪扇窗。空字符串 = 清掉，退回「按最后说话的地方猜」。"""
+    v = (str(sid) if sid is not None else "").strip()
+    store.set_setting(FOCUS_KEY, norm_sid(v) if v else "")
+    return norm_sid(v) if v else ""
+
+
+def active_sid(store) -> str:
+    """你现在在哪扇窗 —— 主动消息/离线时段都按这一扇的开关走。
+
+    优先信界面报上来的那扇（`focus_sid`）；没有（老前端、还没报过）就退回猜：
+    最后一句**你自己真说的话**（role='user' 且 spoken=1）落在哪个会话。
     机器拼的指令（翻空间 / 重新生成那类 spoken=0）不算 —— 那些是后台自己
-    在动，不代表人这会儿待在那扇窗前。一句都没有（新库、或只有它主动说的
-    话）→ 主窗口。
+    在动，不代表人待在那扇窗前。再没有就退回最后一条记录所在的窗口，最后是主窗口。
     """
     if store is None:
         return "main"
+    f = focus_sid(store)
+    if f:
+        return f
     for sql in (
         "SELECT COALESCE(NULLIF(TRIM(session_id),''),'main') s FROM turns "
         "WHERE role='user' AND COALESCE(spoken,1)=1 ORDER BY id DESC LIMIT 1",

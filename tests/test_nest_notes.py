@@ -65,6 +65,32 @@ class TestWindowFlags(unittest.TestCase):
     def test_empty_house_is_the_main_window(self):
         self.assertEqual("main", windows.active_sid(self.s))
 
+    def test_the_window_you_are_looking_at_wins(self):
+        """★ 真机上撞出来的：切到另一扇窗、还没开口就走了 —— 这时候「最后说话的地方」
+        还停在上上扇窗。关掉手上这扇的开关，别的窗跟着失灵，反之亦然。
+        界面报一声自己现在在哪（focus），那两枚开关才真的按这一扇算。"""
+        self.s.add_turn(Turn(role="user", content="我在 t1 说的", session_id="t1"))
+        self.assertEqual("t1", windows.active_sid(self.s))
+        windows.set_focus(self.s, "t2")
+        self.assertEqual("t2", windows.active_sid(self.s),
+                         "人明明站在 t2，就该按 t2 的开关算")
+        windows.set_focus(self.s, "")
+        self.assertEqual("t1", windows.active_sid(self.s),
+                         "focus 清掉就退回按最后说话的地方猜")
+
+    def test_the_two_windows_do_not_drag_each_other_down(self):
+        """一扇关掉，另一扇必须原样开着 —— 这是「两个窗口独立」那句话的字面意思。"""
+        self.s.add_turn(Turn(role="user", content="主窗口说的", session_id="main"))
+        self.s.add_turn(Turn(role="user", content="t2 说的", session_id="t2"))
+        windows.set_flags(self.s, "main", push=False, offline=False)
+        windows.set_focus(self.s, "t2")
+        self.assertTrue(windows.allows_active(self.s, "push"),
+                        "主窗口关了，t2 的主动消息还得是开的")
+        self.assertTrue(windows.allows_active(self.s, "offline"))
+        windows.set_focus(self.s, "main")
+        self.assertFalse(windows.allows_active(self.s, "push"))
+        self.assertFalse(windows.allows_active(self.s, "offline"))
+
     def test_the_switches_travel_with_the_move(self):
         """搬家（导出）必须带上这两枚开关 —— 换台机器还得是这个脾气。"""
         windows.set_flags(self.s, "t1", push=False)
@@ -110,6 +136,13 @@ class TestNestWindowApi(unittest.TestCase):
         self.assertIn("t4", items)
         self.assertFalse(items["t4"]["push"])
 
+    def test_focus_endpoint_decides_which_window_counts(self):
+        self.s.add_turn(Turn(role="user", content="主窗口说的", session_id="main"))
+        self.assertEqual(200, self.c.post("/api/nest/focus", json={"sid": "t9"}).status_code)
+        self.assertEqual("t9", self.c.get("/api/nest/window?sid=t9").json()["active"])
+        self.assertEqual("t9", self.c.get("/api/offline").json()["active_window"])
+        self.assertEqual(400, self.c.post("/api/nest/focus", json={}).status_code)
+
 
 class TestProactiveAndOfflineRespectTheSwitch(unittest.TestCase):
     """关掉某扇窗的开关，它就该真的安静 —— 不是界面翻过去了、后台照说。"""
@@ -144,7 +177,7 @@ class TestProactiveAndOfflineRespectTheSwitch(unittest.TestCase):
         cap = {}
 
         class Cap(Engine):
-            name, label, ready, stub = "cap", "捕获", True, True
+            name, label, ready, stub = "cap", "捕获", True, False
 
             async def stream(self, turn):
                 yield sse(SAY, text="（假装说了一句）")
@@ -165,6 +198,49 @@ class TestProactiveAndOfflineRespectTheSwitch(unittest.TestCase):
         self.assertTrue(offline.window_ok())
         windows.set_flags(self.s, "t1", offline=False)
         self.assertFalse(offline.window_ok(), "这扇窗关了离线模式，这一拍就不该起")
+
+    def test_a_stub_engine_never_opens_its_mouth(self):
+        """★ 真机上撞到的：引擎还是回声（出厂默认），滑钮一拧它就开始主动说话 ——
+        发出去的是「这是回声引擎，你刚说的是：（主动说一句）……去设置里挑一个引擎」，
+        而且被当成它自己想说的话存进对话、还推了一下手机。那是给写代码的人看的诊断。"""
+        from core import offline
+        from core.engines.echo import EchoEngine
+        self.s.set_setting("whisper_freq", {"level": 100})
+        self.pa.bind(self.s, engine_turn=lambda **k: None,
+                     pick_engine=lambda: EchoEngine(), add_turn=lambda *a, **k: None)
+        self.assertFalse(self.pa.may_speak())
+        self.assertFalse(offline.engine_ok())
+        self.assertFalse(self.pa.engine_can_speak())
+
+    def test_a_due_reminder_is_not_burned_while_the_engine_is_a_stub(self):
+        import time as _t
+        from core.engines.echo import EchoEngine
+        self.pa.bind(self.s, engine_turn=lambda **k: None,
+                     pick_engine=lambda: EchoEngine(), add_turn=lambda *a, **k: None)
+        self.pa.set_reminder("问问他推送稳不稳", _t.time() - 60)
+        self.assertEqual(0, asyncio.run(self.pa.fire_due_reminders()))
+        row = self.s.db.execute("SELECT fired_ts FROM reminders").fetchone()
+        self.assertIsNone(row["fired_ts"], "没响就绝不能盖 fired_ts —— 盖了这条提醒就永远丢了")
+
+    def test_the_proactive_line_lands_in_the_window_you_are_looking_at(self):
+        """焦点窗优先：站在 t2（哪怕还没在 t2 说过话），它就往 t2 说。"""
+        from core.engines.base import Engine
+        from core.protocol import DONE, SAY, sse
+        cap = {}
+
+        class Cap(Engine):
+            name, label, ready, stub = "cap", "捕获", True, False
+
+            async def stream(self, turn):
+                yield sse(SAY, text="（假装说了一句）")
+                yield sse(DONE)
+
+        self.s.add_turn(Turn(role="user", content="这句在 main", session_id="main"))
+        windows.set_focus(self.s, "t2")
+        self.pa.bind(self.s, engine_turn=lambda **k: None, pick_engine=lambda: Cap(),
+                     add_turn=lambda *a, **k: cap.update(k))
+        asyncio.run(self.pa.speak_once())
+        self.assertEqual("t2", cap.get("session_id"))
 
 
 class TestNotesRemainingPages(unittest.TestCase):
@@ -351,6 +427,29 @@ class TestNestFrontendWiring(unittest.TestCase):
         self.assertIn('el("button","wf")', js)
         self.assertNotIn('"wf ibtn"', js)
         self.assertNotIn("'wf ibtn'", js)
+
+    def test_reading_a_window_cannot_borrow_the_last_ones_state(self):
+        """★ 真机上撞到的：「关掉主对话的开关，另一个对话也跟着关」。
+
+        病根：切窗口之后那一问失败了（服务端是旧版本，没有这个接口），
+        代码把**上一扇窗**的开关状态留着照画 —— 两扇窗看着就一样了。
+        读不到必须是「未知」（画 ❓），绝不能用别的窗口的数字冒充。"""
+        js = self._read("nest-window.js")
+        seg = js[js.index("async function load"):js.index("async function set")]
+        self.assertIn("known=false", seg)
+        self.assertIn("cur={push:true,offline:true}", seg, "读不到就退回默认值，别留着旧的")
+        self.assertIn('data-on="?"', js, "未知状态要画得出来")
+
+    def test_a_bad_status_code_is_a_failure_not_a_success(self):
+        """老服务端回 404 {"error":"没有这个东西"} —— 没有 ok 字段。
+        只看 body 就会当成「存上了」，界面翻过去、库里一个字没有。"""
+        for f in ("nest-window.js", "nest-notes.js"):
+            self.assertIn("if(!r.ok||!d||d.ok===false)", self._read(f), f)
+
+    def test_the_page_tells_the_backend_which_window_is_open(self):
+        js = self._read("nest-window.js")
+        self.assertIn("/api/nest/focus", js)
+        self.assertIn("reportFocus", js)
 
 
 if __name__ == "__main__":

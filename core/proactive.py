@@ -103,8 +103,31 @@ def target_sid() -> str:
         return "main"
 
 
+def engine_can_speak() -> bool:
+    """现在这个引擎能不能替它开口。
+
+    ★ 回声引擎（`stub = True`）**不行**。它回的是「这是回声引擎，还没有接真的模型。
+      你刚说的是：（主动说一句）……去设置里挑一个引擎」—— 那是**给写代码的人看的
+      诊断**，不是它会说的话。拿它去主动说话，用户收到的就是这么一串废话，
+      还被当成「它自己想说的」存进对话、顺带推一下手机。
+      （出厂引擎就是回声、主动消息出厂是关的，但滑钮一拧就会撞上这条。）
+
+      判断不出来（没注入 / 老实现没有 stub 这个属性）一律当**能** —— 别把正常的
+      引擎误伤成哑巴。"""
+    pick = _deps.get("pick_engine")
+    if not pick:
+        return True
+    try:
+        eng = pick()
+    except Exception:
+        return True
+    return not bool(getattr(eng, "stub", False))
+
+
 def may_speak() -> bool:
     if not window_ok("push"):
+        return False
+    if not engine_can_speak():
         return False
     cap = daily_max()
     if cap <= 0:
@@ -128,6 +151,12 @@ async def speak_once(reason: str = "") -> str:
     # ★ 这扇窗关着「主动消息」就一个字都不说 —— 闹钟那条路也走这儿，
     #   所以提醒同样受这个开关管（不然关掉了还会被提醒戳到，开关就是假的）。
     if not window_ok("push"):
+        return ""
+    # ★ 引擎还是桩（回声那种）也一个字都不说。外面两道闸（`may_speak` /
+    #   `fire_due_reminders`）已经拦了，这儿再拦一道：这个函数自己就不该
+    #   把「这是回声引擎……去设置里挑一个引擎」当成它想说的话存进对话。
+    if not engine_can_speak():
+        print("[proactive] 现在的引擎是桩（回声那种），这句不说了", flush=True)
         return ""
     sid = target_sid()
 
@@ -269,6 +298,9 @@ async def fire_due_reminders() -> int:
     # ★ 这扇窗关着主动消息时**先不响、也先不盖 fired_ts** —— 盖了就永远丢了。
     #   等开关拨回来再补（超期太久的那条有 REMIND_GRACE_S 兜着，会自动作废）。
     if not window_ok("push"):
+        return 0
+    # ★ 引擎还是桩（回声）也先不响、不盖：响了也只是把诊断当话发出去。
+    if not engine_can_speak():
         return 0
     n = 0
     for r in due_reminders():
