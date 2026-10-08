@@ -449,3 +449,16 @@ def nest_thread(sid: str = "main", limit: int = 80, before: int = 0):
                       "starred": bool(r["starred"]), "ts": r["ts"],
                       "hidden": bool(r["hidden"]), "parts": parts})
     return JSONResponse({"items": items, "sid": key})
+
+# ══════════ 巢：删掉一个对话窗口 ══════════
+@router.post("/api/nest/thread/del")
+async def nest_thread_del(req: Request):
+    """删掉某个窗口的全部聊天记录。主窗口（老记录）不给整个删。"""
+    b = await req.json()
+    sid = (b.get("sid") or "main").strip() or "main"
+    if sid == "main":
+        return JSONResponse({"ok": False, "err": "主窗口是老记录，不能整个删（可以逐条删）"},
+                            status_code=400)
+    n = _store.db.execute("DELETE FROM turns WHERE TRIM(session_id)=?", (sid,)).rowcount
+    _store.db.commit()
+    return JSONResponse({"ok": True, "n": n})
