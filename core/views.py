@@ -68,8 +68,13 @@ def chat_day(day: str, who: str = "", withhidden: int = 0):
     for r in _store.db.execute("SELECT * FROM turns ORDER BY id"):
         if _day(r["ts"]) != day:
             continue
+        try:
+            files = json.loads(r["files"]) if r["files"] else []
+        except Exception:
+            files = []
         items.append({"id": r["id"], "role": r["role"], "content": r["content"],
                       "think": r["think"] or "", "starred": bool(r["starred"]),
+                      "files": files,
                       "src": "web", "audio_url": None, "hidden": False,
                       "hidden_parts": None, "t": _hm(r["ts"])})
     return JSONResponse({"items": items, "hidden_count": 0})
@@ -444,8 +449,12 @@ def nest_thread(sid: str = "main", limit: int = 80, before: int = 0):
             parts = json.loads(r["hidden_parts"]) if r["hidden_parts"] else None
         except Exception:
             parts = None
+        try:
+            files = json.loads(r["files"]) if r["files"] else []
+        except Exception:
+            files = []
         items.append({"id": r["id"], "role": r["role"], "content": r["content"],
-                      "think": r["think"] or "", "tools": tools,
+                      "think": r["think"] or "", "tools": tools, "files": files,
                       "starred": bool(r["starred"]), "ts": r["ts"],
                       "hidden": bool(r["hidden"]), "parts": parts,
                       # ★ 「重新生成」把它换掉之后，那条旧回复被标成 spoken=0：

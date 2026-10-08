@@ -311,7 +311,9 @@ def pick_engine():
 async def chat(req: Request):
     body = await req.json()
     msg = (body.get("message") or "").strip()
-    if not msg:
+    # ★ 只发图不写字是允许的 —— 拍张照丢过来本来就是一句话。
+    #   两边都空才是真的没什么好说的。
+    if not msg and not body.get("files"):
         return JSONResponse({"error": "说点什么吧"}, status_code=400)
     session_id = body.get("session_id") or None
     # ★ 0831 自查：电话和文字共用一张表，但**不共用上下文**。
@@ -327,9 +329,17 @@ async def chat(req: Request):
     #   ★ 打电话是唯一要分开的地方：开场白是机器拼的，**用户在电话里真说的那句不是** ——
     #     两个都按 hidden 处理的话，电话里用户真说的那句下一轮就被当成「没说过」，他当场失忆。
     machine = bool(body.get("machine", body.get("hidden")))
+    # ★ 这一轮随消息一起发来的图/文件。前端先传到 /api/upload（图）或
+    #   /api/upload_file（文件），再把"我传了哪些"报过来 —— 这里核一遍再落库。
+    #   落进 turns.files 的只有「它在服务器哪儿」和名字；二进制留在 data/uploads、
+    #   data/files 里，不进数据库。
+    files_meta = _clean_attach(body.get("files"))
+    images, inlined = _attach_payload(files_meta)
     uid = store.add_turn(StoredTurn(role="user", content=msg, session_id=session_id,
                                     hidden=1 if machine else 0, spoken=0 if machine else 1,
-                                    channel=channel, call_id=call_id, ts=time.time()))
+                                    channel=channel, call_id=call_id, ts=time.time(),
+                                    files=(json.dumps(files_meta, ensure_ascii=False)
+                                           if files_meta else "")))
 
     # ★ 重新生成：前端带 `regen_of` = 被换掉的那条【它自己的回复】的 id。
     #   不带它的话（老的「重新生成」就是这样）实测出两件错事：
@@ -393,18 +403,27 @@ async def chat(req: Request):
     # ★ 0831 自查：原来是 `recent_turns(25)` —— 不分频道、不看 spoken，
     #   打电话时读得到三天前的文字聊天和机器拼的场景指令（捕获 EngineTurn 验过）。
     # ★ 重新生成时再卡一道 before_id：只看到被重问的那句之前（见上面那段注释）。
-    history = [{"role": t.role, "content": t.content}
+    # ★ 带过附件的轮次补一句「对方发来过什么」—— 图不重发（每轮都塞一遍又贵又没必要），
+    #   但至少让它记得你发过东西，而不是只记得你说了一句话。
+    history = [{"role": t.role, "content": _hist_files_note(t)}
                for t in store.context_turns(channel=channel, call_id=call_id,
                                             limit=25, exclude_id=uid,
                                             before_id=before_id)]
     # (0906) 引用:挑了上头某一句再说话。引用**就在正文第一行**、跟着消息一起落库
     #        (前端 quoteMark 拼的),所以这儿不用另收字段——翻历史、蒸馏、上下文里全都带着它,
     #        格式本身人和模型都读得懂:「▎引用他说的：…」。这儿只补一句"冲着它来的"。
+    # ★ 附件同样只进**这一轮给引擎的 message**，不进库：库里的 content 永远是你
+    #   自己写的那句话。不然刷新之后你自己的气泡里会多出一段机器写的〔〕旁白。
     msg_for_engine = msg
+    if files_meta:
+        msg_for_engine = (_attach_note(files_meta, len(images), inlined, bool(msg))
+                          + _attach_text_block(inlined)
+                          + ("\n" if msg else "") + msg)
     if msg.startswith("▎引用"):
         msg_for_engine += ("\n〔上面第一行 ▎ 开头的那句是**引用**的原话,不是这会儿说的。"
                            "下面这句是冲着那一句来的,先对准它再回,别当成新起的话头。〕")
-    turn = EngineTurn(message=msg_for_engine, system=system, history=history, session_id=session_id)
+    turn = EngineTurn(message=msg_for_engine, system=system, history=history,
+                      session_id=session_id, images=images)
 
     job = jobs.new(msg)
     gen_at_start = getattr(store, "generation", 0)      # 这一轮开始时的档案世代
@@ -961,6 +980,137 @@ def get_file(name: str):
     if safe.endswith(".html"):
         return FileResponse(p)
     return FileResponse(p, filename=safe.split("_", 1)[-1] if "_" in safe else safe)
+
+
+# ── 聊天里的附件：把「前端说的」核成「服务器上真有的」────────────
+#: 能当文字读进来塞给模型的扩展名。**只按扩展名认，不猜内容** ——
+#: 猜错一个二进制文件就是往上下文里灌一堆乱码，比不读糟得多。
+_TEXT_EXT = {".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".jsonl", ".yaml",
+             ".yml", ".log", ".py", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".html",
+             ".htm", ".css", ".ini", ".toml", ".xml", ".srt", ".vtt", ".tex",
+             ".sh", ".sql", ".conf", ".env", ".rst", ".org"}
+_MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+         ".webp": "image/webp", ".gif": "image/gif"}
+MAX_IMG_BYTES = 8 * 1024 * 1024        # 单张图
+MAX_IMG_TOTAL = 24 * 1024 * 1024       # 一轮所有图加起来的底
+MAX_TXT_BYTES = 200 * 1024             # 单个文字文件读进消息的上限
+MAX_TXT_TOTAL = 400 * 1024             # 一轮所有文字加起来的上限
+
+
+def _clean_attach(raw) -> list[dict]:
+    """把前端报上来的附件核一遍。
+
+    ★ 前端说的 url **一个字都不信**：只认 /uploads/ 和 /files/ 底下的、
+      而且经得起 _safe() 的文件。拿前端给的路径直接开文件，那就是一个
+      任意文件读取 —— 谁都能把 /etc/passwd 当"附件"发进来。
+    """
+    out: list[dict] = []
+    for it in (raw or [])[:12]:                     # 一轮最多 12 样，再多人也说不清
+        if not isinstance(it, dict):
+            continue
+        url = str(it.get("url") or "")
+        m = re.fullmatch(r"/(uploads|files)/([^/\\]+)", url)
+        if not m:
+            continue
+        which = m.group(1)
+        p = _safe(UPLOADS if which == "uploads" else FILES_DIR, m.group(2))
+        if not p:
+            continue
+        try:
+            size = p.stat().st_size
+        except OSError:
+            continue
+        out.append({"kind": "img" if which == "uploads" else "file",
+                    "url": url, "name": str(it.get("name") or m.group(2))[:120],
+                    "path": str(p), "size": size})
+    return out
+
+
+def _attach_payload(files_meta: list[dict]) -> tuple[list[str], list[tuple[str, str]]]:
+    """把附件变成能给模型的两样东西：图（dataURL）＋ 文字文件的内容。
+
+    · 图 → 真的发给它看（模型得看得见才行，见 engines/openai_compat.py）
+    · 文字文件 → 内容直接读出来塞进消息，它不用有"读文件"的手也读得到
+    · 别的（pdf/word/压缩包）→ 这里给不了。**不假装**，消息里会老实说
+    """
+    import base64
+    images: list[str] = []
+    texts: list[tuple[str, str]] = []
+    i_bytes = t_bytes = 0
+    for f in files_meta:
+        p = Path(f["path"])
+        if f["kind"] == "img":
+            mime = _MIME.get(p.suffix.lower())
+            if not mime or f["size"] > MAX_IMG_BYTES or i_bytes + f["size"] > MAX_IMG_TOTAL:
+                continue
+            try:
+                raw = p.read_bytes()
+            except OSError:
+                continue
+            i_bytes += len(raw)
+            images.append("data:%s;base64,%s" % (mime, base64.b64encode(raw).decode()))
+        else:
+            if p.suffix.lower() not in _TEXT_EXT:
+                continue
+            if f["size"] > MAX_TXT_BYTES or t_bytes + f["size"] > MAX_TXT_TOTAL:
+                continue
+            try:
+                txt = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            t_bytes += len(txt)
+            texts.append((f["name"], txt))
+    return images, texts
+
+
+def _attach_note(files_meta: list[dict], n_img: int, texts: list[tuple[str, str]],
+                 has_text: bool) -> str:
+    """拼给模型看的那段旁白。★ 它进的是**这一轮**的 message，不进库 ——
+    库里的 content 永远是你自己写的那句话（见下面 add_turn 那行）。"""
+    if not files_meta:
+        return ""
+    n_file = len(files_meta) - n_img
+    what = "、".join(x for x in (f"{n_img} 张图片" if n_img else "",
+                                 f"{n_file} 个文件" if n_file else "") if x)
+    lines = [f"〔对方这一轮发来了{what}" + ("，还写了一句（在下面）。" if has_text else "。")]
+    if n_img:
+        lines.append("图片就在这条消息里、你直接能看见 —— 像看见对方发的照片那样自然回应，"
+                     "别只说「看到了」，也别说你看不见。")
+    for name, _ in texts:
+        lines.append(f"· 文件「{name}」的内容附在下面。")
+    if n_file > len(texts):
+        lines.append(f"· 另外 {n_file - len(texts)} 个文件是 PDF/Word/压缩包这类，"
+                     "这一版还读不了 —— 对方问起就老实说读不了，别编内容。")
+    return "\n".join(lines) + "〕"
+
+
+def _attach_text_block(texts: list[tuple[str, str]]) -> str:
+    """文字文件的内容 —— 单独一段贴在旁白和原话之间。"""
+    out = []
+    for name, txt in texts:
+        out.append(f"\n──── 文件「{name}」的内容开始 ────\n{txt}\n"
+                   f"──── 文件「{name}」的内容结束 ────")
+    return "".join(out)
+
+
+def _hist_files_note(t) -> str:
+    """历史里那一条给模型看什么。
+
+    ★ 带过附件的轮次要补一句旁白 —— 不补的话下一轮它就只记得"你说了一句话"，
+      不记得你发过东西。图**不能重发**（重发等于每轮都塞一遍图，又贵又没必要），
+      所以这里只留一句"发过什么"。
+    """
+    try:
+        fs = json.loads(getattr(t, "files", "") or "[]")
+    except Exception:
+        fs = []
+    if not fs:
+        return t.content
+    n_i = sum(1 for f in fs if f.get("kind") == "img")
+    n_f = len(fs) - n_i
+    what = "、".join(x for x in (f"{n_i} 张图片" if n_i else "",
+                                 f"{n_f} 个文件" if n_f else "") if x)
+    return f"〔对方这一轮发来了{what}〕\n{t.content}"
 
 
 # ── 接 API：界面里填（普通用户唯一顺手的路）───────────────

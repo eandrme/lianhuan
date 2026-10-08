@@ -174,7 +174,16 @@ class OpenAICompatEngine(Engine):
         if turn.system:
             msgs.append({"role": "system", "content": turn.system})
         msgs += [m for m in (turn.history or []) if m.get("content")]
-        msgs.append({"role": "user", "content": turn.message})
+        # ★ 带图的那一轮：走 OpenAI 那套多模态写法（content 是一个数组）。
+        #   没有图就还是老样子 —— 一个纯字符串。别给不需要它的请求添麻烦：
+        #   content 从 str 变成 list 在老接口上会被拒，能不用就不用。
+        _imgs = [u for u in (getattr(turn, "images", None) or []) if u]
+        if _imgs:
+            msgs.append({"role": "user", "content":
+                         [{"type": "text", "text": turn.message}]
+                         + [{"type": "image_url", "image_url": {"url": u}} for u in _imgs]})
+        else:
+            msgs.append({"role": "user", "content": turn.message})
 
         feed = self._feeder()
         said = False

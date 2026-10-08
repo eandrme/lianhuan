@@ -26,6 +26,10 @@ class Turn:
     system: str = ""                   # 人设 ＋ 召回出来的记忆，拼好的
     history: list[dict] = field(default_factory=list)   # [{"role": "user"|"assistant", "content": str}]
     session_id: str | None = None      # 有的引擎能续会话（CLI 的 --resume），没有就留空
+    #: 这一轮随消息一起发来的图，dataURL 列表（"data:image/jpeg;base64,…"）。
+    #: ★ 不是每个模型都看得见 —— 认不出来的引擎**照旧忽略它**，不要因为多了个字段就崩。
+    #:   看不见是选模型的人该知道的事，不该让「发图」这个动作本身出错。
+    images: list[str] = field(default_factory=list)
 
 
 class Engine:

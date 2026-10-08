@@ -134,7 +134,8 @@ class SqliteStore(Store):
                          ("hidden",  "ALTER TABLE turns ADD COLUMN hidden INTEGER DEFAULT 0"),
                          ("spoken",  "ALTER TABLE turns ADD COLUMN spoken INTEGER DEFAULT 1"),
                          ("channel", "ALTER TABLE turns ADD COLUMN channel TEXT DEFAULT 'text'"),
-                         ("call_id", "ALTER TABLE turns ADD COLUMN call_id TEXT")):
+                         ("call_id", "ALTER TABLE turns ADD COLUMN call_id TEXT"),
+                         ("files",   "ALTER TABLE turns ADD COLUMN files TEXT DEFAULT ''")):
             try:
                 cols = [r[1] for r in boot.execute("PRAGMA table_info(turns)")]
                 if col not in cols:
@@ -183,9 +184,10 @@ class SqliteStore(Store):
     # ── 对话 ──
     def add_turn(self, turn: Turn) -> int:
         cur = self.db.execute(
-            "INSERT INTO turns(role, content, think, tools, hidden, spoken, channel, call_id, "
-            "session_id, ts) VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (turn.role, turn.content, turn.think, turn.tools or "", int(turn.hidden or 0),
+            "INSERT INTO turns(role, content, think, tools, files, hidden, spoken, channel, "
+            "call_id, session_id, ts) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            (turn.role, turn.content, turn.think, turn.tools or "", turn.files or "",
+             int(turn.hidden or 0),
              int(turn.spoken if turn.spoken is not None else 1), turn.channel or "text",
              turn.call_id, turn.session_id, turn.ts or time.time()))
         self.db.commit()
@@ -196,6 +198,7 @@ class SqliteStore(Store):
         return Turn(id=r["id"], role=r["role"], content=r["content"],
                     think=r["think"] or "",
                     tools=(r["tools"] or "") if "tools" in keys else "",
+                    files=(r["files"] or "") if "files" in keys else "",
                     hidden=int(r["hidden"] or 0) if "hidden" in keys else 0,
                     spoken=int(r["spoken"] if r["spoken"] is not None else 1) if "spoken" in keys else 1,
                     channel=(r["channel"] or "text") if "channel" in keys else "text",
@@ -456,11 +459,13 @@ class SqliteStore(Store):
                 #   被一次「导出→导入」整个抹平；`hidden` 同理归 0，
                 #   那些机器拼的指令重新变成人的假气泡。
                 #   ★ 用 .get() 带默认值 —— 老的导出文件没有这两个字段也照样能导。
+                #   ★ 上传的附件（files）同理：不带上的话，导出再导入之后
+                #     那些图就"没主"了 —— 气泡还在，图不见了。
                 self.db.execute(
-                    "INSERT INTO turns(role, content, think, tools, hidden, spoken, "
-                    "channel, call_id, session_id, ts) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO turns(role, content, think, tools, files, hidden, spoken, "
+                    "channel, call_id, session_id, ts) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (t.get("role", "user"), t.get("content", ""), t.get("think", ""),
-                     t.get("tools") or "", int(t.get("hidden") or 0),
+                     t.get("tools") or "", t.get("files") or "", int(t.get("hidden") or 0),
                      int(t.get("spoken", 1) if t.get("spoken") is not None else 1),
                      t.get("channel") or "text", t.get("call_id"),
                      t.get("session_id"), t.get("ts") or time.time()))
