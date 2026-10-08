@@ -1549,6 +1549,16 @@ def block_file(name: str):
     return FileResponse(p, headers=_STATIC_HEADERS) if p else JSONResponse({"error": "没有这个东西"}, status_code=404)
 
 
+# ── 巢（Nest）：全新自包含前端，不改造任何旧代码 ──
+#: ★ 必须写在下面那条 `/{name:path}` 兜底路由【前面】。
+#:   FastAPI 按注册顺序匹配，兜底路由先注册的话 /nest 会被它接走，
+#:   落到 core/web/nest 上找不到文件 —— 于是回一句「没有这个东西」。
+@app.get("/nest")
+def nest_page():
+    html = (WEB / "nest.html").read_text(encoding="utf-8")
+    return Response(html, media_type="text/html", headers=_STATIC_HEADERS)
+
+
 @app.get("/{name:path}")
 def static_file(name: str):
     p = _safe(WEB, name)
@@ -1595,8 +1605,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-# ── 巢（Nest）：全新自包含前端，不改造任何旧代码 ──
-@app.get("/nest")
-def nest_page():
-    html = (WEB / "nest.html").read_text(encoding="utf-8")
-    return Response(html, media_type="text/html", headers=_STATIC_HEADERS)
+
