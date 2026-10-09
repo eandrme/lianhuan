@@ -289,6 +289,15 @@ class TestTheUi(unittest.TestCase):
         self.assertIn("ev.sticker", self.html)
         self.assertIn("L.sticker", self.html)
 
+    def test_a_sticker_that_will_not_load_says_so(self):
+        """★ 真机上撞的：他说发了，屏幕上什么都没有 —— 因为图取不到时那块被**悄悄摘掉**了。
+        悄悄失败比失败更糟：人只能说「没法显示」，我们这边看日志一切正常。"""
+        import re as _re
+        seg = self.html.split("function stickerEl")[1].split("function attachEl")[0]
+        seg = _re.sub(r"/\*[\s\S]*?\*/", "", seg)      # 注释里提到过那句，不算
+        self.assertIn("sticker-bad", seg, "取不到要留个看得见的条")
+        self.assertNotIn("box.remove()", seg, "不许悄悄摘掉")
+
     def test_the_library_points_at_the_chat_picker(self):
         notes = (ROOT / "core" / "web" / "nest-notes.js").read_text(encoding="utf-8")
         self.assertIn("在聊天输入框边上点 😀", notes)

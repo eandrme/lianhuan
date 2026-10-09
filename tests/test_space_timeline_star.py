@@ -193,5 +193,19 @@ class TestStarred(unittest.TestCase):
                         "翻历史时那颗星得还在 —— 用户按过的收藏不能下次进来就没了")
 
 
+class TestRerenderingKeepsWhatWasThere(unittest.TestCase):
+    """切窗口 / 换分档时会**重画**历史 —— 重画的那两处也得把「有什么」带上。
+
+    ★ 真发现：两个重画的地方（nest-tabs / nest-threads）都漏了 `starred`，
+      于是切一次窗口，收藏过的星全没了 —— 后端一直在回，是前端没接着。
+    """
+
+    def test_both_renderers_pass_starred_and_files(self):
+        for f in ("nest-tabs.js", "nest-threads.js"):
+            js = (ROOT / "core" / "web" / f).read_text(encoding="utf-8")
+            self.assertIn("starred:it.starred", js, f + " 重画时丢了收藏")
+            self.assertIn("files:it.files", js, f + " 重画时丢了附件（表情包）")
+
+
 if __name__ == "__main__":
     unittest.main()

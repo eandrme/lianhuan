@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 导航模块 v1：五个格子 + 多窗口 + 搜索 + MCP 按钮
+   巢 · 导航模块 v1：几个格子 + 多窗口 + 搜索 + MCP 按钮
    装法：nest.html 里，nest-icon.js 那行【下面】再加一行
         <script src="/nest-tabs.js?v=1"></script>
    ══════════════════════════════════════════════════════════ */
@@ -54,7 +54,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   document.head.append(css);
 
   const TABS=[["chat","💬","聊天"],["memory","🧠","记忆"],["study","📖","书房"],
-              ["notes","📝","记事"],["setting","⚙️","设置"]];
+              ["notes","📝","记事"],["toys","🧸","玩具箱"],["setting","⚙️","设置"]];
 
   const nav=el("nav"); nav.id="tabs";
   TABS.forEach(t=>{
@@ -79,6 +79,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     const info={memory:["🧠 记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性（仅某助手 / 全部助手）"],
                 study:["📖 书房","书架 · 在读进度 · 边读边聊的小窗"],
                 notes:["📝 记事","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏"],
+                toys:["🧸 玩具箱","他写的小网页都在这儿（点开就玩）"],
                 setting:["⚙️ 设置","美化 · MCP 工具包 · 消息推送 · 大模型 API · 助手设置"]}[k];
     if(info){
       const c=el("div","ph-card");
@@ -152,7 +153,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
         if(typeof addTurn==="function")
           addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
                    tools:it.tools,t:hm(it.ts),ts:it.ts,
-                   files:it.files,superseded:it.superseded});
+                   files:it.files,superseded:it.superseded,starred:it.starred});
       });
       try{toBottom(true);}catch(e){}
     }catch(e){ S.append(el("div","errbox","历史读不出来："+e.message)); }

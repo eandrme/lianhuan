@@ -270,6 +270,7 @@ async def execute(name: str, args: dict) -> dict:
         _store.db.commit()
         return {"ok": True}
     if name == "write_play":
+        from . import datadir as _dd
         fn = re.sub(r"[^a-z0-9-]", "", str(args.get("filename") or "").lower())[:40]
         html = str(args.get("html") or "")
         if not fn or len(html) < 40:
@@ -327,6 +328,7 @@ async def execute(name: str, args: dict) -> dict:
             _store.db.commit()
             return {"ok": True}
     if name == "list_plays":
+        from . import datadir as _dd
         d = _dd.home_dir() / "plays"
         if not d.exists():
             return {"items": []}
@@ -397,12 +399,12 @@ async def execute(name: str, args: dict) -> dict:
         return {"items": [{"day": _dt.fromtimestamp(r["ts"] or 0).strftime("%Y-%m-%d"),
                            "kind": r["kind"] or "", "content": r["content"]} for r in rows]}
     if name == "read_calendar":
-        from datetime import date as _dd, timedelta as _td
+        from datetime import date as _ddate, timedelta as _dtd
         days = int(args.get("days") or 30)
         rows = _store.db.execute(
             "SELECT title, day, tm, kind, done FROM calendar WHERE day >= ? AND day <= ? "
             "ORDER BY day, tm LIMIT 60",
-            (_dd.today().isoformat(), (_dd.today() + _td(days=days)).isoformat())).fetchall()
+            (_ddate.today().isoformat(), (_ddate.today() + _dtd(days=days)).isoformat())).fetchall()
         return {"items": [dict(r) for r in rows]}
     if name == "read_workbook":
         q = ["SELECT id, kind, title, body, url, status FROM workbook WHERE 1=1"]
@@ -442,12 +444,12 @@ async def execute(name: str, args: dict) -> dict:
 
     if name == "write_letter":
         import time as _tm
-        from datetime import date as _dd
+        from datetime import date as _ddate
         # ★ `_who`：这封信是哪位助手写的。**不是模型自己填的** —— 由 exec_guard
         #   按当前窗口挂的那位助手注入（模型瞎填也盖掉）。空＝通用／主助手。
         _store.db.execute("INSERT INTO letters(tags,content,day,ts,who) VALUES(?,?,?,?,?)",
                           (str(args.get("tags") or ""), str(args.get("content") or "")[:8000],
-                           _dd.today().isoformat(), _tm.time(),
+                           _ddate.today().isoformat(), _tm.time(),
                            str(args.get("_who") or "")[:40]))
         _store.db.commit()
         return {"ok": True, "note": "放进信箱了"}

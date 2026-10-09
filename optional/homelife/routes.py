@@ -628,6 +628,93 @@ def api_plays():
         out.append({"file": f.name, "title": title, "url": "/plays/" + f.name})
     return JSONResponse({"items": out})
 
+def _plays_dir():
+    from core import datadir as _dd
+    d = _dd.home_dir() / "plays"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _play_path(name: str):
+    """把前端给的文件名落到 plays 目录里的**一个文件**上。
+
+    ★ 名字是外面传进来的：`../` 那种必须在这一步就断掉，不能拿它去 open/删。
+      规矩照原项目那条来：只收 `xxx.html`，字母数字点划，别的都不认。"""
+    import re as _re
+    from pathlib import Path as _P
+    n = _P(str(name or "")).name                     # 先把路径成分剥掉
+    if not _re.fullmatch(r"[A-Za-z0-9._-]+\.html", n) or n.startswith("."):
+        return None
+    p = (_plays_dir() / n).resolve()
+    if p.parent != _plays_dir().resolve():
+        return None
+    return p
+
+
+@router.post("/api/plays/{name}/del")
+def api_play_del(name: str):
+    """删掉一个小玩意。**人自己也能收拾** —— 他写坏了、或者不喜欢了，得有地方划掉。"""
+    p = _play_path(name)
+    if p is None:
+        return JSONResponse({"ok": False, "err": "这个名字不认（只收 xxx.html）"}, status_code=400)
+    if not p.exists():
+        return JSONResponse({"ok": False, "err": "没有这个小玩意"}, status_code=404)
+    p.unlink()
+    return JSONResponse({"ok": True, "gone": p.name})
+
+
+@router.post("/api/plays/new")
+async def api_play_new(req: Request):
+    """戳他现做一个小玩意。真用引擎写；写不出来老实说，不塞个空壳进玩具箱。"""
+    try:
+        b = await req.json()
+    except Exception:
+        b = {}
+    hint = str((b or {}).get("hint") or "").strip()[:200]
+    ask = ("给{对方}写一个小网页玩意，会上架到玩具厅。"
+           "要求：**一个自包含的 .html**（内联 CSS 和 JS，不引任何外链、不用外部图片），"
+           "手机上点开就能玩，画面好看、手感要对（点一下有反馈），"
+           "不要跟已有的重复，别写说明文字。"
+           + ((" 这一回想要的是：" + hint) if hint else "")
+           + " 只回 HTML 本身，不要解释、不要 markdown 代码块。")
+    try:
+        text = await _say(ask)
+    except Exception as e:                                     # noqa: BLE001
+        return JSONResponse({"ok": False, "err": f"引擎那边出事了：{type(e).__name__}"},
+                            status_code=502)
+    html = str(text or "").strip()
+    if not html:
+        return JSONResponse({"ok": False, "err": "这回没写出来（引擎是桩的时候就会这样）"},
+                            status_code=502)
+    # 模型常见的两种包装：```html 围栏、或者前后带一句解释
+    if "```" in html:
+        seg = html.split("```")
+        html = max(seg, key=len)
+        if html.lstrip().lower().startswith("html"):
+            html = html.lstrip()[4:]
+    i = html.lower().find("<!doctype")
+    if i < 0:
+        i = html.lower().find("<html")
+    if i > 0:
+        html = html[i:]
+    if len(html) < 40 or ("<" not in html) or ("</" not in html):
+        return JSONResponse({"ok": False, "err": "它回的东西不像 HTML，这次不上架"},
+                            status_code=502)
+    import re as _re
+    import time as _tm
+    mt = _re.search(r"<title[^>]*>(.*?)</title>", html, _re.S | _re.I)
+    title = (mt.group(1).strip() if mt else "")[:40] or "小玩意"
+    slug = _re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:24]
+    fn = (slug or "toy") + "-" + format(int(_tm.time()) % 100000, "x")
+    from core import hands as _hands
+    r = await _hands.execute("write_play", {"filename": fn, "html": html})
+    if not (isinstance(r, dict) and r.get("ok")):
+        return JSONResponse({"ok": False, "err": str((r or {}).get("err") or "没上架成")},
+                            status_code=502)
+    return JSONResponse({"ok": True, "file": fn + ".html", "title": title,
+                         "url": r.get("url") or ("/plays/" + fn + ".html")})
+
+
 # ══════════ 巢：记事补「改」和「删」（原项目只有读和写）══════════
 @router.post("/api/notes/{nid}/edit")
 async def note_edit(nid: int, req: Request):

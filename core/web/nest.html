@@ -268,7 +268,14 @@ function stickerEl(f){
   const box=el("div","atts");
   const a=el("a","att-sticker"); a.href=f.url; a.target="_blank"; a.rel="noreferrer";
   const im=el("img"); im.src=f.url; im.alt=f.name||"表情"; im.loading="lazy";
-  im.onerror=()=>box.remove();          // 图没了就整块摘掉，别留个破图标
+  /* ★ 图取不到时**不许悄悄摘掉**。原来写的是 `box.remove()` —— 结果就是
+     「他说发了，屏幕上什么都没有」，而且连个能查的痕迹都不留（人只会说「没法显示」，
+     我们这边看日志一切正常）。现在换成一个看得见的小条：图没了、点开还是能试。 */
+  im.onerror=()=>{
+    box.classList.add("sticker-bad");
+    box.innerHTML="";
+    box.append(el("span","nm","🖼 这张表情包取不到了（"+(f.name||"表情")+"）—— 图可能被清了，或者没登录"));
+  };
   a.append(im); box.append(a);
   if(f.name)box.title=f.name;
   return box;
@@ -297,7 +304,7 @@ function addTurn(it){
   if(it.id)w.dataset.id=it.id;
   // ★ 收藏过的那句，翻历史时也得亮着星 —— 后端 `/api/nest/thread` 一直带着 starred，
   //   不画的话「收藏」这件事在聊天里等于看不见（点过星的下次进来又是一颗没收藏的）。
-  if(it.starred)w.classList.add("starred");
+  if(it.starred||it.starred===1)w.classList.add("starred");
   const m=el("div","meta");
   m.append(el("span","who",it.role==="user"?"我":"它"));
   m.append(el("span","time",it.t||""));
@@ -517,6 +524,8 @@ boot();
     font:12px/1.5 var(--mono);color:var(--dim)}
   #raw .rh{display:flex;gap:6px;align-items:center;margin-bottom:6px;color:var(--fg)}
   #raw .rh .sp{flex:1}
+  .atts.sticker-bad{color:var(--err);font-size:12px;border:1px dashed var(--err);
+    border-radius:9px;padding:6px 9px;max-width:76vw}
   .turn.starred > .meta .starmark{color:var(--warn);margin-right:4px}
   .meta .starmark{font-size:12px}
   .menu{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);
@@ -769,6 +778,7 @@ boot();
   <script src="/nest-threads.js?v=1"></script>
   <script src="/nest-files.js?v=1"></script>
 <script src="/nest-sticker.js?v=1"></script>
+<script src="/nest-toys.js?v=1"></script>
   <script src="/nest-window.js?v=1"></script>
   <script src="/nest-setting.js?v=1"></script>
 <script src="/nest-assistant.js?v=1"></script>
