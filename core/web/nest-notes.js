@@ -677,9 +677,11 @@ try{
   async function secSticker(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const hint=el("span",null,"点一张＝放进输入框上头，配句话一起发");
+    const hint=el("span",null,"这一节是**管**这张表的（传 / 改名字和标签 / 删）。"
+      +"要发的时候在聊天输入框边上点 😀 —— 助手也能发，他自己照名字和标签挑");
     hint.style.cssText="font-size:11.5px;color:var(--dim2)";
     const add=el("button","pri","＋ 传一张");
+    window.nestStickerLibHint=()=>say("表情包在下面 —— 得先传几张");
     top.append(hint,el("div","sp"),add);
     body.append(top);
     const list=el("div"); body.append(list);

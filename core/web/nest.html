@@ -263,6 +263,16 @@ function toolEl(name,state,ms,err,args){
   h.onclick=()=>d.classList.toggle("open");
   return d;
 }
+/* 表情包：贴在末尾的一张小图。点开还是能看原图（a 包着 img） */
+function stickerEl(f){
+  const box=el("div","atts");
+  const a=el("a","att-sticker"); a.href=f.url; a.target="_blank"; a.rel="noreferrer";
+  const im=el("img"); im.src=f.url; im.alt=f.name||"表情"; im.loading="lazy";
+  im.onerror=()=>box.remove();          // 图没了就整块摘掉，别留个破图标
+  a.append(im); box.append(a);
+  if(f.name)box.title=f.name;
+  return box;
+}
 /* 附件：图直接看，文件给个名字，点开是原文件 */
 function attachEl(fs){
   const box=el("div","atts");
@@ -301,11 +311,20 @@ function addTurn(it){
   w.append(m);
   if(it.think)w.append(thinkEl(it.think));
   (it.tools||[]).forEach(t=>w.append(toolEl(t.name,t.ok===false?"err":"ok",null,t.err||"","")));
-  const at=attachEl(it.files);
-  if(at)w.append(at);
+  // ★ 附件的位置分两种：人发的排在正文前面（那是他要说的东西），
+  //   他发的表情包排在**末尾** —— 人定的规矩：表情包只用来点缀，放最后。
+  const mine=it.role==="user";
+  const atts=(it.files||[]);
+  const stk=atts.filter(f=>f&&f.sticker);
+  const rest=atts.filter(f=>!f||!f.sticker);
+  if(mine){ const a0=attachEl(rest); if(a0)w.append(a0); }
   const bs=el("div","bubbles");
   splitSay(it.content).forEach(x=>bs.append(el("div","bubble",x)));
   w.append(bs);
+  if(!mine){
+    const a1=attachEl(rest); if(a1)w.append(a1);
+    stk.forEach(f=>w.append(stickerEl(f)));
+  }
   if(it.superseded){
     // ★ 这条是「重新生成」换掉的旧回复。它还在，能读、能复制，但它自己
     //   已经不再记得说过这句（后端把它的 spoken 折成 0 了）—— 说清楚，
@@ -325,7 +344,7 @@ function liveTurn(){
   const bs=el("div","bubbles");
   w.append(m,st,th,tl,bs);
   S.append(w);toBottom(true);
-  return {w,st,th,tl,bs,think:"",t0:0,tools:[],usage:null};
+  return {w,st,th,tl,bs,think:"",t0:0,tools:[],usage:null,sticker:null};
 }
 function lastTool(L,name){
   for(let i=L.tools.length-1;i>=0;i--){
@@ -372,6 +391,12 @@ function handle(ev,L){
     case "tool_done":{
       const c=lastTool(L,ev.name);
       if(c)L.tl.replaceChild(toolEl(ev.name,ev.ok?"ok":"err",ev.ms,ev.err,""),c);
+      // ★ 他发的表情包：当场贴在末尾。不然得刷新一次才看得见，
+      //   而他刚被告知「贴上了」—— 那种「说了没做」最招人烦。
+      if(ev.sticker&&ev.sticker.url&&!L.sticker){
+        L.sticker=ev.sticker;
+        L.w.append(stickerEl({url:ev.sticker.url,name:ev.sticker.name||"表情",sticker:true}));
+      }
       toBottom();break;}
     case "usage": L.usage={tin:ev.tin,tout:ev.tout}; break;
     case "done":
@@ -743,6 +768,7 @@ boot();
   <script src="/nest-notes.js?v=1"></script>
   <script src="/nest-threads.js?v=1"></script>
   <script src="/nest-files.js?v=1"></script>
+<script src="/nest-sticker.js?v=1"></script>
   <script src="/nest-window.js?v=1"></script>
   <script src="/nest-setting.js?v=1"></script>
 <script src="/nest-assistant.js?v=1"></script>

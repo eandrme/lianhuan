@@ -451,9 +451,12 @@ async def chat(req: Request):
     # ── MCP：这位助手能用的那几个（第一位的 None＝不限，老行为一字不差）──
     _allow = _asst.mcp_allow(store, session_id)
     _eng = pick_engine()
+    # ★ 这一轮的「小票」：手在里面留东西（现在只有表情包一张图）。
+    #   用**这一轮自己的**字典，不用全局变量 —— 同时开几扇窗说话也不会串。
+    _notes = {}
     if getattr(_eng, "tools", None) is not None:
         _eng.tools = _hands.tools_for(_eng.tools, _allow)
-        _eng.exec_tool = _hands.exec_guard(_allow, (assistant or {}).get("id"))
+        _eng.exec_tool = _hands.exec_guard(_allow, (assistant or {}).get("id"), _notes)
 
     turn = EngineTurn(message=msg_for_engine, system=system, history=history,
                       session_id=session_id, images=images, think=_think_mode)
@@ -519,9 +522,18 @@ async def chat(req: Request):
                     content, "chat", untrusted=bool(_MM.search(msg)))
             except Exception as e:
                 print("[mood marker] fail:", e, flush=True)
+            # ★ 这一轮他发的表情包：落成这条回复的附件，**排在正文之后**（末尾），
+            #   刷新、换机器、导出搬家都还跟着这一条 —— 只在前端画一下的话，
+            #   下次进来就没了，而他会以为自己发过。
+            _files = []
+            _st = _notes.get("sticker")
+            if _st and _st.get("url"):
+                _files.append({"kind": "img", "url": _st["url"],
+                               "name": _st.get("name") or "表情", "sticker": True})
             await asyncio.to_thread(store.add_turn, StoredTurn(
                 role="assistant", content=content, think="".join(think),
                 tools=json.dumps(tools, ensure_ascii=False) if tools else "",
+                files=json.dumps(_files, ensure_ascii=False) if _files else "",
                 # ★ 回复要跟着这一轮的频道走 —— 不带的话电话历史里只有人说的、没有他答的
                 channel=channel, call_id=call_id,
                 session_id=session_id, ts=time.time()))
@@ -1582,7 +1594,10 @@ def _pick_engine_for_active():
         allow = _asst.mcp_allow(store, sid)
         asst = _asst.assistant_of(store, sid)
         if getattr(eng, "tools", None) is not None:
-            eng.tools = _hands.tools_for(eng.tools, allow)
+            # ★ 表情包要贴在「这一轮的回复」上，而主动消息 / 离线那两条路的回复
+            #   落库时没有附件那一栏 —— 所以那只手在这儿直接摘掉：不发，也不留个
+            #   「贴上了」的假话。
+            eng.tools = _hands.without(_hands.tools_for(eng.tools, allow), ["send_sticker"])
         eng.exec_tool = _hands.exec_guard(allow, (asst or {}).get("id"))
     except Exception as e:                                       # noqa: BLE001
         print("[assistant] 主动/离线那条筛工具失败（这一拍按不限走）:", e, flush=True)

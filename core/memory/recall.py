@@ -60,6 +60,39 @@ def persona_block(persona: dict) -> str:
     return SEG.join(out)
 
 
+def sticker_block(store, limit: int = 60) -> str:
+    """表情包那一段：**有什么**＋**什么时候才发**。
+
+    ★ 规矩是人定的，一条都不能含糊（这几条不是建议，是用户点名的要求）：
+      · 只用来点缀，放末尾 —— 不许拿它替代该说的话
+      · 一轮最多一张，不是每句都带
+      · 按名字 / 标签 / 上下文挑，挑不到就不发
+      ★ 表里一张都没有时返回空串 —— 让模型知道有一堆图可以挑，比让它瞎编一张强。
+    """
+    try:
+        rows = [dict(r) for r in store.db.execute(
+            "SELECT id,name,tags FROM stickers ORDER BY id DESC LIMIT ?", (limit,))]
+        total = store.db.execute("SELECT COUNT(*) FROM stickers").fetchone()[0]
+    except Exception:
+        return ""
+    if not rows:
+        return ""
+    lines = [f"〔表情包（表里一共 {total} 张"
+             + (f"，这儿列最近 {len(rows)} 张" if total > len(rows) else "") + "）〕"]
+    lines.append("要发就调 `send_sticker`（写它的名字）。发之前先照这几条过一遍：")
+    lines.append("· **只用来点缀，放在话的末尾**；该说的话必须先说全、说清楚 —— "
+                 "不许拿一张表情包替代你要说的那句话。")
+    lines.append("· **一轮最多一张**；也**不是每句都要带** —— 大多数时候不带，"
+                 "只有真觉得这一刻贴切才带。拿不准就不发。")
+    lines.append("· 挑哪张看它的名字和标签，挑跟眼前这句话、这个气氛最贴的那一张；"
+                 "挑不到合适的就不发，别硬凑。")
+    for r in rows:
+        nm = (r["name"] or "").strip() or "（没名字）"
+        tg = (r["tags"] or "").strip()
+        lines.append(f"· {nm}" + (f" ｜ {tg}" if tg else ""))
+    return "\n".join(lines)
+
+
 def memory_block(mems: list[Memory]) -> str:
     if not mems:
         # ★ 空的时候也要说话。不说的话模型会以为「没提供记忆」＝「可以随便编」
@@ -253,6 +286,8 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
         #   而 `/chat` 紧接着又把最近 25 条塞进 `history`，同一段逐字进了两遍。
         #   ★ 默认仍是 True：duplex / 主动消息那几条路只有 system 没有 history。
         "dialogue": (dialogue_block(turns[-recent:]) if include_dialogue else ""),
+        # 表情包：有什么可发 + 什么时候才该发（规矩全在这一段里，见 sticker_block）
+        "sticker": sticker_block(store),
         "think": think_line,          # ★ 放最后：离得越近模型抓得越牢（上面自己写的规矩）
     }
     return _fit(parts, turns, recent, mems)
@@ -279,11 +314,13 @@ def _fit(parts: dict, turns: list, recent: int, mems: list) -> str:
       接下来的事 → 工作记录 → 最近的对话 → 这两天对方说的 → 记忆条数 → （人设永不砍）
     """
     KEEP = ("today_line", "persona", "extra", "think")      # 这几样任何时候都不砍
-    ORDER = ["upcoming", "worklog", "dialogue", "today", "memory"]
+    # ★ sticker 排在最前：它最不要紧（这一轮不发也不会怎样），超长先收它
+    ORDER = ["sticker", "upcoming", "worklog", "dialogue", "today", "memory"]
 
     def render(p: dict) -> str:
         return SEG.join(p[k] for k in ("today_line", "persona", "extra", "memory",
-                                       "today", "worklog", "upcoming", "dialogue", "think")
+                                       "today", "worklog", "upcoming", "dialogue",
+                                       "sticker", "think")
                         if p.get(k))
 
     out = render(parts)

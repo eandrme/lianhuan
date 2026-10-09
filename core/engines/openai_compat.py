@@ -310,7 +310,10 @@ class OpenAICompatEngine(Engine):
                             err = str(result.get("err") or result.get("error") or "没成")[:120]
                         yield sse("tool", name=name,
                                   args=str((c.get("function") or {}).get("arguments") or "")[:400])    
-                        yield sse("tool_done", name=name, ok=ok, err=err)
+                        # ★ 表情包：把这张图**随事件带出去**，前端当场就能贴在末尾。
+                        #   不带的话，人得刷新一次才看得见 —— 而他刚被告知「贴上了」。
+                        _st = result.get("sticker") if isinstance(result, dict) else None
+                        yield sse("tool_done", name=name, ok=ok, err=err, sticker=_st)
                         msgs.append({"role": "tool", "tool_call_id": c.get("id"),
                                      "content": json.dumps(result, ensure_ascii=False)[:2000]})
                 if not said:

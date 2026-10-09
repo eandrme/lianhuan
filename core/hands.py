@@ -94,6 +94,12 @@ TOOLS = [
         "when": {"type": "string", "description": "什么时候，ISO 时间如 2026-09-01T21:00 "
                                                   "或 '+90m' / '+3h' 这种相对写法"},
         "notes": {"type": "string", "description": "补充（可选）"}}, ["title", "when"]),
+    _t("send_sticker", "发一张表情包 —— **只用来点缀，放在话的末尾**。"
+       "不许拿它替代你该说的话（该说的先说全）。一轮最多一张，也不是每句都要带，"
+       "不必要就别发。挑哪张看它的名字和标签，挑跟眼前这句话最贴的那一张；"
+       "挑不到合适的就不发，别硬凑。",
+       {"name": {"type": "string",
+                 "description": "表情包的名字（照 system 里那张表挑）"}}, ["name"]),
     _t("write_letter", "给对方写一封信（放进信箱，认真写，别一句话糊弄）",
        {"content": {"type": "string"}, "tags": {"type": "string", "description": "如 情书/周报"}},
        ["content"]),
@@ -129,9 +135,15 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 30 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 31 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
+
+
+def without(all_of: list, names) -> list:
+    """从工具表里摘掉几只（按名字）。给「这条路收了也没地方放」的场合用。"""
+    drop = {str(x) for x in (names or ())}
+    return [t for t in all_of if t["function"]["name"] not in drop]
 
 
 def tools_for(all_of: list, allow) -> list:
@@ -156,7 +168,7 @@ def tools_for(all_of: list, allow) -> list:
             if not _is_mcp(t["function"]["name"]) or t["function"]["name"] in keep]
 
 
-def exec_guard(allow, assistant_id=None):
+def exec_guard(allow, assistant_id=None, notes=None):
     """包一层执行。两件事：
 
     · **许可之外**的 MCP 工具当场拒掉 —— 表是「发出去时」的样子，而这一轮可能跑着
@@ -164,9 +176,14 @@ def exec_guard(allow, assistant_id=None):
       （带 `server__` 前缀）而这位助手没开那个 server，就不给动。
     · `write_letter` 时把**当前助手**注进去（`_who`）—— 信才分得清是谁写的。
       这件事不能让模型自己填：它填错了，信就跑别人那沓去了。
+    · `send_sticker` 收进 `notes["sticker"]`（这一轮的那一张），由调用方贴到回复末尾。
+      **`notes` 是 None 就当场拒掉** —— 那边没有地方放这张图，回了「贴上了」而屏幕上
+      什么都不出现，比不发还糟（挂电话/主动消息那两条路就是这样）。
     """
-    if allow is None and not assistant_id:
-        return execute
+    _notes = notes if notes is not None else {}
+    # ★ 这里**故意不做**「什么都不用管就直接返回裸 execute」那种短路：
+    #   那会把最普通的情况（没配助手、MCP 也不限）也跳过去 —— 表情包发出去了、
+    #   可没人收集，屏幕上什么都不出现。几句字符串判断的代价，换的是不出现假成功。
 
     async def _run(name: str, args: dict):
         if allow is not None and "__" in str(name):
@@ -174,6 +191,15 @@ def exec_guard(allow, assistant_id=None):
             if server not in {str(x) for x in allow}:
                 return {"ok": False, "err": f"「{server}」这个 MCP 没给这位助手开 —— "
                                             f"要用就去 设置 › 助手管理 里手动勾"}
+        if name == "send_sticker":
+            if notes is None:
+                return {"ok": False, "err": "这个窗口发不了表情包（只在大聊天里发）"}
+            if _notes.get("sticker"):
+                return {"ok": False, "err": "一轮只能发一张表情包 —— 这张不发了"}
+            r = await execute(name, args)
+            if isinstance(r, dict) and r.get("ok") and r.get("sticker"):
+                _notes["sticker"] = r["sticker"]
+            return r
         if assistant_id and name == "write_letter":
             args = dict(args or {})
             args["_who"] = assistant_id
@@ -389,6 +415,31 @@ async def execute(name: str, args: dict) -> dict:
         q.append("ORDER BY id DESC LIMIT 40")
         rows = _store.db.execute(" ".join(q), a).fetchall()
         return {"items": [dict(r) for r in rows]}
+    if name == "send_sticker":
+        # ★ 这只是一张**表里的**图，不是模型编出来的东西：名字对不上就不发，
+        #   宁可它这次没发，也不能让气泡里出现一个坏图标。
+        want = str(args.get("name") or "").strip()
+        if not want:
+            return {"ok": False, "err": "没说要哪一张"}
+        rows = [dict(r) for r in _store.db.execute(
+            "SELECT id,name,tags,url FROM stickers ORDER BY id DESC LIMIT 500")]
+        hit = None
+        if want.isdigit():
+            hit = next((r for r in rows if str(r["id"]) == want), None)
+        if hit is None:
+            hit = next((r for r in rows if (r["name"] or "").strip() == want), None)
+        if hit is None:
+            low = want.lower()
+            hit = next((r for r in rows if low and low in (r["name"] or "").lower()), None)
+        if hit is None:
+            hit = next((r for r in rows if low and low in (r["tags"] or "").lower()), None)
+        if hit is None:
+            names = "、".join([(r["name"] or "没名字") for r in rows[:12]]) or "（表里还空着）"
+            return {"ok": False, "err": f"表里没有「{want}」这张。能发的有：{names}"}
+        return {"ok": True, "note": "贴上了，它会出现在你这句的末尾",
+                "sticker": {"id": hit["id"], "name": hit["name"] or "表情",
+                            "url": hit["url"], "tags": hit["tags"] or ""}}
+
     if name == "write_letter":
         import time as _tm
         from datetime import date as _dd
