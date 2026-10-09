@@ -211,6 +211,7 @@ try{
       keyI.value="";
       await loadCfg();
       msg.className="set-msg ok"; msg.textContent="存下了。";
+      if(window.__nestWhisperReload)window.__nestWhisperReload();
       checkNow(sec,msg);
     };
 
@@ -245,7 +246,8 @@ try{
     const val=el("div","v","0");
     row.append(rng,val);
     const desc=el("div","set-msg","读着…");
-    sec.append(row,desc);
+    const stubNote=el("div","set-msg");
+    sec.append(row,desc,stubNote);
     box.append(sec);
 
     /* ★ 换算必须跟后端**一模一样**：公式在 core/proactive.daily_max ——
@@ -273,6 +275,18 @@ try{
         desc.className="set-msg err";
         desc.textContent="读不到："+e.message;
       }
+      /* ★ 引擎还是回声那种桩时，滑钮拧到多少它都不会开口 ——
+         不说清楚的话，人会以为「拨了没用＝开关是坏的」。 */
+      try{
+        const c=await jget("/api/engine/config");
+        if((c.engine||"echo")==="echo"){
+          stubNote.className="set-msg err";
+          stubNote.textContent="注意：现在的引擎还是回声（没接模型），它不会主动开口 —— "
+            +"上面「大模型引擎」里接上一家，这根滑钮才真的算数。";
+        }else stubNote.textContent="";
+      }catch(e){ stubNote.textContent=""; }
+      /* 引擎换了之后这根滑钮才算数 —— 让 secEngine 存完能叫这一节重画一遍 */
+      window.__nestWhisperReload=load;
     }
     let t=0;
     rng.oninput=()=>{

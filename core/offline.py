@@ -549,6 +549,7 @@ async def tick(force: bool = False, dry: bool = False) -> None:
             _persist(st, dry, save=False)
             return                                        # 你最近那个窗口关着离线模式
         if not engine_ok():
+            _log("现在的引擎是桩（回声那种），这一拍不跑 —— 跑了只会把机器诊断写进私密库")
             _persist(st, dry, save=False)
             return                                        # 引擎还是桩，跑了只会写一堆废话进私密库
 
