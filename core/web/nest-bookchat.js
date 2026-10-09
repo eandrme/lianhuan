@@ -17,34 +17,42 @@ try{
 
   const css=document.createElement("style");
   css.textContent=`
-.bc-fab{position:fixed;right:18px;bottom:88px;z-index:44;width:52px;height:52px;border-radius:50%;
-  background:var(--accent);color:var(--nest-me-fg,#10131a);font-size:22px;
-  box-shadow:0 8px 22px #0007;display:flex;align-items:center;justify-content:center}
-.bc-box{position:fixed;right:16px;bottom:150px;z-index:44;width:min(370px,92vw);height:min(58vh,460px);
-  display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--r);box-shadow:0 14px 40px #0009;overflow:hidden}
+.bc-fab{position:fixed;right:18px;bottom:96px;z-index:44;width:52px;height:52px;border-radius:50%;
+  background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--ink-1);color:var(--accent);font-size:22px;
+  box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center}
+.bc-box{position:fixed;right:16px;bottom:158px;z-index:44;width:min(370px,92vw);height:min(58vh,460px);
+  display:flex;flex-direction:column;background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);
+  border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .bc-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .bc-title{flex:1;min-width:0;font-size:13px;color:var(--fg);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bc-list{flex:1;overflow:auto;padding:10px 12px}
-.bc-msg{max-width:88%;padding:8px 11px;border-radius:var(--r-sm);margin:0 0 8px;
-  font-size:14px;white-space:pre-wrap;word-break:break-word;line-height:1.6}
-.bc-msg.user{margin-left:auto;background:var(--accent);color:var(--nest-me-fg,#10131a)}
-.bc-msg.assistant{background:var(--panel2);border:1px solid var(--line)}
+.bc-msg{max-width:76%;padding:9px 12px;margin:0 0 8px;
+  font-size:15px;white-space:pre-wrap;word-break:break-word;line-height:1.8}
+/* 跟主聊天里那两种气泡同一套：他＝墨晕软边，我＝海沫玻璃 */
+.bc-msg.user{margin-left:auto;background:rgba(220,234,243,.58);color:var(--tx-1);
+  border-radius:22px 22px 6px 22px;border:1px solid var(--glass-line)}
+.bc-msg.assistant{background:rgba(110,130,150,.10);border:0;border-radius:22px 30px 26px 18px}
 .bc-msg.thinking{color:var(--dim2);font-style:italic}
-.bc-msg.err{background:#e0716f1a;border:1px solid var(--err);color:#f0b3b1;font-size:13px}
+.bc-msg.err{background:color-mix(in srgb,var(--err) 12%,transparent);border:1px solid var(--err);
+  color:var(--err);font-size:13px}
 .bc-foot{border-top:1px solid var(--line);padding:8px 10px}
-.bc-quote{display:flex;gap:6px;align-items:flex-start;background:var(--panel2);border-left:3px solid var(--accent);
-  border-radius:6px;padding:6px 8px;font-size:12.5px;color:var(--dim);margin-bottom:7px}
+.bc-quote{display:flex;gap:6px;align-items:flex-start;background:var(--panel2);border-left:1px solid var(--accent);
+  border-radius:8px;padding:6px 8px;font-size:12.5px;color:var(--dim);margin-bottom:7px}
 .bc-quote .x{margin-left:auto;color:var(--dim2)}
-.bc-qbtn{font-size:12.5px;color:var(--dim);padding:2px 6px;border-radius:6px;margin-bottom:6px}
+.bc-qbtn{font-size:12.5px;color:var(--dim);padding:2px 8px;border-radius:8px;margin-bottom:6px;
+  border:1px solid var(--ink-1)}
 .bc-qbtn:hover{background:var(--panel2);color:var(--fg)}
 .bc-row{display:flex;gap:7px;align-items:flex-end}
-.bc-row textarea{flex:1;resize:none;background:var(--panel2);border:1px solid var(--line);
-  border-radius:var(--r-sm);color:var(--fg);font:inherit;font-size:14px;padding:8px 10px;
+.bc-row textarea{flex:1;resize:none;background:var(--glass-bg);border:1px solid var(--glass-line);
+  border-radius:14px;color:var(--fg);font:inherit;font-size:16px;padding:8px 10px;
   outline:none;max-height:30vh}
-.bc-send{padding:9px 14px;border-radius:var(--r-sm);background:var(--accent);
-  color:var(--nest-me-fg,#10131a);font-weight:600;font-size:14px}
+.bc-send{padding:9px 14px;border-radius:14px;background:var(--glass-bg);
+  border:1px solid var(--accent);color:var(--accent);font-weight:500;font-size:14px}
 @media(max-width:520px){.bc-box{right:8px;left:8px;width:auto;bottom:140px;height:60vh}}
 `;
   document.head.append(css);

@@ -26,16 +26,17 @@ try{
 
   const css=document.createElement("style");
   css.textContent=`
-#skPick{position:fixed;left:0;right:0;bottom:0;z-index:44;background:var(--panel);
-  border-top:1px solid var(--line);border-radius:var(--r) var(--r) 0 0;
+#skPick{position:fixed;left:0;right:0;bottom:0;z-index:44;background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border-top:1px solid var(--glass-line);border-radius:var(--r) var(--r) 0 0;
   padding:10px 12px calc(10px + env(safe-area-inset-bottom));max-height:46vh;
-  display:flex;flex-direction:column;gap:8px;box-shadow:0 -8px 24px #0004}
+  display:flex;flex-direction:column;gap:8px;box-shadow:var(--shadow)}
 #skPick .hd{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim2)}
 #skPick .hd .sp{flex:1}
 #skPick .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));
   gap:8px;overflow:auto}
-#skPick .cell{position:relative;border:1px solid var(--line);border-radius:10px;
-  background:var(--panel2);padding:4px;display:flex;flex-direction:column;gap:3px;align-items:center}
+#skPick .cell{position:relative;border:1px solid var(--ink-1);border-radius:10px;
+  background:transparent;padding:4px;display:flex;flex-direction:column;gap:3px;align-items:center}
 #skPick .cell img{width:100%;height:64px;object-fit:contain;border-radius:7px;display:block}
 #skPick .cell .nm{font-size:10.5px;color:var(--dim2);max-width:100%;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

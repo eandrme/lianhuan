@@ -25,38 +25,42 @@ try{
 #tabs button .lb{font-size:10.5px;letter-spacing:.14em;font-family:var(--font)}
 #tabs button.on{color:var(--accent)}
 #tabs button:active{transform:scale(.96)}
+/* 正中间给那枚凸起的心留一格缺口：它住在这儿，谁也不挡 */
+#tabs .fab-slot{flex:0 0 60px;pointer-events:none}
 /* ★ 面板不盖住底部导航：留出它那一格（--nest-tabs-h 是量出来的高度） */
 #pane{position:fixed;inset:0 0 var(--nest-tabs-h,0px) 0;z-index:40;
-  background:color-mix(in srgb,var(--paper) 88%,transparent);
-  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
   display:flex;flex-direction:column;animation:pageIn 420ms cubic-bezier(.22,.8,.3,1)}
 #pane .ph{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
   border-bottom:1px solid var(--line)}
 #pane .ph .ic{color:var(--accent)}
 #pane .ph .t{font-weight:500;letter-spacing:.1em}
-#pane .ph .en{font-family:var(--mono);font-size:9px;letter-spacing:.22em;color:var(--dim2)}
+#pane .ph .en{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
+  text-transform:uppercase}
 #pane .ph .x{margin-left:auto}
 #pane .pb{flex:1;overflow:auto;padding:16px 14px calc(18px + var(--nest-tabs-h,0px))}
 .sheet{position:fixed;inset:0;z-index:45;background:rgba(70,100,130,.22);
   backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center}
 .sheet .box{width:min(660px,100%);max-height:76vh;overflow:auto;
-  background:var(--glass-bg);backdrop-filter:blur(22px) saturate(150%);
-  -webkit-backdrop-filter:blur(22px) saturate(150%);
+  background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line);border-radius:26px 26px 0 0;padding:14px;
   padding-bottom:calc(14px + env(safe-area-inset-bottom));box-shadow:var(--shadow);
   animation:msgIn 320ms cubic-bezier(.22,.8,.3,1)}
 .sheet .bh{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .sheet .bh b{font-size:15px;font-weight:500;letter-spacing:.1em}
 .sheet .bh .x{margin-left:auto}
-.sheet input[type=text]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;margin-bottom:8px}
+.sheet input[type=text]{width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--glass-line);
+  background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;margin-bottom:8px}
 .thr,.res{display:flex;align-items:center;gap:9px;padding:11px 9px;border-bottom:1px solid var(--line);cursor:pointer}
 .thr:hover,.res:hover{background:var(--panel2)}
 .thr .tt,.res .tt{flex:1;min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.thr .tn{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--dim2);flex:0 0 auto}
+.thr .tn{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);flex:0 0 auto}
 .thr.on .tt{color:var(--accent)}
 .res{display:block}
-.res .k{font-size:11.5px;color:var(--dim2);margin-bottom:2px}
+.res .k{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
+  text-transform:uppercase;margin-bottom:2px}
 .ph-card{border:1px solid var(--glass-line);background:var(--glass-bg);border-radius:var(--r);
   padding:16px;color:var(--dim);box-shadow:var(--shadow)}
 .ph-card b{color:var(--fg);font-size:15px;font-weight:500;letter-spacing:.08em}
@@ -85,8 +89,13 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     nav.append(b);
   });
 
+  /* ★ 六格的正中间挖一个 60px 的缺口（第 3、4 格之间）—— 那枚凸起的心住在这儿。
+     不留缺口的话它会正好压住「巢」和「书房」两个字，看得见但点不着。 */
+  const slot=el("span"); slot.className="fab-slot";
+  nav.insertBefore(slot, nav.children[Math.floor(TABS.length/2)]);
+
   /* ── 中间那个凸起的圆：开一扇新窗 ──
-     放在导航条上方正中（不占格子），心的形状是强调，不是装饰。 */
+     从缺口里向上凸起 26px（半个身子在导航条里），心的形状是强调，不是装饰。 */
   const fab=el("button"); fab.id="newChatFab"; fab.title="开一扇新窗";
   fab.append(nestIcon("heart",24));
   fab.onclick=()=>newThread();
@@ -320,7 +329,10 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   /* ── 挂上去 ── */
   const col=document.querySelector("#chatCol");
   if(col)col.append(nav); else document.body.append(nav);
-  document.body.append(pane,fab);
+  /* ★ 心挂进**导航条里**（nav 是 position:relative 的），不再 fixed 到屏幕上 ——
+     它跟着导航条走，永远压在输入框上的那个毛病从结构上就没了。 */
+  nav.append(fab);
+  document.body.append(pane);
   /* 量出标签栏真正占多高，交给 #pane 让位（含安全区 —— 所以补一次 + 转屏也补） */
   const measure=()=>{
     try{

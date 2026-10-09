@@ -31,21 +31,31 @@
   --ink-1:#6E8296; --ink-2:#55677C; --ink-3:#93A6B8;
   --tx-1:#46505C; --tx-2:#7C8794; --tx-3:#A7B0BB;
   --foam-1:#F6FAFC; --foam-2:#DCEAF3; --foam-3:#C3D9E8;
+  /* ★ #6E93B3 是**唯一**的强调色。别处再要「重点」也只用它，或者用青灰 --ink-1。
+     暖土金那一族（上一版的主色）一个都不留。 */
   --accent:#6E93B3;
+  /* 拉丁小标签专用灰：全大写、宽字距那些字用它，比正文元信息再冷一档 */
+  --latin-c:#8A95A2;
   /* ── 老名字（各模块读的就是这一套，一个都不许删）── */
   --bg:var(--paper); --fg:var(--tx-1); --dim:var(--tx-2); --dim2:var(--tx-3);
   --panel:rgba(255,255,255,.42); --panel2:rgba(255,255,255,.24);
   --line:rgba(110,130,150,.20);
-  --ok:#6E9E86; --err:#B5796F; --warn:#BC9A62;
+  /* 语义色只留「能认出来」这一点用处，色相全部压进冷调 ——
+     原来的「进行中」是一块暖土金，跟这套皮冲突，换掉了。 */
+  --ok:#6E9E86; --err:#B0757C; --warn:#9A8FA8;
   --r:20px; --r-sm:12px; --gap:10px; --pad:16px;
-  --fs:15px; --lh:1.75; --colw:720px; --sidew:300px;
+  --fs:15px; --lh:1.8; --colw:720px; --sidew:300px;
   /* ★ 不引 Google Fonts：那台在手机上常常是**连不上**的，而 <link> 是阻塞渲染的 ——
      一整页会白等它超时。宋体用系统里的：iOS 有 Songti SC，安卓中文机多半有思源宋。
      想要一模一样的那款字，把字体文件丢进 core/web/fonts/，我再加 @font-face。 */
   --font:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* 拉丁标签一律 Jost：本机有就用，没有就退回无衬线。
+     ★ 同样不引外链 —— Jost 的 woff2 丢进 core/web/fonts/ 就能真用上。 */
+  --latin:"Jost","Jost*","Futura","Avenir Next","Century Gothic",var(--mono);
   --glass-bg:rgba(255,255,255,.42);
   --glass-line:rgba(255,255,255,.65);
+  /* ★ 全站只有这一种阴影。纯黑阴影、暖色阴影一律不出现。 */
   --shadow:0 10px 24px rgba(70,100,130,.10);
 }
 /* ── 深色 · 月光版（照同一套色相，只是把纸换成夜）── */
@@ -54,12 +64,14 @@
   --ink-1:#8FA8BE; --ink-2:#6E8296; --ink-3:#5B6C7E;
   --tx-1:#DCE4EC; --tx-2:#9FAEBD; --tx-3:#7C8B9A;
   --accent:#8FB4D4;
+  --latin-c:#93A0AE;
   --panel:rgba(255,255,255,.08); --panel2:rgba(255,255,255,.05);
   --line:rgba(255,255,255,.12);
-  --ok:#7FB79B; --err:#C98A80; --warn:#CBAA72;
+  --ok:#7FB79B; --err:#C08E92; --warn:#A79CB5;
   --glass-bg:rgba(255,255,255,.08);
   --glass-line:rgba(255,255,255,.14);
-  --shadow:0 10px 24px rgba(0,0,0,.22);
+  /* ★ 月亮底下也照样不许用纯黑阴影 —— 跟白天是同一条规矩。 */
+  --shadow:0 10px 24px rgba(70,100,130,.10);
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -79,7 +91,7 @@ input,textarea,select{font-size:16px!important}
 #bar{display:flex;align-items:center;gap:10px;padding:10px var(--pad);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
   background:color-mix(in srgb,var(--bg) 90%,transparent);backdrop-filter:blur(8px)}
-.brand{font-weight:600;letter-spacing:.5px}
+.brand{font-weight:500;letter-spacing:.5px}
 .sp{flex:1}
 .ibtn{padding:6px 10px;border-radius:var(--r-sm);color:var(--dim)}
 .ibtn:hover{background:var(--panel2);color:var(--fg)}
@@ -92,9 +104,9 @@ input,textarea,select{font-size:16px!important}
 .cp:hover{background:var(--panel2);color:var(--fg)}
 .bubbles{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
 .turn.me .bubbles{align-items:flex-end}
-.bubble{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);
-  padding:9px 13px;max-width:88%;white-space:pre-wrap;word-break:break-word}
-.turn.me .bubble{background:var(--accent);border-color:transparent;color:#0b1020}
+.bubble{background:var(--panel2);border:0;border-radius:var(--r);
+  padding:9px 13px;max-width:76%;white-space:pre-wrap;word-break:break-word}
+.turn.me .bubble{background:rgba(220,234,243,.58);color:var(--tx-1)}
 /* 被「重新生成」换掉的旧回复：读得出来、但看得出它已经不是活的那条 */
 .turn.sup .bubble{opacity:.5}
 .turn.sup .meta{opacity:.6}
@@ -110,7 +122,9 @@ input,textarea,select{font-size:16px!important}
   border-radius:9px;padding:7px 11px;max-width:76vw}
 .att-file .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-details.think{margin:0 0 7px;background:var(--panel);border:1px solid var(--line);
+details.think{margin:0 0 7px;background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);
   border-radius:var(--r-sm);overflow:hidden}
 details.think>summary{list-style:none;cursor:pointer;padding:7px 11px;display:flex;
   gap:7px;align-items:center;font-size:13px;color:var(--dim)}
@@ -119,8 +133,8 @@ details.think pre{margin:0;padding:0 12px 10px;font:12.5px/1.55 var(--mono);
   color:var(--dim);white-space:pre-wrap;max-height:320px;overflow:auto}
 details.think .sec{color:var(--dim2)}
 
-.stage{font-size:12.5px;color:var(--dim2);margin:0 0 8px;padding-left:2px;
-  display:flex;align-items:center;gap:8px;letter-spacing:.08em}
+.stage{font-size:11px;color:var(--tx-3);margin:0 0 8px;padding-left:2px;
+  display:flex;align-items:center;gap:8px;letter-spacing:.16em}
 .stage .foam{display:inline-flex;gap:4px;align-items:flex-end;height:9px}
 .stage .foam i{width:5px;height:5px;border-radius:50%;background:var(--accent);
   opacity:.25;animation:bubbleUp 1.6s ease-in-out infinite}
@@ -128,10 +142,11 @@ details.think .sec{color:var(--dim2)}
 .stage .foam i:nth-child(3){animation-delay:.44s}
 
 .tools{display:flex;flex-direction:column;gap:5px;margin:0 0 7px}
-.tool{border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);font-size:13px}
+.tool{border:1px solid var(--glass-line);background:var(--glass-bg);border-radius:var(--r-sm);font-size:13px;
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
 .tool .thead{display:flex;align-items:center;gap:7px;padding:6px 10px;cursor:pointer}
 .tool .tname{font-family:var(--mono);font-size:12.5px}
-.tool .tms{color:var(--dim2);font-size:12px}
+.tool .tms{color:var(--tx-3);font-size:10px;letter-spacing:.14em;font-family:var(--latin)}
 .tool .tcar{margin-left:auto;color:var(--dim2);transition:transform .15s}
 .tool.open .tcar{transform:rotate(180deg)}
 .tool .tbody{display:none;border-top:1px solid var(--line);padding:8px 10px}
@@ -141,9 +156,11 @@ details.think .sec{color:var(--dim2)}
 .tool[data-state=ok]  .ticon{color:var(--ok)}
 .tool[data-state=err] .ticon{color:var(--err)}
 
-.errbox{max-width:88%;border:1px solid var(--err);background:#e0716f1a;color:#f0b3b1;
+.errbox{max-width:88%;border:1px solid var(--err);
+  background:color-mix(in srgb,var(--err) 12%,transparent);color:var(--err);
   border-radius:var(--r-sm);padding:8px 11px;font-size:13px}
-.usage{font-size:11.5px;color:var(--dim2);margin-top:6px;font-family:var(--mono)}
+.usage{font-size:10px;color:var(--tx-3);margin-top:6px;font-family:var(--latin);
+  letter-spacing:.14em}
 .hint{max-width:var(--colw);margin:44px auto;text-align:center;color:var(--dim2);font-size:13px}
 
 #composer{border-top:1px solid var(--line);background:var(--bg);
@@ -152,15 +169,19 @@ details.think .sec{color:var(--dim2)}
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:8px 8px 8px 12px}
 #ta{flex:1;resize:none;background:none;border:0;outline:none;color:var(--fg);
   font:inherit;max-height:38vh;padding:5px 0}
-#btnSend{padding:8px 16px;border-radius:var(--r-sm);background:var(--accent);
-  color:#0b1020;font-weight:600;white-space:nowrap}
-#btnSend.stop{background:var(--err);color:#1a0d0d}
+/* ★ 这里只是「还没铺到玻璃那一层」的兜底；#btnSend 的真样子在下面
+   「和纸墨晕 × 海沫玻璃」那一段。两条要**说同一件事** —— 老代码里
+   这里原来是实心 accent 底 + 实心 err 底，而后来的 `.stop` 只改描边和字色，
+   实心底就留下来了：红底红字，按下去那一下什么都看不见。 */
+#btnSend{padding:8px 16px;border-radius:var(--r-sm);background:transparent;
+  color:var(--accent);font-weight:500;white-space:nowrap}
+#btnSend.stop{background:transparent;color:var(--err)}
 
 #side{width:var(--sidew);flex:0 0 var(--sidew);border-left:1px solid var(--line);
   background:var(--panel);overflow:auto;padding:var(--pad);transition:transform .2s ease}
 #app.side-off #side{transform:translateX(105%)}
 @media (max-width:820px){
-  #side{position:fixed;right:0;top:0;bottom:0;z-index:20;box-shadow:-8px 0 24px #0006}
+  #side{position:fixed;right:0;top:0;bottom:0;z-index:20;box-shadow:var(--shadow)}
   #app.side-off #side{transform:translateX(105%)}
   .bubble{max-width:94%}
 }
@@ -168,22 +189,23 @@ details.think .sec{color:var(--dim2)}
 #gate{position:fixed;inset:0;background:var(--bg);display:flex;
   align-items:center;justify-content:center;z-index:50}
 #gate .card{width:min(340px,86vw);display:flex;flex-direction:column;gap:12px;text-align:center}
-#gate input{padding:12px 14px;border-radius:var(--r-sm);border:1px solid var(--line);
-  background:var(--panel2);color:var(--fg);font:inherit;outline:none}
-#gate button{padding:12px;border-radius:var(--r-sm);background:var(--accent);
-  color:#0b1020;font-weight:600}
+#gate input{padding:12px 14px;border-radius:var(--r-sm);border:1px solid var(--glass-line);
+  background:var(--glass-bg);color:var(--fg);font:inherit;outline:none}
+#gate button{padding:12px;border-radius:var(--r-sm);background:var(--glass-bg);
+  border:1px solid var(--accent);color:var(--accent);font-weight:500}
 .muted{color:var(--dim2);font-size:12.5px}
 
 /* ══════════════════════════════════════════════════════════
    和纸墨晕 × 海沫玻璃
    ══════════════════════════════════════════════════════════ */
 #bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.bg-noise{position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay}
-.bg-warm{position:absolute;inset:0;opacity:.55;
-  background:radial-gradient(120% 80% at 50% 0%,#FFFDF8 0%,rgba(255,253,248,0) 62%)}
+.bg-noise{position:absolute;inset:0;opacity:.05;mix-blend-mode:overlay}
+/* 纸面受光：只是让顶上亮一点，色相是冷的（原来那层 #FFFDF8 偏暖，换掉了） */
+.bg-warm{position:absolute;inset:0;opacity:.45;
+  background:radial-gradient(120% 80% at 50% 0%,#FBFDFE 0%,rgba(251,253,254,0) 62%)}
 :root[data-moon="1"] .bg-noise{opacity:.10}
 :root[data-moon="1"] .bg-warm{opacity:.30;
-  background:radial-gradient(120% 80% at 50% 0%,rgba(120,160,200,.16) 0%,rgba(0,0,0,0) 60%)}
+  background:radial-gradient(120% 80% at 50% 0%,rgba(120,160,200,.16) 0%,rgba(70,100,130,0) 60%)}
 :root[data-moon="1"] .bg-art{opacity:.55}
 .bg-art{position:absolute;inset:0;width:100%;height:100%}
 .blob{animation-iteration-count:infinite;animation-timing-function:ease-in-out;animation-direction:alternate}
@@ -193,16 +215,28 @@ details.think .sec{color:var(--dim2)}
 @keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(20px,26px) scale(1.07)}}
 @keyframes drift2{0%,100%{transform:translate(0,0) scale(1.04)}50%{transform:translate(-24px,14px) scale(.96)}}
 @keyframes drift3{0%,100%{transform:translate(-8px,12px) scale(1)}50%{transform:translate(16px,-18px) scale(1.05)}}
-@keyframes breathe{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.03);opacity:1}}
+/* 头像呼吸：4s、scale 1 → 1.02（只一点点，像在喘气，不是心跳） */
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
 @keyframes bubbleUp{0%,100%{opacity:.2;transform:translateY(2px) scale(.8)}50%{opacity:.85;transform:translateY(-2px) scale(1.1)}}
 @keyframes msgIn{0%{opacity:0;filter:blur(6px);transform:translateY(6px)}100%{opacity:1;filter:blur(0);transform:none}}
 @keyframes pageIn{0%{opacity:0;transform:translateX(10px)}100%{opacity:1;transform:none}}
+/* ★ 降低动效偏好：不是「全都别动」，而是**退化成纯淡入**。
+   漂移 / 呼吸 / 上浮一律停住，位移和模糊也一起去掉 —— 只留下透明度的渐显，
+   这样「消息进来了」这件事还看得见，但没有任何东西在动。 */
 @media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
-    transition-duration:.2s!important}
+  .blob{animation:none!important}
+  .tide .avs .a,#newChatFab{animation:none!important}
+  .stage .foam i,.stage .dots i,.dots i{animation:none!important;opacity:.6}
+  *{animation-name:none!important;transition-property:opacity,color,background-color,border-color!important}
+  .turn,#pane,.sheet .box{animation:fadeIn 420ms ease forwards!important}
+  /* hover 上浮 / 按压缩放也一起去掉 */
+  .nt-card:hover,.set-sec:hover,.ty-card:hover,.ph-card:hover,.mem-card:hover,
+  .st-book:hover,.tide-row>*:hover,.cr-card:hover,.cr-note:hover,button:active{
+    transform:none!important}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 }
 #app{position:relative;z-index:1}
-/* 玻璃：通透，不是磨砂塑料 */
+/* 玻璃：通透，不是磨砂塑料。全站卡片 / 导航 / 输入框都用这一种材质。 */
 .glass{
   background:var(--glass-bg);
   backdrop-filter:blur(18px) saturate(140%);
@@ -210,15 +244,19 @@ details.think .sec{color:var(--dim2)}
   border:1px solid var(--glass-line);
   box-shadow:var(--shadow);
 }
+/* 玻璃卡轻轻浮起来 2px —— 只给「可以点、可以看」的卡，不给输入框那一行。
+   具名的那一长串在 nest-skin2.js（那一层排在各模块之后，才盖得住它们自己的样式）。 */
+.glass{transition:transform .28s ease,box-shadow .28s ease}
 /* ── 顶栏：极简，一条细线收尾 ── */
 #bar{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) var(--pad) 8px;
-  position:sticky;top:0;z-index:6;border-bottom:1px solid var(--line);
-  background:color-mix(in srgb,var(--paper) 72%,transparent);
+  position:sticky;top:0;z-index:6;border-bottom:1px solid var(--glass-line);
+  background:var(--glass-bg);
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
 #bar .who{display:flex;flex-direction:column;line-height:1.15;min-width:0}
 #bar .who b{font-weight:500;font-size:16px;letter-spacing:.08em;color:var(--tx-1);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw}
-#bar .who span{font-family:var(--mono);font-size:9px;letter-spacing:.22em;color:var(--tx-3);
+/* 拉丁标签：Jost、全大写、字距 .24em、10~13px、#8A95A2 */
+#bar .who span{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
   text-transform:uppercase}
 #bar .ibtn{padding:6px;border-radius:12px;color:var(--tx-2)}
 #bar .ibtn:hover{background:var(--panel2);color:var(--tx-1)}
@@ -227,6 +265,8 @@ details.think .sec{color:var(--dim2)}
   background-size:cover;background-position:center;color:var(--tx-2);font-size:12px;
   display:flex;align-items:center;justify-content:center}
 #bar .me img{width:100%;height:100%;object-fit:cover;display:block}
+/* 头像呼吸：4s、scale 1 → 1.02 */
+#bar .me{animation:breathe 4s ease-in-out infinite;transform-origin:50% 50%}
 #gate .card{padding:26px 22px;display:flex;flex-direction:column;gap:12px;text-align:center;
   width:min(340px,86vw);border-radius:26px}
 .gate-mark{width:44px;height:44px;margin:0 auto;color:var(--accent)}
@@ -238,59 +278,68 @@ details.think .sec{color:var(--dim2)}
 .empty-verse .v{writing-mode:vertical-rl;text-orientation:upright;
   font-size:15px;letter-spacing:.34em;line-height:1;color:var(--dim);opacity:.9;
   max-height:46vh}
-.empty-verse .ln{width:1px;height:64px;background:currentColor;opacity:.28;color:var(--dim2);
+.empty-verse .ln{width:1px;height:64px;background:currentColor;opacity:.30;color:var(--dim2);
   margin-top:6px}
-.empty-verse .en{writing-mode:vertical-rl;font-family:var(--mono);font-size:9px;
-  letter-spacing:.28em;color:var(--dim2);text-transform:uppercase;margin-top:4px}
+.empty-verse .en{writing-mode:vertical-rl;font-family:var(--latin);font-size:10px;
+  letter-spacing:.24em;color:var(--latin-c);text-transform:uppercase;margin-top:4px}
 .empty-verse .mark{width:26px;height:26px;color:var(--accent);opacity:.7;margin:2px auto 0}
 .empty-verse .mark .ni,.empty-verse .mark svg{width:26px;height:26px}
+/* 消息入场：模糊散开 + 轻轻落下来，420ms */
 .turn{margin-bottom:24px;animation:msgIn 420ms cubic-bezier(.22,.8,.3,1) forwards}
-.turn .meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--tx-3);
-  text-transform:none;margin-bottom:7px}
-.turn .meta .who{font-family:var(--font);letter-spacing:.06em;font-size:11px}
-/* AI：墨晕形气泡 —— 手撕宣纸那种不规则软边，文字直接坐在纸底上 */
+/* 元信息在气泡**下方**：10px、字距 .24em、A7B0BB */
+.turn .meta{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--tx-3);
+  text-transform:uppercase;margin:10px 0 0}
+.turn .meta .who{font-family:var(--font);letter-spacing:.14em;font-size:11px}
+/* AI：墨晕软边 —— 没有描边，就是纸上一团化开的墨 */
 .turn.ai .bubble{
   border-radius:22px 30px 26px 18px;
-  background:linear-gradient(135deg,rgba(110,130,150,.13),rgba(110,130,150,.07));
-  border:1px solid rgba(255,255,255,.28);
+  background:var(--nest-ai-bubble,rgba(110,130,150,.10));
+  border:0;
   color:var(--tx-1);
 }
-/* 我：冰蓝海沫玻璃 */
+/* 我：海沫玻璃 —— 右下角一个 6px 的指向 */
 .turn.me .bubble{
   border-radius:22px 22px 6px 22px;
-  background:rgba(220,234,243,.58);
-  backdrop-filter:blur(14px) saturate(130%);-webkit-backdrop-filter:blur(14px) saturate(130%);
-  border:1px solid rgba(255,255,255,.62);
+  background:var(--nest-me-bubble,rgba(220,234,243,.58));
+  color:var(--nest-me-fg,var(--tx-1));
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);
 }
-:root[data-moon="1"] .turn.ai .bubble{background:rgba(110,140,175,.14);border-color:rgba(255,255,255,.10)}
-:root[data-moon="1"] .turn.me .bubble{background:rgba(110,140,175,.16);border-color:rgba(255,255,255,.14)}
-.bubble{padding:11px 15px;max-width:76%;font-size:var(--fs);line-height:1.8}
+:root[data-moon="1"] .turn.ai .bubble{background:var(--nest-ai-bubble,rgba(110,140,175,.14))}
+:root[data-moon="1"] .turn.me .bubble{background:var(--nest-me-bubble,rgba(110,140,175,.16));
+  border-color:rgba(255,255,255,.14)}
+/* 76% 是设计定的上限；「外观」面板把宽度调过就听面板的 */
+.bubble{padding:11px 15px;max-width:var(--nest-bubble-max,76%);font-size:var(--fs);
+  line-height:var(--lh)}
 /* 打字中：上浮的海沫 */
 .stage .dots i,.dots i{animation:bubbleUp 1.6s ease-in-out infinite}
-/* ── 输入：悬浮玻璃胶囊 ── */
-#composer{padding:8px var(--pad) calc(8px + env(safe-area-inset-bottom))}
+/* ── 输入：悬浮玻璃条 ──
+   ★ 底下多留 34px：正中那颗凸起的心要探上来 26px，不留白就会压在输入框上。 */
+#composer{padding:8px var(--pad) calc(34px + env(safe-area-inset-bottom))}
 #composer .row{border-radius:24px;padding:8px 8px 8px 14px;gap:8px;
   background:var(--glass-bg);
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line);box-shadow:var(--shadow)}
-#btnSend{border-radius:18px;background:var(--accent);color:#F7FBFF;font-weight:500;
-  letter-spacing:.06em;padding:9px 16px}
-#btnSend.stop{background:var(--err);color:#FFF6F5}
-/* ── 底部导航：玻璃条 + 中间凸起的心 ── */
-#tabs{position:relative;z-index:5;border-top:1px solid var(--line);
-  background:color-mix(in srgb,var(--paper) 70%,transparent);
-  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%)}
+/* 按钮：1px 青灰描边，选中 / 主操作才用 accent。不做实心色块。 */
+#btnSend{border-radius:18px;background:var(--glass-bg);border:1px solid var(--ink-1);
+  color:var(--accent);font-weight:500;letter-spacing:.06em;padding:9px 16px}
+#btnSend.stop{border-color:var(--err);color:var(--err);background:var(--glass-bg)}
+/* ── 底部导航：玻璃条 + 正中凸起 26px 的心 ── */
+#tabs{position:relative;z-index:41;border-top:1px solid var(--glass-line);
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
 #tabs button{color:var(--tx-3)}
 #tabs button.on{color:var(--accent)}
 #tabs button .lb{font-family:var(--font);font-size:10.5px;letter-spacing:.14em}
-#newChatFab{position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(env(safe-area-inset-bottom) + 54px);z-index:7;
+/* ★ 心＝底部导航正中间那枚，向上凸起 26px（半个身子在导航条里、半个探出来）。
+   放在 #tabs 里而不是 fixed 到屏幕上：它跟着导航条走，永远压不到输入框。 */
+#newChatFab{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(100% - 26px);z-index:7;
   width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   color:var(--accent);background:var(--foam-1);border:1px solid var(--glass-line);
-  box-shadow:0 12px 26px rgba(70,100,130,.18);
+  box-shadow:var(--shadow);
   animation:breathe 4s ease-in-out infinite}
-:root[data-moon="1"] #newChatFab{background:rgba(255,255,255,.14);
-  box-shadow:0 12px 26px rgba(0,0,0,.28)}
+:root[data-moon="1"] #newChatFab{background:rgba(255,255,255,.14)}
 #newChatFab .ni,#newChatFab svg{width:24px;height:24px}
 /* ── 抽屉 ── */
 #drawer{position:fixed;inset:0;z-index:60;background:rgba(70,100,130,.18);
@@ -299,8 +348,8 @@ details.think .sec{color:var(--dim2)}
 #drawer .panel{position:absolute;left:0;top:0;bottom:0;width:min(300px,84vw);
   padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   border-radius:0 26px 26px 0;overflow:auto;
-  background:var(--glass-bg);backdrop-filter:blur(22px) saturate(150%);
-  -webkit-backdrop-filter:blur(22px) saturate(150%);
+  background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
   border-right:1px solid var(--glass-line);box-shadow:var(--shadow);
   transform:translateX(-14px);transition:transform .3s ease}
 #drawer.open .panel{transform:none}
@@ -308,11 +357,14 @@ details.think .sec{color:var(--dim2)}
   border-radius:14px;color:var(--tx-1);font-size:15px;letter-spacing:.08em}
 #drawer .room:hover{background:var(--panel2)}
 #drawer .room .sp{flex:1}
-#drawer .room .en{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--tx-3)}
-#drawer .h{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:var(--tx-3);
+#drawer .room .en{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c)}
+#drawer .h{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
   margin:16px 8px 6px;text-transform:uppercase}
-#drawer .rule{height:1px;width:44px;background:currentColor;opacity:.3;margin:14px 8px;
-  color:var(--tx-3)}
+/* 分隔：1px、短（32~64px）、透明度 30% —— 常跟一行字并排 */
+#drawer .rule{height:1px;width:48px;background:currentColor;opacity:.30;margin:14px 8px;
+  color:var(--latin-c)}
+hr,.rule{height:1px;width:48px;border:0;background:currentColor;opacity:.30;margin:14px auto;
+  color:var(--latin-c)}
 </style>
 </head>
 <body>
@@ -323,16 +375,16 @@ details.think .sec{color:var(--dim2)}
     <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" seed="12"/></filter>
     <rect width="100%" height="100%" filter="url(#paperNoise)"/>
   </svg>
-  <!-- ② 暖光：模拟纸张受光 -->
+  <!-- ② 收光：顶上亮一点，色相是冷的 -->
   <div class="bg-warm"></div>
-  <!-- ③ 墨晕 + 等高线 + 顶部云盖 + 星屑 -->
+  <!-- ③ 墨晕 + 等高线 + 顶部云盖 + 墨点星屑 -->
   <svg class="bg-art" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
     <defs>
       <filter id="organic" x="-40%" y="-40%" width="180%" height="180%">
         <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="41" result="n"/>
         <feDisplacementMap in="SourceGraphic" in2="n" scale="46" xChannelSelector="R" yChannelSelector="G"/>
       </filter>
-      <filter id="softBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="58"/></filter>
+      <filter id="softBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="72"/></filter>
       <filter id="domeBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
       <radialGradient id="domeGrad" cx="50%" cy="6%" r="96%">
         <stop offset="0%" stop-color="#FBFDFE" stop-opacity="0.95"/>
@@ -340,25 +392,26 @@ details.think .sec{color:var(--dim2)}
         <stop offset="100%" stop-color="#C3D9E8" stop-opacity="0.22"/>
       </radialGradient>
     </defs>
-    <!-- 墨晕 1 · 青灰 -->
+    <!-- 墨晕 1 · 青灰（高斯模糊 72px；外缘 3 圈 0.5px 内缩等高线，都压到 12%） -->
     <g class="blob drift1" style="transform-origin:22% 28%">
-      <ellipse cx="22%" cy="28%" rx="21%" ry="16%" fill="#6E8296" opacity="0.20" filter="url(#softBlur)"/>
-      <ellipse cx="22%" cy="28%" rx="19%" ry="14%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.14" filter="url(#organic)"/>
-      <ellipse cx="22%" cy="28%" rx="16%" ry="11.5%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.11"/>
-      <ellipse cx="22%" cy="28%" rx="13%" ry="9%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.09"/>
-      <ellipse cx="22%" cy="28%" rx="9.5%" ry="6.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.07"/>
+      <ellipse cx="22%" cy="28%" rx="19%" ry="15%" fill="#6E8296" opacity="0.20" filter="url(#softBlur)"/>
+      <ellipse cx="22%" cy="28%" rx="17%" ry="13%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12" filter="url(#organic)"/>
+      <ellipse cx="22%" cy="28%" rx="14.5%" ry="10.5%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12"/>
+      <ellipse cx="22%" cy="28%" rx="12%" ry="8%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12"/>
     </g>
     <!-- 墨晕 2 · 水色 -->
     <g class="blob drift2" style="transform-origin:76% 36%">
-      <ellipse cx="76%" cy="36%" rx="17%" ry="19%" fill="#C3D9E8" opacity="0.30" filter="url(#softBlur)"/>
-      <ellipse cx="76%" cy="36%" rx="15%" ry="17%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12" filter="url(#organic)"/>
-      <ellipse cx="76%" cy="36%" rx="12%" ry="14%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.09"/>
+      <ellipse cx="76%" cy="36%" rx="16%" ry="18%" fill="#C3D9E8" opacity="0.30" filter="url(#softBlur)"/>
+      <ellipse cx="76%" cy="36%" rx="14%" ry="16%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12" filter="url(#organic)"/>
+      <ellipse cx="76%" cy="36%" rx="11.5%" ry="13%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12"/>
+      <ellipse cx="76%" cy="36%" rx="9%" ry="10%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12"/>
     </g>
     <!-- 墨晕 3 · 重墨 -->
     <g class="blob drift3" style="transform-origin:58% 80%">
-      <ellipse cx="58%" cy="80%" rx="24%" ry="13%" fill="#55677C" opacity="0.15" filter="url(#softBlur)"/>
-      <ellipse cx="58%" cy="80%" rx="21%" ry="11%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.10" filter="url(#organic)"/>
-      <ellipse cx="58%" cy="80%" rx="17%" ry="8.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.08"/>
+      <ellipse cx="58%" cy="80%" rx="22%" ry="12%" fill="#55677C" opacity="0.15" filter="url(#softBlur)"/>
+      <ellipse cx="58%" cy="80%" rx="19%" ry="10%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.12" filter="url(#organic)"/>
+      <ellipse cx="58%" cy="80%" rx="15.5%" ry="7.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.12"/>
+      <ellipse cx="58%" cy="80%" rx="12%" ry="5.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.12"/>
     </g>
     <!-- ④ 顶部云盖（扇贝边 + 伞骨 + 等高线） -->
     <g class="dome">
@@ -379,21 +432,18 @@ details.think .sec{color:var(--dim2)}
       <path fill="none" stroke="#6E8296" stroke-width="0.4" opacity="0.09"
             d="M70,26 C115,42 155,47 195,46 C235,45 275,39 320,24"/>
     </g>
-    <!-- ⑤ 墨点 / 星屑（不闪） -->
+    <!-- ④ 墨点 / 星屑：一共 8 个（6~10 之间）、1~2px、20%、**不闪**
+         （星是画出来的四角星，不写字形 —— 字体换一个就不是这个形状了） -->
     <g fill="#6E8296" opacity="0.20">
-      <circle cx="12%" cy="16%" r="1.2"/><circle cx="88%" cy="42%" r="0.9"/>
-      <circle cx="34%" cy="86%" r="1.3"/><circle cx="70%" cy="12%" r="0.8"/>
-      <circle cx="52%" cy="64%" r="1.0"/><circle cx="18%" cy="62%" r="0.9"/>
-      <circle cx="82%" cy="74%" r="1.1"/>
-      <!-- 星屑：画出来的四角星（不写字形 —— 字体换一个就不是这个形状了） -->
+      <circle cx="12%" cy="16%" r="1.6"/><circle cx="88%" cy="42%" r="1.1"/>
+      <circle cx="34%" cy="86%" r="1.9"/><circle cx="70%" cy="12%" r="1.0"/>
+      <circle cx="52%" cy="64%" r="1.4"/>
       <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
             transform="translate(44% 34%) scale(1.15)"/>
       <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
             transform="translate(81% 72%) scale(1)"/>
       <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
             transform="translate(16% 48%) scale(.85)"/>
-      <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
-            transform="translate(62% 18%) scale(.9)"/>
     </g>
   </svg>
 </div>
@@ -671,7 +721,8 @@ function addTurn(it){
     catch(e){cp.textContent="复制失败";}
   };
   m.append(cp);
-  w.append(m);
+  /* ★ 元信息在气泡**下方**（10px 那一行）—— 所以这里先不 append，
+     等正文 / 思考 / 工具 / 附件 / 表情包都摆完，最后才把它挂上去。 */
   if(it.think)w.append(thinkEl(it.think));
   (it.tools||[]).forEach(t=>w.append(toolEl(t.name,t.ok===false?"err":"ok",null,t.err||"","")));
   // ★ 附件的位置分两种：人发的排在正文前面（那是他要说的东西），
@@ -694,6 +745,7 @@ function addTurn(it){
     //   免得过几天你问它「你上次不是这么说的吗」，它一脸茫然。
     w.append(el("div","supnote","已被重新生成取代 · 它还在这，但它自己不再记得这一条"));
   }
+  w.append(m);          /* 元信息收尾，落在气泡下方 */
   S.append(w);
   return w;
 }
@@ -706,7 +758,8 @@ function liveTurn(){
   const th=thinkEl("");th.hidden=true;
   const tl=el("div","tools");
   const bs=el("div","bubbles");
-  w.append(m,st,th,tl,bs);
+  /* 元信息最后挂 —— 它在气泡下方 */
+  w.append(st,th,tl,bs,m);
   S.append(w);toBottom(true);
   return {w,st,th,tl,bs,think:"",t0:0,tools:[],usage:null,sticker:null};
 }
@@ -879,7 +932,9 @@ boot();
   css.textContent=`
   .dots{margin-left:4px}
   .toast{position:fixed;left:50%;bottom:78px;transform:translate(-50%,10px);z-index:80;
-    background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+    border:1px solid var(--glass-line);border-radius:var(--r-sm);box-shadow:var(--shadow);
     padding:9px 14px;font-size:13px;opacity:0;transition:.18s;pointer-events:none;max-width:86vw}
   .toast.on{opacity:1;transform:translate(-50%,0)}
   #raw{position:fixed;left:10px;right:10px;bottom:10px;max-height:46vh;overflow:auto;z-index:70;
@@ -889,10 +944,11 @@ boot();
   #raw .rh .sp{flex:1}
   .atts.sticker-bad{color:var(--err);font-size:12px;border:1px dashed var(--err);
     border-radius:9px;padding:6px 9px;max-width:76vw}
-  .turn.starred > .meta .starmark{color:var(--warn);margin-right:4px}
+  .turn.starred > .meta .starmark{color:var(--accent);margin-right:4px}
   .meta .starmark{font-size:12px}
-  .menu{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);
-    border-radius:var(--r-sm);padding:4px;min-width:168px;box-shadow:0 10px 30px #0009}
+  .menu{position:absolute;z-index:60;background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);border:1px solid var(--glass-line);
+    border-radius:var(--r-sm);padding:4px;min-width:168px;box-shadow:var(--shadow)}
   .menu button{display:block;width:100%;text-align:left;padding:9px 11px;border-radius:7px;font-size:14px}
   .menu button:hover{background:var(--panel2)}
   .menu button.danger{color:var(--err)}

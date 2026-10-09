@@ -8,12 +8,18 @@
 "use strict";
 try{
   const LS="nest_theme";
+  /* ★ 默认值＝外壳那一套「和纸墨晕 × 海沫玻璃」。
+     以前这里是一份**深色**默认（bg #0f1115 / accent #7aa2f7），而 apply() 会在每次
+     进站时把这些写进 <html> 的行内样式 —— 行内优先于 :root，于是外壳刚画好的和纸、
+     墨晕、海沫玻璃全被盖掉，整站变成一块黑板。把默认值对齐外壳之后，apply() 变成
+     一次「写进去也和外壳一样」的空操作；只有用户自己改过外观才真的会不一样。 */
   const D={
-    bg:"#0f1115",panel:"#151a21",panel2:"#1b212b",line:"#252c38",
-    fg:"#e9edf4",dim:"#96a0b1",dim2:"#6b7486",
-    accent:"#7aa2f7",ok:"#5ec27f",err:"#e0716f",warn:"#e0b96f",
-    aiBubble:"#1b212b",meBubble:"#7aa2f7",
-    rBubble:14,rCard:9,bubbleMax:88,fs:15,lh:1.6,colw:760,tail:0,
+    bg:"#F2EDE2",panel:"rgba(255,255,255,.42)",panel2:"rgba(255,255,255,.24)",
+    line:"rgba(110,130,150,.20)",
+    fg:"#46505C",dim:"#7C8794",dim2:"#A7B0BB",
+    accent:"#6E93B3",ok:"#6E9E86",err:"#B0757C",warn:"#9A8FA8",
+    aiBubble:"rgba(110,130,150,.10)",meBubble:"rgba(220,234,243,.58)",
+    rCard:20,bubbleMax:76,fs:15,lh:1.8,colw:720,
     bgMode:"solid",grad1:"#1b2233",grad2:"#3a2a4d",bgImg:"",bgDim:45,
     icThink:"spark",icSide:"menu",icDbg:"chip",send:"发送",
     offBadge:1,tw:0,twCps:45
@@ -54,27 +60,28 @@ try{
   const st=document.createElement("style");
   st.textContent=`
 body{background:var(--nest-page-bg,var(--bg))}
-.bubble{background:var(--nest-ai-bubble,var(--panel2));border-radius:var(--nest-r-bubble,var(--r));max-width:var(--nest-bubble-max,88%)}
-.turn.me .bubble{background:var(--nest-me-bubble,var(--accent));color:var(--nest-me-fg,#0b1020)}
-.turn.ai .bubble:first-child{border-top-left-radius:var(--nest-tail,var(--r))}
-.turn.me .bubble:first-child{border-top-right-radius:var(--nest-tail,var(--r))}
-details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
+/* ★ 气泡的**形状**（那两组不对称圆角、76% 宽度）由外壳定死，这儿一条都不写 ——
+   以前这里给 .bubble 重新指定 border-radius / max-width，还靠 :first-child 把
+   左上角抹成 0，注入的样式又排在外壳后面，于是设计稿的软边全被盖掉。
+   这里只保留「颜色可换」：外壳读 --nest-ai-bubble / --nest-me-bubble / --nest-me-fg。 */
+details.think,.tool{border-radius:var(--nest-r-card,var(--r))}
 .sk-h{font-size:13px;color:var(--dim);margin:15px 0 7px;letter-spacing:.5px}
 .sk-h:first-child{margin-top:0}
 .sk-row{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:13px;color:var(--dim)}
 .sk-row>span.lb{flex:0 0 76px}
 .sk-row input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
-.sk-row input[type=color]{width:36px;height:26px;padding:0;border:1px solid var(--line);border-radius:6px;background:none}
-.sk-row input[type=text]{flex:1;min-width:0;width:100%;background:var(--panel2);border:1px solid var(--line);
-  color:var(--fg);border-radius:7px;padding:6px 8px;font:inherit;font-size:13px}
-.sk-row .v{flex:0 0 40px;text-align:right;color:var(--dim2);font-size:12px}
+.sk-row input[type=color]{width:36px;height:26px;padding:0;border:1px solid var(--ink-1);border-radius:6px;background:none}
+.sk-row input[type=text]{flex:1;min-width:0;width:100%;background:var(--glass-bg);border:1px solid var(--glass-line);
+  color:var(--fg);border-radius:12px;padding:6px 8px;font:inherit;font-size:16px}
+.sk-row .v{flex:0 0 44px;text-align:right;color:var(--tx-3);font-size:10px;letter-spacing:.14em;
+  font-family:var(--latin)}
 .sk-btns{display:flex;flex-wrap:wrap;gap:6px;margin:9px 0}
-.sk-btns button{padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);font-size:13px}
+.sk-btns button{padding:7px 11px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px}
 .sk-btns button.on{border-color:var(--accent);color:var(--accent)}
 .sk-presets{display:flex;gap:7px;flex-wrap:wrap}
-.sk-presets i{width:36px;height:28px;border-radius:8px;border:1px solid var(--line);cursor:pointer;display:block}
-.nest-off{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--warn);
-  border:1px solid var(--warn);border-radius:20px;padding:2px 9px;cursor:pointer;white-space:nowrap}
+.sk-presets i{width:36px;height:28px;border-radius:8px;border:1px solid var(--ink-1);cursor:pointer;display:block}
+.nest-off{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--tx-2);
+  border:1px solid var(--ink-1);border-radius:10px;padding:2px 9px;cursor:pointer;white-space:nowrap}
 .nest-off .moon{animation:skbreath 2.6s ease-in-out infinite}
 @keyframes skbreath{0%,100%{opacity:.4}50%{opacity:1}}
 @media(max-width:600px){.nest-off .txt{display:none}}
@@ -94,9 +101,14 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
     set("--fg",T.fg);set("--dim",T.dim);set("--dim2",T.dim2);
     set("--accent",T.accent);set("--ok",T.ok);set("--err",T.err);set("--warn",T.warn);
     set("--nest-ai-bubble",T.aiBubble);set("--nest-me-bubble",T.meBubble);
-    set("--nest-me-fg",lum(T.meBubble)>0.62?"#10131a":"#ffffff");
-    set("--nest-r-bubble",T.rBubble+"px");set("--nest-r-card",T.rCard+"px");
-    set("--nest-bubble-max",T.bubbleMax+"%");set("--nest-tail",T.tail?"4px":"0px");
+    /* 只有 #rrggbb / #rgb 才推得出该配深字还是浅字；海沫玻璃那种 rgba(...) 推不出来，
+       退回正文色 --tx-1（写死白色会变成白字白底）。 */
+    set("--nest-me-fg",/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(T.meBubble||""))
+        ?(lum(T.meBubble)>0.62?"#10131a":"#ffffff"):"var(--tx-1)");
+    /* ★ --nest-r-bubble / --nest-tail 不再写了：气泡那两组不对称软边是设计定死的，
+       面板里那两枚控件也一起撤了，留着这两个变量只会让人以为还能调。 */
+    set("--nest-r-card",T.rCard+"px");
+    set("--nest-bubble-max",T.bubbleMax+"%");
     set("--fs",T.fs+"px");set("--lh",String(T.lh));set("--colw",T.colw+"px");
     if(T.bgMode==="img"&&T.bgImg){
       const d=(T.bgDim/100).toFixed(2);
@@ -198,16 +210,22 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
   pollOff(); setInterval(pollOff,30000);
 
   /* ── 外观面板 ── */
+  /* ★ 预设里原来有「纸」和「暖」两套暖土金 —— 那是上一版的皮，
+     跟和纸墨晕 × 海沫玻璃冲突，换成了冷调的两套（海雾 / 月白）。
+     剩下几套只是把纸换成别的颜色，主色一律还在青灰那一族里。 */
   const PRESETS=[
-    ["夜",{}],
-    ["纸",{bg:"#f4f1ea",panel:"#fffdf8",panel2:"#efeae0",line:"#ded7c9",fg:"#2f2b26",dim:"#6f675c",dim2:"#948b7d",
-          accent:"#b07d3a",aiBubble:"#fffdf8",meBubble:"#e8d9bd",bgMode:"solid"}],
-    ["森",{bg:"#0c1410",panel:"#12201a",panel2:"#16291f",line:"#23392c",fg:"#e6f0e8",dim:"#8fa79a",dim2:"#6b8175",
-          accent:"#6fbf8b",aiBubble:"#16291f",meBubble:"#2f6b4a",bgMode:"solid"}],
-    ["霓",{bg:"#0a0a12",panel:"#12121f",panel2:"#191931",line:"#2a2a4a",fg:"#eae6ff",dim:"#9a92c9",dim2:"#6f679b",
-          accent:"#b06cff",aiBubble:"#191931",meBubble:"#7a2bd6",bgMode:"solid"}],
-    ["暖",{bg:"#140f0c",panel:"#1d1613",panel2:"#261c17",line:"#38291f",fg:"#f2e8e0",dim:"#b39a88",dim2:"#8a7566",
-          accent:"#e0915c",aiBubble:"#261c17",meBubble:"#a95c2e",bgMode:"solid"}]
+    ["和纸",{bg:"#F2EDE2",panel:"rgba(255,255,255,.42)",panel2:"rgba(255,255,255,.24)",
+            line:"rgba(110,130,150,.20)",fg:"#46505C",dim:"#7C8794",dim2:"#A7B0BB",
+            accent:"#6E93B3",aiBubble:"rgba(110,130,150,.10)",meBubble:"rgba(220,234,243,.58)",bgMode:"solid"}],
+    ["月白",{bg:"#E8EEF2",panel:"rgba(255,255,255,.46)",panel2:"rgba(255,255,255,.26)",
+            line:"rgba(110,130,150,.20)",fg:"#3E4A57",dim:"#72808E",dim2:"#9FAAB6",
+            accent:"#6E93B3",aiBubble:"rgba(110,130,150,.10)",meBubble:"rgba(214,232,244,.60)",bgMode:"solid"}],
+    ["海雾",{bg:"#E6EDF1",panel:"rgba(255,255,255,.44)",panel2:"rgba(255,255,255,.25)",
+            line:"rgba(110,130,150,.22)",fg:"#42505E",dim:"#75838F",dim2:"#A2ADB8",
+            accent:"#6E93B3",aiBubble:"rgba(110,130,150,.12)",meBubble:"rgba(204,226,238,.62)",bgMode:"solid"}],
+    ["夜蓝",{bg:"#1C2430",panel:"rgba(255,255,255,.08)",panel2:"rgba(255,255,255,.05)",
+            line:"rgba(255,255,255,.12)",fg:"#DCE4EC",dim:"#9FAEBD",dim2:"#7C8B9A",
+            accent:"#8FB4D4",aiBubble:"rgba(110,140,175,.14)",meBubble:"rgba(110,140,175,.16)",bgMode:"solid"}]
   ];
   function cRow(box,k,lb){
     const i=document.createElement("input"); i.type="color"; i.value=money(T[k]||D[k]);
@@ -264,17 +282,13 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
     cRow(box,"aiBubble","它的气泡"); cRow(box,"meBubble","我的气泡");
 
     box.append(H("形状 · 字号"));
-    nRow(box,"rBubble","气泡圆角",0,28,1,"px");
-    nRow(box,"rCard","卡片圆角",0,20,1,"px");
+    /* ★ 「气泡圆角 / 小尾巴」两枚控件撤了：那两组不对称软边（22/30/26/18 与
+       22/22/6/22）是这一套皮的一部分，留着滑杆等于留一个能把它调坏的入口。 */
+    nRow(box,"rCard","卡片圆角",0,28,1,"px");
     nRow(box,"bubbleMax","气泡宽度",55,96,1,"%");
     nRow(box,"fs","字号",13,20,0.5,"px");
     nRow(box,"lh","行高",1.3,2.1,0.05,"");
     nRow(box,"colw","聊天区宽",560,1200,20,"px");
-    const tb=document.createElement("div"); tb.className="sk-btns";
-    const bt=document.createElement("button"); bt.textContent="气泡小尾巴：开";
-    bt.className=T.tail?"on":"";
-    bt.onclick=()=>{T.tail=T.tail?0:1;save();apply();buildPanel();};
-    tb.append(bt); box.append(tb);
 
     box.append(H("背景"));
     const mb=document.createElement("div"); mb.className="sk-btns";

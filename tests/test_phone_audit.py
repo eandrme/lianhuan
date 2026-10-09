@@ -201,6 +201,95 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn("/api/upload", skin)
         self.assertIn("paintAva", self.html, "顶栏那两颗圆头像")
 
+    def test_the_palette_has_exactly_one_accent(self):
+        """★ 用户定的色板：唯一强调色 #6E93B3，正文 / 次要 / 元信息 / 墨色都是定值。
+
+        暖土金那一族（上一版的主色）**一个字节都不许留** —— 它们最容易从
+        某个模块的老样式里悄悄长回来，而光看代码看不出来（只有一处也是花的）。
+        """
+        for bit in ("--tx-1:#46505C", "--tx-2:#7C8794", "--tx-3:#A7B0BB",
+                    "--ink-1:#6E8296", "--ink-2:#55677C", "--ink-3:#93A6B8",
+                    "--latin-c:#8A95A2", "--accent:#6E93B3"):
+            self.assertIn(bit, self.html, bit)
+        warm = re.compile(r"#(?:[Bb]8860[Bb]|[Cc]9[Aa]24[Aa]|[Bb][Cc]9[Aa]62|[Bb]07[Dd]3[Aa]|"
+                          r"[Ee]0915[Cc]|[Cc]9[Aa]62)", re.I)
+        for f in NEST_FILES:
+            txt = (WEB / f).read_text(encoding="utf-8")
+            self.assertIsNone(warm.search(txt), f + " 里还有暖土金那一族的颜色")
+
+    def test_shadows_are_only_the_one_cool_shadow(self):
+        """阴影只有 rgba(70,100,130,.10)：纯黑阴影、暖色阴影一律不许有。"""
+        bad = {}
+        for f in NEST_FILES:
+            for m in re.finditer(r"box-shadow:\s*([^;\n}]+)", (WEB / f).read_text(encoding="utf-8")):
+                v = m.group(1)
+                if re.search(r"#000|rgba\(\s*0\s*,\s*0\s*,\s*0", v):
+                    bad.setdefault(f, []).append(v.strip())
+        self.assertEqual({}, bad, "这几处还是纯黑阴影")
+
+    def test_the_ink_washes_are_three_by_three(self):
+        """背景：3 团墨晕，每团外缘**恰好 3 层**内缩 0.5px、12% 的等高线。"""
+        blobs = re.findall(r'<g class="blob drift\d"[^>]*>(.*?)</g>', self.html, re.S)
+        self.assertEqual(3, len(blobs), "墨晕该是 3 团")
+        for i, b in enumerate(blobs, 1):
+            rings = [e for e in re.findall(r"<ellipse[^>]*>", b) if 'fill="none"' in e]
+            self.assertEqual(3, len(rings), f"第 {i} 团外缘该有 3 层等高线")
+            for r in rings:
+                self.assertIn('stroke-width="0.5"', r)
+                self.assertIn('opacity="0.12"', r)
+        # 墨点 / 星屑：6~10 个、1~2px、20%、不闪
+        g = re.search(r'<g fill="#6E8296" opacity="0\.20">(.*?)</g>', self.html, re.S)
+        self.assertIsNotNone(g, "墨点那一组没了")
+        specks = re.findall(r"<circle[^>]*>|<path[^>]*>", g.group(1))
+        self.assertTrue(6 <= len(specks) <= 10, f"墨点/星屑该是 6~10 个，现在 {len(specks)}")
+        for c in re.findall(r'<circle[^>]*r="([\d.]+)"', g.group(1)):
+            self.assertTrue(1 <= float(c) <= 2, f"墨点半径 {c} 不在 1~2px")
+        self.assertNotIn("animation", g.group(0), "墨点不许闪")
+
+    def test_the_heart_is_a_notch_in_the_bottom_nav(self):
+        """★ 聊天页那枚心：底部导航**正中间向上凸起 26px**，不许再压在输入框上。
+
+        以前它是 `position:fixed` 到屏幕上、离底 54px —— 正好骑在输入框那一行上。
+        现在它住在导航条里（#tabs 是 relative），靠 bottom:calc(100% - 26px) 探出半个身子。
+        """
+        self.assertIn("bottom:calc(100% - 26px)", self.html)
+        fab = self.html[self.html.index("#newChatFab"):]
+        self.assertNotIn("position:fixed", fab[:fab.index("}")], "心不许再 fixed 到屏幕上")
+        self.assertIn("nav.append(fab)", self.tabs, "心得挂进导航条里")
+        self.assertIn(".fab-slot", self.tabs, "正中间得给它留一格缺口，不然压住两格的字")
+        # 输入框底下要留出那 26px，否则「不压在输入框上」只是句空话
+        self.assertIn("calc(34px + env(safe-area-inset-bottom))", self.html)
+
+    def test_the_memory_screen_has_a_hanging_line_index(self):
+        """记忆页追加的「垂线索引」：细线垂下 → 末端小圆圈 → 旁边竖排标题 + 竖排日期。"""
+        skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
+        for bit in (".tvi-line", ".tvi-node", ".tvi-title", ".tvi-date", "tideIndex"):
+            self.assertIn(bit, skin, bit)
+        self.assertIn("writing-mode:vertical-rl", skin, "标题 / 日期都得是竖排")
+        self.assertIn('head.append(idx)', skin, "索引得真插进记忆页里")
+        # 多条线长短不一 = 横向错落
+        m = re.search(r"LINE_LEN=\[([\d,]+)\]", skin)
+        self.assertIsNotNone(m, "得有一组长短不同的线")
+        self.assertGreater(len(set(m.group(1).split(","))), 1, "线一样长就不叫错落了")
+
+    def test_the_study_cover_is_a_seal_not_a_color_block(self):
+        """书房封面：去掉大色块，改成一枚印章式的细线方框。"""
+        study = (WEB / "nest-study.js").read_text(encoding="utf-8")
+        cover = study[study.index(".st-cover{"):study.index(".st-title{")]
+        self.assertNotIn("linear-gradient", cover, "封面不许再是大色块")
+        self.assertNotIn("var(--accent)", cover, "封面不许用强调色铺底")
+        self.assertIn("border:1px solid var(--ink-1)", cover, "得是细线方框")
+        self.assertIn(".st-cover::after", study, "印章那味儿靠里面再收一圈线")
+
+    def test_every_progress_bar_is_a_hairline(self):
+        """所有进度条都是 1px 细线填充 —— 不许有 5px / 7px 的粗色块。"""
+        for f, sel in (("nest-study.js", ".st-bar .track"), ("nest-notes.js", ".mo-row .track")):
+            txt = (WEB / f).read_text(encoding="utf-8")
+            line = next(l for l in txt.splitlines() if l.startswith(sel + "{"))
+            self.assertIn("height:1px", line, f + " 的进度条还是粗的")
+        skin2 = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
+        self.assertNotIn("border-radius:999px!important", skin2, "别再有胶囊墙")
+
     def test_the_memory_screen_has_the_tide_card(self):
         skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
         self.assertIn("OUR TIDE", skin)

@@ -22,28 +22,33 @@ try{
   const css=document.createElement("style");
   css.textContent=`
 .mem-bar{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-.mem-bar input{flex:1;min-width:0;padding:9px 11px;border-radius:9px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--fg);font:inherit;outline:none;box-sizing:border-box}
-.mem-bar button{padding:9px 12px;border-radius:9px;border:1px solid var(--accent);color:var(--accent);white-space:nowrap;font-size:13.5px}
+/* 输入框 / 卡片 / 按钮的**材质**统一由 nest-skin2.js 那一层压上去，这里只说形状：
+   卡片是玻璃、按钮是 1px 青灰描边（选中态才 accent）、进度条只有 1px。 */
+.mem-bar input{flex:1;min-width:0;padding:9px 11px;border-radius:14px;border:1px solid var(--glass-line);
+  background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+.mem-bar button{padding:9px 12px;border-radius:10px;border:1px solid var(--ink-1);color:var(--accent);white-space:nowrap;font-size:13.5px}
 .mem-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.mem-chips button{padding:6px 11px;border-radius:20px;border:1px solid var(--line);
-  background:var(--panel);font-size:13px;color:var(--dim)}
+.mem-chips button{padding:6px 11px;border-radius:10px;border:1px solid var(--ink-1);
+  background:transparent;font-size:13px;color:var(--dim)}
 .mem-chips button.on{border-color:var(--accent);color:var(--accent)}
-.mem-card{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:12px;margin-bottom:9px}
-.mem-card .txt{white-space:pre-wrap;word-break:break-word;font-size:14.5px}
-.mem-card .meta{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:11.5px;color:var(--dim2);flex-wrap:wrap}
-.mem-card .tag{background:var(--panel2);border-radius:6px;padding:1px 6px}
+.mem-card{border:1px solid var(--glass-line);background:var(--glass-bg);border-radius:var(--r);padding:12px;margin-bottom:9px;
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);box-shadow:var(--shadow)}
+.mem-card .txt{white-space:pre-wrap;word-break:break-word;font-size:14.5px;line-height:1.8}
+.mem-card .meta{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:10px;
+  letter-spacing:.14em;color:var(--tx-3);flex-wrap:wrap}
+.mem-card .tag{background:transparent;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
 .mem-card .ops{margin-left:auto;display:flex;gap:6px}
-.mem-card .ops button{padding:4px 10px;border-radius:7px;border:1px solid var(--line);font-size:12px;color:var(--dim)}
+.mem-card .ops button{padding:4px 10px;border-radius:8px;border:1px solid var(--ink-1);font-size:12px;color:var(--dim)}
 .mem-card .ops button.danger{color:var(--err);border-color:var(--err)}
-.mem-edit textarea{width:100%;min-height:96px;padding:10px 11px;border-radius:9px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;resize:vertical}
-.mem-edit select,.mem-edit input{width:100%;padding:9px 10px;margin-top:7px;border-radius:8px;
-  border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit;outline:none;box-sizing:border-box}
+.mem-edit textarea{width:100%;min-height:96px;padding:10px 11px;border-radius:14px;border:1px solid var(--glass-line);
+  background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;resize:vertical}
+.mem-edit select,.mem-edit input{width:100%;padding:9px 10px;margin-top:7px;border-radius:14px;
+  border:1px solid var(--glass-line);background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;box-sizing:border-box}
 .mem-edit .row{display:flex;gap:6px;margin-top:10px}
-.mem-edit .row button{flex:1;padding:10px;border-radius:9px;border:1px solid var(--line);
-  background:var(--panel2);color:var(--fg);font:inherit}
-.mem-edit .row button.pri{background:var(--accent);color:var(--nest-me-fg,#10131a);border-color:transparent;font-weight:600}
+.mem-edit .row button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--ink-1);
+  background:transparent;color:var(--fg);font:inherit}
+.mem-edit .row button.pri{border-color:var(--accent);color:var(--accent);background:transparent;font-weight:500}
 `;
   document.head.append(css);
 

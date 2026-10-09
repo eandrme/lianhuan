@@ -21,46 +21,55 @@ try{
   const css=document.createElement("style");
   css.textContent=`
 .st-top{display:flex;gap:8px;align-items:center;margin-bottom:10px}
-.st-top button{padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--dim)}
+.st-top button{padding:7px 11px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px;color:var(--dim)}
 .st-tabs{display:flex;gap:6px;flex:1}
-.st-tabs button{padding:7px 12px;border-radius:20px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--dim)}
+.st-tabs button{padding:7px 12px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px;color:var(--dim)}
 .st-tabs button.on{border-color:var(--accent);color:var(--accent)}
 .st-up{border-color:var(--accent)!important;color:var(--accent)!important;white-space:nowrap}
 .st-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.st-book{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:11px;cursor:pointer}
+/* 玻璃卡：跟全站同一块玻璃 */
+.st-book{border:1px solid var(--glass-line);background:var(--glass-bg);border-radius:var(--r);padding:11px;cursor:pointer;
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);box-shadow:var(--shadow)}
 .st-book.on{border-color:var(--accent)}
-.st-cover{width:100%;height:74px;border-radius:9px;display:flex;align-items:center;justify-content:center;
-  font-size:30px;font-weight:600;color:#fff;background:linear-gradient(140deg,var(--accent),var(--panel2))}
-.st-title{font-size:14px;margin:8px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.st-bar{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim2);margin:3px 0}
-.st-bar .lb{flex:0 0 16px}
-.st-bar .track{flex:1;height:5px;border-radius:3px;background:var(--panel2);overflow:hidden}
-.st-bar .fill{height:100%;border-radius:3px}
+/* ★ 封面：没有大色块了 —— 一枚**印章式的细线方框**，字落在框里，纸上留白 */
+.st-cover{width:58px;height:58px;margin:2px auto 8px;border-radius:4px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--ink-1);background:transparent;position:relative;
+  font-size:24px;font-weight:400;color:var(--ink-2);font-family:var(--font);line-height:1}
+.st-cover::after{content:"";position:absolute;inset:3px;border:1px solid var(--ink-1);opacity:.45;border-radius:2px;pointer-events:none}
+.st-title{font-size:14px;margin:8px 0 6px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 进度条：只有 1px 的一条细线，没有粗色块 */
+.st-bar{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--tx-3);margin:5px 0;
+  letter-spacing:.14em}
+.st-bar .lb{flex:0 0 16px;font-family:var(--font)}
+.st-bar .track{flex:1;height:1px;background:var(--line);overflow:hidden}
+.st-bar .fill{height:1px}
 .st-bar .fill.me{background:var(--accent)}
-.st-bar .fill.ai{background:var(--warn)}
-.st-meta{font-size:11.5px;color:var(--dim2);margin-top:6px}
+.st-bar .fill.ai{background:var(--ink-3)}
+.st-meta{font-size:10px;letter-spacing:.14em;color:var(--tx-3);margin-top:6px;text-align:center}
 .st-nav{display:flex;gap:6px;margin-bottom:10px}
-.st-nav button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--dim)}
-.st-ch{font-size:16px;font-weight:600;margin:6px 0 12px}
-.st-p{position:relative;padding:6px 0;line-height:1.85;font-size:15px;cursor:pointer;border-left:2px solid transparent}
+.st-nav button{flex:1;padding:8px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px;color:var(--dim)}
+.st-ch{font-size:16px;font-weight:500;margin:6px 0 12px;letter-spacing:.06em}
+.st-p{position:relative;padding:6px 0;line-height:1.8;font-size:15px;cursor:pointer;border-left:1px solid transparent}
 .st-p.mk{padding-left:14px;border-left-color:var(--line)}
 .st-p.mk:hover{background:var(--panel2)}
-.st-dot{position:absolute;left:-5px;top:9px;font-size:11px;line-height:1;background:none;padding:0}
+.st-dot{position:absolute;left:-5px;top:9px;font-size:11px;line-height:1;background:none;padding:0;border:0}
 .st-dot.me{color:var(--accent)}
-.st-dot.ai{color:var(--warn)}
+.st-dot.ai{color:var(--ink-2)}
 .st-dot.both{color:var(--ok)}
-.st-h{font-size:12.5px;color:var(--dim);margin:16px 0 6px;letter-spacing:.5px}
-.st-quote{border-left:3px solid var(--line);padding:6px 10px;color:var(--dim);font-size:13px;margin-bottom:8px}
+.st-h{font-size:10px;color:var(--tx-3);margin:16px 0 6px;letter-spacing:.24em;text-transform:uppercase;
+  font-family:var(--latin)}
+.st-quote{border-left:1px solid var(--line);padding:6px 10px;color:var(--dim);font-size:13px;margin-bottom:8px}
 .st-row{display:flex;gap:6px;margin-top:9px}
-.st-row button{flex:1;padding:10px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit}
-.st-row button.pri{background:var(--accent);color:var(--nest-me-fg,#10131a);border-color:transparent;font-weight:600}
-.st-ann{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:13.5px}
+.st-row button{flex:1;padding:10px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;color:var(--fg);font:inherit}
+.st-row button.pri{border-color:var(--accent);color:var(--accent);background:transparent;font-weight:500}
+.st-ann{border:1px solid var(--glass-line);background:var(--glass-bg);border-radius:14px;padding:9px 11px;margin-bottom:7px;font-size:13.5px}
 .st-ann .q{color:var(--dim);font-size:12.5px;margin-bottom:4px}
-.st-ann .who{font-size:11.5px;color:var(--dim2);margin-top:5px}
+.st-ann .who{font-size:10px;letter-spacing:.14em;color:var(--tx-3);margin-top:5px}
 .st-ann.clk{cursor:pointer}
 .st-ann.clk:hover{background:var(--panel2)}
-.sheet textarea{width:100%;min-height:92px;box-sizing:border-box;padding:10px;border-radius:9px;
-  border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit;outline:none;resize:vertical}
+.sheet textarea{width:100%;min-height:92px;box-sizing:border-box;padding:10px;border-radius:14px;
+  border:1px solid var(--glass-line);background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;resize:vertical}
 `;
   document.head.append(css);
 
@@ -126,13 +135,13 @@ try{
       c.append(el("div","st-meta",(b.chapters||0)+" 章"));
              const ops=el("div"); ops.style.cssText="display:flex;gap:6px;margin-top:8px";
       const rn=el("button",null,"改名");
-      rn.style.cssText="flex:1;padding:4px;border-radius:7px;border:1px solid var(--line);background:none;font-size:12px;color:var(--dim)";
+      rn.style.cssText="flex:1;padding:4px;border-radius:8px;border:1px solid var(--ink-1);background:none;font-size:12px;color:var(--dim)";
       rn.onclick=(e)=>{e.stopPropagation();
         const t=prompt("新书名：",b.title||"");if(!t||!t.trim())return;
         jpost("/api/books/"+b.id+"/rename",{title:t.trim()}).then(r=>{if(r.ok){say("改好了");shelf();}else say("改不了："+(r.err||"?"));});
       };
       const dl=el("button",null,"删");
-      dl.style.cssText="padding:4px 9px;border-radius:7px;border:1px solid var(--err);background:none;font-size:12px;color:var(--err)";
+      dl.style.cssText="padding:4px 9px;border-radius:8px;border:1px solid var(--err);background:none;font-size:12px;color:var(--err)";
       dl.onclick=(e)=>{e.stopPropagation();
         if(!confirm("删掉《"+(b.title||"")+"》？书、批注、聊天记录都会一起没"))return;
         jpost("/api/books/"+b.id+"/del",{}).then(r=>{if(r.ok){say("删了");shelf();}else say("删不掉");});

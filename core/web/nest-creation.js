@@ -18,14 +18,14 @@ try{
   const css=document.createElement("style");
   css.textContent=`
 .cr-top{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.cr-top button{padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--dim)}
+.cr-top button{padding:7px 11px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px;color:var(--dim)}
 .cr-top button.pri{border-color:var(--accent);color:var(--accent)}
 .cr-top .sp{flex:1}
-.cr-top .nm{font-size:15px;font-weight:600}
+.cr-top .nm{font-size:15px;font-weight:500}
 .cr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
 .cr-card{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:12px;cursor:pointer}
 .cr-card:hover{border-color:var(--accent)}
-.cr-card .nm{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr-card .nm{font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cr-card .nt{font-size:12.5px;color:var(--dim2);margin-top:5px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cr-card .ct{font-size:11.5px;color:var(--dim2);margin-top:8px}
@@ -49,7 +49,7 @@ try{
 .cr-btns{display:flex;gap:6px;margin-top:10px}
 .cr-btns button{flex:1;padding:10px;border-radius:9px;border:1px solid var(--line);
   background:var(--panel2);color:var(--fg);font:inherit}
-.cr-btns button.pri{background:var(--accent);color:var(--nest-me-fg,#10131a);border-color:transparent;font-weight:600}
+.cr-btns button.pri{border-color:var(--accent);color:var(--accent);background:transparent;font-weight:500}
 .cr-sheet textarea{width:100%;min-height:92px;box-sizing:border-box;padding:10px;border-radius:9px;
   border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit;outline:none;resize:vertical}
 `;

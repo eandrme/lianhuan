@@ -47,7 +47,7 @@ try{
   const css=document.createElement("style");
   css.textContent=`
 .nt-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-.nt-chips button{padding:6px 12px;border-radius:20px;border:1px solid var(--line);
+.nt-chips button{padding:6px 12px;border-radius:10px;border:1px solid var(--ink-1);
   background:var(--panel);font-size:13px;color:var(--dim)}
 .nt-chips button.on{border-color:var(--accent);color:var(--accent)}
 .nt-top{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
@@ -75,8 +75,8 @@ try{
 .nt-btns{display:flex;gap:6px;margin-top:10px}
 .nt-btns button{flex:1;padding:10px;border-radius:9px;border:1px solid var(--line);
   background:var(--panel2);color:var(--fg);font:inherit}
-.nt-btns button.pri{background:var(--accent);color:var(--nest-me-fg,#10131a);
-  border-color:transparent;font-weight:600}
+.nt-btns button.pri{border-color:var(--accent);color:var(--accent);
+  background:transparent;font-weight:500}
 .nt-sheet textarea{width:100%;min-height:110px;box-sizing:border-box;padding:10px;
   border-radius:9px;border:1px solid var(--line);background:var(--panel2);
   color:var(--fg);font:inherit;outline:none;resize:vertical}
@@ -94,10 +94,11 @@ try{
 .mo-head .s{font-size:11.5px;color:var(--dim2);margin-top:4px}
 .mo-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
 .mo-row .nm{flex:0 0 44px;color:var(--dim)}
-.mo-row .track{flex:1;height:7px;border-radius:4px;background:var(--panel2);overflow:hidden}
-.mo-row .fill{height:100%;border-radius:4px;background:var(--accent)}
-.mo-row .v{flex:0 0 34px;text-align:right;font-family:var(--mono);color:var(--dim2)}
-.mo-row button{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);
+.mo-row .track{flex:1;height:1px;background:var(--line);overflow:hidden}
+.mo-row .fill{height:1px;background:var(--accent)}
+.mo-row .v{flex:0 0 40px;text-align:right;font-family:var(--latin);font-size:10px;
+  letter-spacing:.14em;color:var(--tx-3)}
+.mo-row button{width:26px;height:26px;border-radius:8px;border:1px solid var(--ink-1);
   background:none;color:var(--dim);font-size:14px;line-height:1}
 .mo-row button:hover{border-color:var(--accent);color:var(--accent)}
 /* 日历 */
@@ -106,15 +107,15 @@ try{
 .cal-grid button{position:relative;aspect-ratio:1/1;border-radius:9px;border:1px solid transparent;
   background:var(--panel);color:var(--dim);font-size:13px}
 .cal-grid button.out{opacity:.3}
-.cal-grid button.today{border-color:var(--dim2)}
+.cal-grid button.today{border-color:var(--ink-1)}
 .cal-grid button.on{border-color:var(--accent);color:var(--accent)}
 .cal-grid button b{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);
-  width:4px;height:4px;border-radius:50%;background:var(--warn)}
+  width:4px;height:4px;border-radius:50%;background:var(--accent)}
 .cal-mo{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .cal-mo .t{flex:1;text-align:center;font-size:14px}
-.cal-mo button{padding:6px 12px;border-radius:8px;border:1px solid var(--line);color:var(--dim)}
+.cal-mo button{padding:6px 12px;border-radius:10px;border:1px solid var(--ink-1);color:var(--dim)}
 .crow{display:flex;align-items:center;gap:8px;padding:9px 8px;border-bottom:1px solid var(--line)}
-.crow .dt{flex:0 0 78px;font-size:12px;color:var(--dim2);font-family:var(--mono)}
+.crow .dt{flex:0 0 82px;font-size:10px;letter-spacing:.14em;color:var(--tx-3);font-family:var(--latin)}
 .crow .tt{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .crow .tt em{color:var(--dim2);font-style:normal;font-size:11.5px;margin-left:6px}
 .crow .kd{font-size:11px;color:var(--dim2);background:var(--panel2);border-radius:6px;padding:1px 6px}
@@ -127,7 +128,7 @@ try{
 /* 梗库 / 表情包 */
 .me-card{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);
   padding:12px;margin-bottom:9px}
-.me-card .w{font-size:16px;font-weight:600}
+.me-card .w{font-size:16px;font-weight:500}
 .me-card .mn{font-size:13.5px;color:var(--dim);margin-top:5px;white-space:pre-wrap;line-height:1.7}
 .me-card .al{font-size:11.5px;color:var(--dim2);margin-top:5px}
 .sk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:9px}
@@ -150,7 +151,8 @@ try{
 .hl-sum .c b{display:block;font-size:19px}
 .hl-sum .c small{font-size:11px;color:var(--dim2)}
 .hrow{display:flex;align-items:center;gap:8px;padding:9px 8px;border-bottom:1px solid var(--line);font-size:13px}
-.hrow .dt{flex:0 0 82px;color:var(--dim2);font-family:var(--mono);font-size:12px}
+.hrow .dt{flex:0 0 82px;color:var(--tx-3);font-family:var(--latin);font-size:10px;
+  letter-spacing:.24em}
 .hrow .v{flex:1;min-width:0}
 .hrow .nt{color:var(--dim2);font-size:11.5px;display:block;margin-top:2px}
 .hrow button{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:7px;padding:3px 9px}

@@ -46,7 +46,7 @@ try{
 .set-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .set-row .sp{flex:1}
 .set-chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
-.set-chips button{padding:5px 10px;border-radius:16px;border:1px solid var(--line);
+.set-chips button{padding:5px 10px;border-radius:10px;border:1px solid var(--ink-1);
   background:var(--panel2);font-size:12.5px;color:var(--dim);max-width:100%;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .set-chips button.on{border-color:var(--accent);color:var(--accent)}
@@ -57,8 +57,8 @@ try{
 .set-btns{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
 .set-btns button{padding:9px 13px;border-radius:9px;border:1px solid var(--line);
   background:var(--panel2);color:var(--fg);font:inherit;font-size:13.5px}
-.set-btns button.pri{background:var(--accent);color:var(--nest-me-fg,#10131a);
-  border-color:transparent;font-weight:600}
+.set-btns button.pri{border-color:var(--accent);color:var(--accent);
+  background:transparent;font-weight:500}
 .set-btns button:disabled{opacity:.5}
 .set-msg{font-size:12.5px;color:var(--dim);margin-top:8px;line-height:1.65;white-space:pre-wrap}
 .set-msg.err{color:var(--err)}
@@ -67,10 +67,11 @@ try{
 .set-now b{color:var(--ok)}
 .set-slide{display:flex;align-items:center;gap:9px}
 .set-slide input[type=range]{flex:1;accent-color:var(--accent)}
-.set-slide .v{flex:0 0 34px;text-align:right;font-family:var(--mono);color:var(--dim)}
+.set-slide .v{flex:0 0 44px;text-align:right;font-family:var(--latin);font-size:10px;
+  letter-spacing:.24em;color:var(--tx-3)}
 .set-list{max-height:210px;overflow:auto;margin-top:8px}
 .set-kv{font-size:12.5px;color:var(--dim);line-height:1.9}
-.set-kv b{color:var(--fg);font-weight:600}
+.set-kv b{color:var(--fg);font-weight:500}
 /* MCP 总管理 */
 .mcp-list{max-height:none}
 .mcp-row{border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px;

@@ -35,81 +35,153 @@ try{
 
   const css=document.createElement("style");
   css.textContent=`
-/* ── ① 统一材质：纸底上的玻璃 ── */
+/* ── ① 统一材质：纸底上的同一块玻璃 ──
+   卡片 / 弹层 / 输入框都是：rgba(255,255,255,.42) + blur(18px) saturate(140%)
+   + 1px rgba(255,255,255,.65) 描边 + 圆角。没有第二种材质。 */
 .nt-card,.set-sec,.mcp-row,.as-row,.mo-head,.ty-card,.ph-card,.cal-mo,
-.sk-grid>button,.cal-grid button,.crow,.thr,.res,.tl-item{
+.mem-card,.st-book,.st-ann,.tl-item,.sk-grid>button,.cal-grid button{
   background:var(--glass-bg)!important;
-  backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line)!important;border-radius:var(--r)!important;
   box-shadow:var(--shadow)}
+/* 玻璃卡 hover：轻轻浮起 2px */
+@media (hover:hover){
+  .nt-card:hover,.set-sec:hover,.ty-card:hover,.ph-card:hover,.mem-card:hover,
+  .st-book:hover,.tide-row>*:hover,.cr-card:hover,.cr-note:hover{transform:translateY(-2px)}
+}
 .set-sec{padding:14px!important}
+.nt-card,.set-sec,.ty-card,.ph-card,.mem-card,.st-book,.tide-row>*,.tvi{
+  transition:transform .28s ease,box-shadow .28s ease}
 .nt-card,.mo-head,.ty-card{padding:13px}
 .crow,.thr,.res{border-radius:14px!important;border:1px solid transparent!important;
   box-shadow:none;background:transparent!important}
 .crow:hover,.thr:hover,.res:hover{background:var(--panel2)!important}
-/* 分隔就用细横线：1px、短、透明（不是粗色块） */
+/* 分隔一律是细横线：1px、宽 32~64px、透明度 30%（不是粗色块），常与一行字并排 */
 .hr,.nt-lb,.set-msg{border-color:var(--line)}
-hr,.rule{height:1px;width:48px;border:0;background:currentColor;opacity:.28;margin:14px auto;color:var(--dim2)}
-/* 药丸（分档 / 芯片） */
-.nt-chips button,.set-chips button,.nt-top button,.set-btns button{
-  border-radius:999px!important;border:1px solid var(--line);background:var(--panel2);
+hr,.rule,.nt-hr{height:1px;width:48px;border:0;background:currentColor;opacity:.30;
+  margin:14px auto;color:var(--latin-c)}
+.nt-hr-inline{display:inline-block;vertical-align:middle;margin:0 10px}
+/* 分档 / 芯片 / 按钮：一律 1px 青灰描边，**不做胶囊墙** ——
+   选中态（.on / .pri）才换成 accent。没有实心色块。 */
+.nt-chips button,.set-chips button,.nt-top button,.set-btns button,
+.st-tabs button,.mem-chips button,.st-top button,.st-nav button,.st-row button,
+.mem-bar button,.mem-card .ops button{
+  border-radius:10px!important;border:1px solid var(--ink-1);background:transparent;
   color:var(--dim);font-size:13px;letter-spacing:.04em;
   display:inline-flex;align-items:center;justify-content:center;gap:5px;
-  transition:color .25s ease,border-color .25s ease,transform .2s ease}
+  transition:color .25s ease,border-color .25s ease,background-color .25s ease,transform .2s ease}
 .nt-chips button.on,.set-chips button.on{color:var(--accent);border-color:var(--accent);
   background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .nt-chips button:active,.set-chips button:active{transform:scale(.97)}
 .nt-top button.pri,.set-btns button.pri{color:var(--accent);border-color:var(--accent);
   background:color-mix(in srgb,var(--accent) 10%,transparent)}
-/* 输入框：纸上的浅槽 */
-.nt-in,.set-in,.sheet input[type=text],#pane input[type=text],.sheet textarea,.nt-sheet textarea{
-  background:rgba(255,255,255,.30)!important;border:1px solid var(--line)!important;
+/* ── ①B 各模块自己画的那几套控件，一并收编到同一套规矩里 ──
+   按钮一律 1px 青灰描边、没有实心色块、不做胶囊；只有 .pri / .on 用 accent。 */
+.cr-top button,.cr-row button,.cr-h button,.cr-btns button,.mcp-hdrow button,
+.nt-btns button,.sk-btns button,.st-top button,.st-nav button,.st-row button,
+.mem-bar button,.mem-card .ops button,.nt-top button{
+  border-radius:10px!important;border:1px solid var(--ink-1)!important;
+  background:transparent!important;color:var(--dim)}
+.cr-top button.pri,.cr-btns button.pri,.nt-btns button.pri,.set-btns button.pri,
+.st-row button.pri,.mem-edit .row button.pri,.mcp-hdrow button.pri{
+  border-color:var(--accent)!important;color:var(--accent)!important;background:transparent!important}
+.cr-row button.danger,.mem-card .ops button.danger{
+  color:var(--err)!important;border-color:var(--err)!important}
+/* 那几枚「状态胶囊」也放平：1px 青灰，不要 999px 的圆头 */
+.mcp-sw,.nest-off{border-radius:10px!important;border:1px solid var(--ink-1)!important;
+  background:transparent!important;color:var(--tx-2)!important}
+.mcp-sw.on,.mcp-sw.cur{border-color:var(--accent)!important;color:var(--accent)!important}
+/* 剩下的卡片：还是那一块玻璃 */
+.cr-card,.cr-note,.cr-row,.hrow{border-color:var(--line)}
+.cr-card,.cr-note{background:var(--glass-bg)!important;border:1px solid var(--glass-line)!important;
+  border-radius:var(--r)!important;box-shadow:var(--shadow)}
+/* 元信息 / 拉丁小标：10~13px、字距 .24em、#8A95A2 */
+.cr-h,.cr-card .ct,.cr-note .who,.st-ann .who,.set-slide .v,.mcp-meta,.mcp-tag,
+.mem-card .meta,.st-meta,.mo-row .v,.usage,.nt-meta,.as-mid .mt{
+  font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c)}
+/* 次要文字 */
+.cr-card .nt,.set-sec .sub,.set-msg,.set-kv,.cr-row .nt{color:var(--tx-2)}
+/* 输入框：跟卡片同一块玻璃（同样是 .42 + 泛白描边） */
+.nt-in,.set-in,.sheet input[type=text],#pane input[type=text],.sheet textarea,.nt-sheet textarea,
+.mem-bar input,.mem-edit textarea,.mem-edit select,.mem-edit input,
+.cr-in,#cr-body,.cr-sheet textarea,.sk-row input[type=text]{
+  background:var(--glass-bg)!important;border:1px solid var(--glass-line)!important;
   border-radius:14px!important;color:var(--fg);letter-spacing:.02em}
 :root[data-moon="1"] .nt-in,:root[data-moon="1"] .set-in,
-:root[data-moon="1"] .sheet input[type=text],:root[data-moon="1"] .sheet textarea{
-  background:rgba(255,255,255,.06)!important}
+:root[data-moon="1"] .sheet input[type=text],:root[data-moon="1"] .sheet textarea,
+:root[data-moon="1"] .mem-bar input,:root[data-moon="1"] .mem-edit textarea,
+:root[data-moon="1"] .mem-edit select,:root[data-moon="1"] .mem-edit input{
+  background:var(--glass-bg)!important}
 .nt-in:focus,.set-in:focus,.sheet input[type=text]:focus,.sheet textarea:focus{
   outline:1px solid var(--accent);outline-offset:1px;border-color:transparent!important}
-/* 弹层 */
+/* 弹层：同一块玻璃，不另起一种厚度 */
 .sheet .box,.nt-sheet{background:var(--glass-bg)!important;
-  backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line)!important;box-shadow:var(--shadow)!important}
-/* 元信息排版：小、宽字距、全大写那种安静感 */
-.nt-meta,.mcp-meta,.as-mid .mt,.mo-row .v,.usage,.turn .meta{
-  font-family:var(--mono);letter-spacing:.10em}
-/* 大数字（陪伴天数那种） */
-.big-num{font-family:var(--mono);font-size:58px;line-height:1;font-weight:400;color:var(--accent)}
-.en-cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--var-dim2,var(--dim2))}
+/* 元信息排版：10px、A7B0BB */
+.nt-meta,.mcp-meta,.as-mid .mt,.mo-row .v,.usage{font-family:var(--font);
+  font-size:10px;letter-spacing:.14em;color:var(--tx-3)}
+/* 拉丁标签：Jost、全大写、字距 .24em、10~13px、#8A95A2 */
+.en-cap{font-family:var(--latin)!important;font-size:10px;letter-spacing:.24em;
+  text-transform:uppercase;color:var(--latin-c)}
+/* 大数字（陪伴天数）：68px、accent、字重 400 */
+.big-num{font-family:var(--latin);font-size:68px;line-height:1;font-weight:400;color:var(--accent)}
+/* 竖排：空态独白与栏目标签用 */
 .vtext{writing-mode:vertical-rl;text-orientation:upright;letter-spacing:.22em}
 /* ── ② 记忆那一格顶上那张 OUR TIDE ── */
 .tide{margin:0 0 16px;padding:18px 16px;text-align:center;border-radius:26px;
   background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
   -webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line);box-shadow:var(--shadow)}
-.tide .cap{font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;color:var(--dim2);
+.tide .cap{font-family:var(--latin);font-size:11px;letter-spacing:.24em;color:var(--latin-c);
   text-transform:uppercase}
 .tide .avs{display:flex;justify-content:center;align-items:center;margin:12px 0 4px}
 .tide .avs .a{width:46px;height:46px;border-radius:50%;overflow:hidden;
   border:1px solid var(--glass-line);background:var(--panel2);
   display:flex;align-items:center;justify-content:center;
-  color:var(--dim2);animation:breathe 4s ease-in-out infinite}
+  color:var(--dim2);animation:breathe 4s ease-in-out infinite;transform-origin:50% 50%}
 .tide .avs .a+a{margin-left:-14px}
 .tide .avs .a img{width:100%;height:100%;object-fit:cover;display:block}
 .tide .num{margin-top:8px}
 .tide .names{font-size:15px;letter-spacing:.14em;margin-top:6px}
 .tide .poem{font-style:italic;color:var(--dim2);font-size:13px;letter-spacing:.06em;margin-top:6px}
-.tide .since{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--dim2);margin-top:8px}
+.tide .since{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);margin-top:8px}
 /* 两条并排的小玻璃卡（时钟 / 位置那种） */
 .tide-row{display:flex;gap:10px;margin:0 0 16px}
 .tide-row>*{flex:1;min-width:0;padding:12px;border-radius:20px;text-align:center;
   background:var(--glass-bg);border:1px solid var(--glass-line);box-shadow:var(--shadow)}
-.tide-row .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--dim2);
+.tide-row .k{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
   text-transform:uppercase}
 .tide-row .v{font-size:15px;margin-top:6px;letter-spacing:.08em}
+/* ── ②B 垂线索引 ─────────────────────────────────────────
+   从顶上垂下一条 1px 细线，末端一颗小圆圈节点，旁边是**竖排**标题 + 竖排日期。
+   每一条的线长不一样（错落），横着排开，装不下就横向滑。 */
+.tvi{display:flex;gap:6px;overflow-x:auto;padding:14px 12px 16px;margin:0 0 16px;
+  border-radius:var(--r);background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);box-shadow:var(--shadow);scrollbar-width:none}
+.tvi::-webkit-scrollbar{display:none}
+.tvi-cap{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:0 2px}
+.tvi-cap .ln{height:1px;width:48px;background:currentColor;opacity:.30;color:var(--latin-c);
+  flex:0 0 auto}
+.tvi-cap .en{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
+  text-transform:uppercase}
+.tvi-col{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;
+  min-width:30px;padding:0 5px;cursor:default}
+.tvi-line{width:1px;background:var(--ink-3);opacity:.55}
+.tvi-node{width:6px;height:6px;border-radius:50%;border:1px solid var(--ink-1);
+  background:var(--paper);margin:-1px 0 8px;flex:0 0 auto}
+.tvi-txt{display:flex;align-items:flex-start;gap:7px}
+.tvi-title{writing-mode:vertical-rl;text-orientation:upright;
+  font-size:13px;letter-spacing:.18em;line-height:1;color:var(--tx-1);max-height:96px;
+  overflow:hidden}
+.tvi-date{writing-mode:vertical-rl;text-orientation:upright;font-family:var(--latin);
+  font-size:10px;letter-spacing:.24em;line-height:1;color:var(--latin-c);max-height:96px}
+.tvi-empty{padding:4px 8px;font-size:12px;color:var(--dim2)}
 /* ── ③ 头像那一节 ── */
 .ava-row{display:flex;align-items:center;gap:14px;margin:10px 0}
 .ava-pick{width:64px;height:64px;border-radius:50%;overflow:hidden;flex:0 0 64px;
+  animation:breathe 4s ease-in-out infinite;transform-origin:50% 50%;
   border:1px solid var(--glass-line);background:var(--panel2);
   display:flex;align-items:center;justify-content:center;color:var(--dim2)}
 .ava-pick img{width:100%;height:100%;object-fit:cover;display:block}
@@ -182,6 +254,55 @@ hr,.rule{height:1px;width:48px;border:0;background:currentColor;opacity:.28;marg
     return row;
   };
 
+  /* ── ②B 垂线索引 ──────────────────────────────────────
+     记忆页在 OUR TIDE 下面多一条索引：一串从顶上垂下来的细线。
+     每一条＝一条真记过的记忆（内容当竖排标题、记下它的日子当竖排日期），
+     线长各不相同，所以一排看过去是**错落**的。一条记忆都没有就不画这一块。 */
+  const LINE_LEN=[30,58,16,74,40,64,22,52];   /* 每条线垂下来多长：错落感就在这儿 */
+  function indexCol(it,ord){
+    const col=el("div","tvi-col");
+    const line=el("div","tvi-line");
+    line.style.height=LINE_LEN[ord%LINE_LEN.length]+"px";
+    const node=el("div","tvi-node");
+    const txt=el("div","tvi-txt");
+    const title=el("div","tvi-title");
+    title.textContent=String(it.content||it.title||"（空的）").replace(/\s+/g," ").trim().slice(0,14);
+    txt.append(title);
+    const day=String(it.day||it.date||"").trim();
+    if(day){
+      const d=el("div","tvi-date");
+      d.textContent=day.replace(/-/g,".");
+      txt.append(d);
+    }
+    col.append(line,node,txt);
+    if(it.content)col.title=String(it.content).slice(0,120);
+    return col;
+  }
+  async function tideIndex(){
+    let items=[];
+    try{
+      const j=await jget("/api/memory/all?limit=40");
+      items=(j&&j.items)||[];
+    }catch(e){ return null; }
+    /* 按天去重：一天只出一条，日期新的排前面 —— 索引是「这条线上有哪些天」 */
+    const seen={}, pick=[];
+    items.slice().sort((a,b)=>String(b.day||"").localeCompare(String(a.day||"")))
+      .forEach(it=>{
+        const d=String(it.day||it.date||"");
+        if(d&&seen[d])return;
+        if(d)seen[d]=1;
+        if(pick.length<8)pick.push(it);
+      });
+    if(!pick.length)return null;
+    const wrap=el("div");
+    const cap=el("div","tvi-cap");
+    cap.append(el("span","ln"),el("span","en","MEMORY INDEX"));
+    const strip=el("div","tvi");
+    pick.forEach((it,i)=>strip.append(indexCol(it,i)));
+    wrap.append(cap,strip);
+    return wrap;
+  }
+
   /* 记忆那一格：在它画完之后，把 OUR TIDE 插到最前面 */
   function wrapMemory(){
     const P=window.NEST_PANES;
@@ -192,6 +313,8 @@ hr,.rule{height:1px;width:48px;border:0;background:currentColor;opacity:.28;marg
       try{
         const head=el("div");
         head.append(await buildTide(),clockRow());
+        const idx=await tideIndex();
+        if(idx)head.append(idx);
         box.insertBefore(head,box.firstChild);
       }catch(e){ console.error("tide:",e); }
     };
