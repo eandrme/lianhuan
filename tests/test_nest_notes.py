@@ -451,6 +451,15 @@ class TestNestFrontendWiring(unittest.TestCase):
         self.assertIn("/api/nest/focus", js)
         self.assertIn("reportFocus", js)
 
+    def test_it_says_which_kind_of_failure_it_is(self):
+        """★ 真机上撞到的：手机上的提示把「连不上」和「服务端是旧版本」混成一句话，
+        人会照着错的方向折腾（明明要重启服务端，却去查网络；或者反过来白重启）。"""
+        js = self._read("nest-window.js")
+        self.assertIn("whyKind", js)
+        self.assertIn("服务端是旧版本", js)
+        self.assertIn("连不上服务端", js)
+        self.assertIn("throw new Error(\"连不上服务器\")", js, "网络层的失败要单独认出来")
+
     def test_the_page_loads_the_settings_module(self):
         self.assertIn('src="/nest-setting.js', self._read("nest.html"))
         js = self._read("nest-setting.js")

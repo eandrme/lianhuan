@@ -26,10 +26,24 @@ try{
   const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
   const say=t=>{try{if(typeof toast==="function")toast(t);}catch(e){}};
   const jget=async u=>{
-    const r=await fetch(u,{credentials:"same-origin"});
-    if(!r.ok)throw new Error(r.status===404?"没有这个接口（HTTP 404）":"HTTP "+r.status);
+    let r;
+    try{ r=await fetch(u,{credentials:"same-origin"}); }
+    catch(e){ throw new Error("连不上服务器"); }   // 网络层就失败了（DNS/连不上/断网）
+    if(!r.ok)throw new Error(r.status===404?"服务端没有这个接口（HTTP 404）"
+      :(r.status===401?"登录过期了（HTTP 401）":"HTTP "+r.status));
     return r.json();
   };
+  /* ★ 读不到要分清是**哪一种** —— 网络不通和服务端是旧版本，该让人做的事
+     完全不一样（一个去查地址/网络，一个去重启服务端）。混成一句话，
+     会把人往错的方向支使半天。 */
+  const WHY_TEXT={
+    net:"连不上服务端 —— 查一下地址和网络（这一条不是版本问题）",
+    old:"服务端是旧版本，没有这两枚开关的接口 —— 重启一下 core.server",
+    auth:"登录过期了 —— 重新进一次",
+    other:"读不到服务端"
+  };
+  const whyKind=why=>/连不上服务器/.test(why)?"net"
+    :(/404/.test(why)?"old":(/401/.test(why)?"auth":"other"));
   const jpost=async(u,b)=>{
     let r;
     try{
@@ -90,8 +104,7 @@ try{
   const btns={};
 
   const tip=(k)=>{
-    if(!known)return META[k].label+"：读不到服务端的开关状态（"+why+"）"
-      +"　—— 服务端要是旧版本，重启一下 core.server 这两枚才有";
+    if(!known)return META[k].label+"："+WHY_TEXT[whyKind(why)]+"（"+why+"）";
     const on=!!cur[k];
     return META[k].label+"（这个窗口）·"+(on?"开":"关")+"："+(on?META[k].hint:META[k].off_hint)
       +"　—— 点一下"+(on?"关掉":"打开");
@@ -113,11 +126,11 @@ try{
     });
   }
 
-  /* 服务端还是旧的 / 读不到时说实话，但只说一次，别每 800 毫秒念一遍 */
+  /* 读不到时说实话，但只说一次，别每 800 毫秒念一遍 */
   function warnOnce(){
     if(warned)return;
     warned=true;
-    say("读不到服务端的窗口开关 —— 服务端可能是旧版本，重启一下 core.server 再用这两枚");
+    say("读不到服务端的窗口开关 —— "+WHY_TEXT[whyKind(why)]+"（"+why+"）");
   }
 
   async function load(force){
@@ -244,7 +257,7 @@ try{
       }
       b.title=kn
         ? (META[k].label+"（这扇窗）·"+(on?"开":"关")+"　点一下"+(on?"关掉":"打开"))
-        : (META[k].label+"：读不到服务端的状态 —— 旧版服务端重启一下就有");
+        : (META[k].label+"："+WHY_TEXT[whyKind(why)]);
       b.onclick=async e=>{
         e.stopPropagation();
         const now=!(b.dataset.on==="1");
