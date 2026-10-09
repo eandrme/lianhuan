@@ -9,15 +9,15 @@
      · 离线模式：关掉＝这扇窗名下不给它自己那段时间。
      · 书房小窗**不在其列** —— 那是纯粹的读书助手，走 book_chat，跟这儿无关。
 
-   ★ v2 修的两件事（都是真机上撞出来的）：
+   v2 修的两件事（都是真机上撞出来的）：
      ① 切了窗口之后，读不到服务端就把**上一扇窗**的状态画到这一扇上 ——
-        看着就像「关了一个，另一个也跟着关」。现在读不到就画「❓」并且说实话，
+        看着就像「关了一个，另一个也跟着关」。现在读不到就画「未知」并且说实话，
         绝不用上一扇窗的数字冒充这一扇的。
      ② 只看回包的 body、不看 HTTP 状态码：老服务端回 404 {"error":"没有这个东西"}，
         没有 ok 字段，于是被当成「存上了」，界面翻过去、其实一个字没落库。
         现在状态码不对就是失败，并且直说「服务端可能是旧的，重启一下再用」。
 
-   放了两处：聊天顶栏（当前这扇窗）＋「对话窗口」列表里每一行。
+   放了两处：聊天顶栏（当前这扇窗）和「对话窗口」列表里每一行。
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -33,7 +33,7 @@ try{
       :(r.status===401?"登录过期了（HTTP 401）":"HTTP "+r.status));
     return r.json();
   };
-  /* ★ 读不到要分清是**哪一种** —— 网络不通和服务端是旧版本，该让人做的事
+  /* 读不到要分清是**哪一种** —— 网络不通和服务端是旧版本，该让人做的事
      完全不一样（一个去查地址/网络，一个去重启服务端）。混成一句话，
      会把人往错的方向支使半天。 */
   const WHY_TEXT={
@@ -51,7 +51,7 @@ try{
         headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
     }catch(e){ return {ok:false,err:"连不上服务器"}; }
     let d=null; try{ d=await r.json(); }catch(e){}
-    // ★ 状态码不对＝没成。老服务端回 404 的 {"error":"…"} 里没有 ok 字段，
+    // 状态码不对＝没成。老服务端回 404 的 {"error":"…"} 里没有 ok 字段，
     //   只判 `d.ok!==false` 会把它当成功 —— 界面翻了，库里一个字没有。
     if(!r.ok||!d||d.ok===false){
       const why=(d&&(d.err||d.error))||("HTTP "+r.status);
@@ -66,18 +66,25 @@ try{
 
   const META={
     push:{
-      label:"主动消息", on:"🔔", off:"🔕",
+      label:"主动消息", on:"bell", off:"bell",
       hint:"它想你了会在这个窗口里凑过来说一句（还要总闸「耳语频率」不为 0、"
           +"引擎不是回声那种桩）",
       off_hint:"这个窗口里它不会主动开口"
     },
     offline:{
-      label:"离线模式", on:"🌙", off:"☀️",
+      label:"离线模式", on:"moon", off:"sun",
       hint:"你久不在的时候，它可以在这扇窗名下有一段自己的时间",
       off_hint:"这扇窗名下不给它自己那段时间"
     }
   };
   const KEYS=["push","offline"];
+
+  /* 图标：清掉按钮原来的内容，再塞一枚自绘细线图标（名字见 META） */
+  const putIcon=(host,name,size)=>{
+    if(!host||typeof nestIcon!=="function")return;
+    host.textContent="";
+    host.append(nestIcon(name,size));
+  };
 
   const css=document.createElement("style");
   css.textContent=`
@@ -99,7 +106,7 @@ try{
   document.head.append(css);
 
   /* 当前这扇窗的两枚开关（顶栏用）
-     known=false = 服务端的真值没读到。这时画「❓」，**绝不用别的窗口的数冒充**。 */
+     known=false = 服务端的真值没读到。这时画「未知」，**绝不用别的窗口的数冒充**。 */
   let cur={push:true,offline:true}, curSid=null, busy=false, known=true, why="", warned=false;
   const btns={};
 
@@ -116,10 +123,10 @@ try{
       b.dataset.k=k;
       if(!known){
         b.dataset.on="?";
-        b.textContent="❓";
+        putIcon(b,"warn");
       }else{
         b.dataset.on=cur[k]?"1":"0";
-        b.textContent=cur[k]?META[k].on:META[k].off;
+        putIcon(b,cur[k]?META[k].on:META[k].off);
       }
       b.title=tip(k);
       b.setAttribute("aria-label",b.title);
@@ -149,7 +156,7 @@ try{
         warnOnce();
       }
     }catch(e){
-      // ★ 读不到就退回默认值 + 「未知」，**不保留上一扇窗的状态** ——
+      // 读不到就退回默认值 + 「未知」，**不保留上一扇窗的状态** ——
       //   「关了一个，另一个也跟着关」就是这么来的。
       known=false;
       why=String((e&&e.message)||e);
@@ -192,7 +199,7 @@ try{
     return ok;
   }
 
-  /* ★ 说实话：这扇窗拨开了，但「耳语频率」那把总闸还是 0 ——
+  /* 说实话：这扇窗拨开了，但「耳语频率」那把总闸还是 0 ——
      它照样一句都不会主动说。不说的话，人会以为这枚开关是坏的。 */
   async function checkPushMaster(){
     try{
@@ -203,7 +210,7 @@ try{
     }catch(e){}
   }
 
-  /* ★ 同样说实话：总闸开着、这扇窗也开着，但引擎还是回声那种桩 ——
+  /* 同样说实话：总闸开着、这扇窗也开着，但引擎还是回声那种桩 ——
      它不会主动开口（回了也只是把机器诊断当话发出去）。 */
   async function checkOfflineMaster(){
     try{
@@ -216,7 +223,7 @@ try{
     }catch(e){}
   }
 
-  /* ── 顶栏：插在窗口名旁边（在 🐞＋🔍🔧 那一组左边）── */
+  /* ── 顶栏：插在窗口名旁边（在那组按钮左边）── */
   const bar=$("#bar");
   if(bar){
     const wrap=el("div"); wrap.id="winFlags";
@@ -250,10 +257,12 @@ try{
       b.dataset.k=k;
       if(kn){
         b.dataset.on=on?"1":"0";
-        b.append(el("span",null,on?META[k].on:META[k].off),el("span",null,META[k].label.slice(0,2)));
+        const ic=el("span"); ic.append(nestIcon(on?META[k].on:META[k].off));
+        b.append(ic,el("span",null,META[k].label.slice(0,2)));
       }else{
         b.dataset.on="?";
-        b.append(el("span",null,"❓"),el("span",null,META[k].label.slice(0,2)));
+        const ic=el("span"); ic.append(nestIcon("warn"));
+        b.append(ic,el("span",null,META[k].label.slice(0,2)));
       }
       b.title=kn
         ? (META[k].label+"（这扇窗）·"+(on?"开":"关")+"　点一下"+(on?"关掉":"打开"))
@@ -263,7 +272,7 @@ try{
         const now=!(b.dataset.on==="1");
         if(await set(sid,k,now)){
           b.dataset.on=now?"1":"0";
-          b.firstChild.textContent=now?META[k].on:META[k].off;
+          putIcon(b.firstChild,now?META[k].on:META[k].off);
         }
       };
       w.append(b);

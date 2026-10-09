@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════
    巢 · 对话窗口 v2：窗口列表可删 + 修「重新生成重复用户话」
    装法：nest.html 再加一行 <script src="/nest-threads.js?v=1"></script>
-   不改任何旧文件 —— 用捕获点击接管「＋」和「重新生成」
+   不改任何旧文件 —— 用捕获点击接管「+」和「重新生成」
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -69,7 +69,7 @@ try{
          body:JSON.stringify({message:text,
            session_id:gSid()==="main"?undefined:gSid(),
            machine:true,
-           // ★ 这条 id 是关键：后端靠它把上文切到「用户那句话之前」，
+           // 这条 id 是关键：后端靠它把上文切到「用户那句话之前」，
            //   并把这条旧回复折起来（见 core/server.py 里那段注释）。
            //   不带的话就是老毛病：同一句话进模型两遍，旧答案也还在。
            regen_of:regenOf||undefined})},
@@ -91,7 +91,7 @@ try{
     if(!p){ say("找不到它回应的那句话"); return; }
     const ask=turnText(p).split("|||").join("\n");
     if(!ask){ say("那句话是空的"); return; }
-    /* ★ 先问出「要被换掉的这条回复」在库里是第几行。
+    /* 先问出「要被换掉的这条回复」在库里是第几行。
        问不出来就别硬来 —— 硬来的话后端拿不到 id，又会把你那句话发两遍、
        旧答案也留在它脑子里，等于白点一次。 */
     let rid=0;
@@ -106,12 +106,14 @@ try{
   /* ── 窗口列表（带删除）── */
   async function openThreads(){
     const wrap=el("div","sheet"), bx=el("div","box");
-    const h=el("div","bh"), b=el("b",null,"对话窗口"), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,"对话窗口"), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap);
 
-    const nb=el("button",null,"＋ 新对话");
+    const nb=el("button",null);
+    nb.append(nestIcon("plus"),document.createTextNode(" 新对话"));
     nb.style.cssText="padding:8px 12px;border:1px solid var(--accent);border-radius:9px;"+
                      "color:var(--accent);margin-bottom:8px";
     nb.onclick=()=>{
@@ -122,9 +124,9 @@ try{
     bx.append(nb);
     const list=el("div"); bx.append(list);
     list.append(el("div","res","读取中…"));
-    /* ★ 每扇窗的两枚开关（主动消息 / 离线模式）。读一次「被拨过的窗口」，
+    /* 每扇窗的两枚开关（主动消息 / 离线模式）。读一次「被拨过的窗口」，
        没拨过的就是默认「开」—— nest-window.js 是这套语义唯一的出处。
-       读不到（老服务端）就把按钮画成「❓」，别拿默认值冒充服务端的真值。 */
+       读不到（老服务端）就把按钮画成「未知」，别拿默认值冒充服务端的真值。 */
     let WFLAGS={}, WFLAGS_OK=true;
     try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }
     catch(e){ WFLAGS={}; WFLAGS_OK=false; }
@@ -164,7 +166,7 @@ try{
     }catch(e){ list.innerHTML=""; list.append(el("div","res","读不出来："+e.message)); }
   }
 
-  /* ── 捕获点击：接管「＋」和「重新生成」── */
+  /* ── 捕获点击：接管「+」和「重新生成」── */
   let LASTTURN=null;
   document.addEventListener("click",e=>{
     const t=e.target; if(!t||!t.closest)return;

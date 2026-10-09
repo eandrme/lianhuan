@@ -12,7 +12,7 @@
      POST /api/plays/new        → 戳他现做一个（真用引擎写，写不出来老实说）
      POST /api/plays/<f>/del    → 不喜欢了划掉
 
-   ★ 玩的时候用 `<iframe sandbox="allow-scripts">`：小玩意是**同一个域名**下的网页，
+   ※ 玩的时候用 `<iframe sandbox="allow-scripts">`：小玩意是**同一个域名**下的网页，
      不给 sandbox 的话它能伸手摸到外层页面（也就摸得到你的会话）。
      副作用：它自己的 localStorage 会被挡（要存档的小玩意用「新窗口打开」）。
    ══════════════════════════════════════════════════════════ */
@@ -66,7 +66,8 @@ try{
   window.NEST_PANES.toys=function(box){
     box.innerHTML="";
     const top=el("div","nt-top");
-    const bNew=el("button","pri","＋ 让他做一个");
+    const bNew=el("button","pri");
+    bNew.append(nestIcon("plus",15),document.createTextNode("让他做一个"));
     const bReload=el("button",null,"刷新");
     const sp=el("div","sp");
     top.append(bNew,sp,bReload);
@@ -91,7 +92,7 @@ try{
         : "";
       list.innerHTML="";
       if(!its.length){
-        list.append(el("div","hint","玩具箱还空着。点上面「＋ 让他做一个」，"
+        list.append(el("div","hint","玩具箱还空着。点上面「让他做一个」，"
           +"他会现写一个自包含的小网页丢进来。"));
         return;
       }
@@ -127,12 +128,12 @@ try{
       hd.append(el("b",null,title||"小玩意"));
       const bTab=el("button",null,"新窗口");
       bTab.onclick=()=>window.open(url,"_blank","noopener");
-      const bX=el("button",null,"✕");
+      const bX=el("button"); bX.append(nestIcon("close",15));
       bX.onclick=()=>wrap.remove();
       hd.append(bTab,bX);
       const fr=el("iframe");
       fr.src=url;
-      /* ★ 沙箱：不给 `allow-same-origin` —— 小玩意是同一个域名下的网页，
+      /* ※ 沙箱：不给 `allow-same-origin` —— 小玩意是同一个域名下的网页，
          不隔开的话它能摸到外层页面（也就摸得到会话）。代价是它自己的
          localStorage 被挡，要存档的用「新窗口」。 */
       fr.setAttribute("sandbox","allow-scripts");
@@ -145,7 +146,8 @@ try{
     bReload.onclick=load;
     bNew.onclick=()=>{
       const wrap=el("div","sheet"), bx=el("div","box nt-sheet");
-      const h=el("div","bh"), t=el("b",null,"让他做一个"), x=el("button","x ibtn","✕");
+      const h=el("div","bh"), t=el("b",null,"让他做一个"), x=el("button","x ibtn");
+      x.append(nestIcon("close",15));
       x.onclick=()=>wrap.remove(); h.append(t,x);
       const hint=el("div","hint","他会现写一个自包含的小网页（真用引擎，要花一次调用）。"
         +"想要什么可以写一句，也可以留空让他自己发挥。");

@@ -5,13 +5,13 @@
 
    两处：
      · **设置 › 助手管理**（`window.nestAssistantSection`，由 nest-setting.js 要一节）
-       一位助手＝头像 ＋ 名字 ＋ 名字下面那行小字 ＋ 系统提示词 ＋ 它能用的 MCP ＋
-       挂在他名下的窗口 ＋ 他写的信。
+       一位助手＝头像 + 名字 + 名字下面那行小字 + 系统提示词 + 它能用的 MCP +
+       挂在他名下的窗口 + 他写的信。
      · **聊天顶栏那颗身份牌**（`#nestAsstBadge`）—— 你现在这个窗口是谁在说话。
        点一下能看到他的小字、他名下的窗、以及通往助手管理的门。
 
    后端全在 `core/assistants.py`（语义一处定义）+ `/api/assistants*`。
-   ★ 没配过助手时这一层整个不出现 —— 老行为一字不差。
+   没配过助手时这一层整个不出现 —— 老行为一字不差。
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -79,7 +79,8 @@ try{
   /* ── 小工具 ── */
   function sheet(title,build){
     const wrap=el("div","sheet"), bx=el("div","box nt-sheet");
-    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
@@ -117,7 +118,8 @@ try{
       const im=el("img",big?"as-av-big":"as-av"); im.src=a.avatar; im.alt="";
       return im;
     }
-    const d=el("div",big?"as-av-big":"as-av","🪺");
+    const d=el("div",big?"as-av-big":"as-av");
+    d.append(nestIcon("nest"));
     return d;
   };
 
@@ -127,9 +129,10 @@ try{
     sec.append(el("h4",null,"助手管理"));
     sec.append(el("div","sub","一位助手下面挂几扇窗。他自己有：头像 · 名字 · 名字下面那行小字 · "
       +"系统提示词 · 他能用的 MCP · 他写的信。"
-      +"★ MCP 是**分人**的：新助手默认一个都不给，要哪个在下面手动勾 —— 别的助手不受影响。"));
+      +"MCP 是**分人**的：新助手默认一个都不给，要哪个在下面手动勾 —— 别的助手不受影响。"));
     const head=el("div","set-btns");
-    const bNew=el("button","pri","＋ 新建一位");
+    const bNew=el("button","pri");
+    bNew.append(nestIcon("plus"),document.createTextNode(" 新建一位"));
     head.append(bNew);
     const msg=el("div","set-msg");
     const list=el("div");
@@ -144,7 +147,7 @@ try{
         ITEMS=j.items||[];
         const w=await jget("/api/nest/threads?with_assistant=1");
         WINDOWS=w.items||[];
-        // ★ 还没有聊天记录的窗口不在那份名单里（名单是从 turns 里分的）——
+        // 还没有聊天记录的窗口不在那份名单里（名单是从 turns 里分的）——
         //   可人就是想现在把「当前这个窗口」挂过去。缺的话补一条。
         const sid0=gSid();
         if(!WINDOWS.some(x=>x.sid===sid0))
@@ -240,7 +243,7 @@ try{
         pr.placeholder="你是……。说话短，别客套。";
         bx.append(pr);
         /* MCP */
-        bx.append(el("span","lb","他能用的 MCP（★ 分人的：别的助手不受这里影响）"));
+        bx.append(el("span","lb","他能用的 MCP（分人的：别的助手不受这里影响）"));
         const mcpBox=el("div","as-box");
         const rowAll=el("label","as-chk");
         const ckAll=el("input"); ckAll.type="checkbox";
@@ -260,7 +263,7 @@ try{
         function paintMcp(){
           const all=(mcp===null);
           ckAll.checked=all;
-          // ★ 「全部」开着时，下面每一条**画成没勾**：那才是实情 ——「没有单独勾过谁」。
+          // 「全部」开着时，下面每一条**画成没勾**：那才是实情 ——「没有单独勾过谁」。
           //   画成勾上的话，人点一下是「取消」，结果存成「一个都不给」，正好反了
           //   （真机上就是这么撞的）。
           boxes.forEach(({c,m})=>{

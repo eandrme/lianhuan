@@ -55,7 +55,8 @@ try{
     try{ const s=(window.getSelection().toString()||"").trim(); if(s)lastSel=s.slice(0,300); }catch(e){}
   });
 
-  const fab=el("button","bc-fab","💬");
+  const fab=el("button","bc-fab");
+  fab.append(nestIcon("chat"));
   fab.title="读书小窗";
   fab.hidden=true;
   fab.onclick=()=>{ if(box&&!box.hidden){box.hidden=true;} else openWin(); };
@@ -65,12 +66,14 @@ try{
     box=el("div","bc-box"); box.hidden=true;
     const h=el("div","bc-head");
     titleEl=el("div","bc-title","读书小窗");
-    const x=el("button","ibtn","✕"); x.onclick=()=>{box.hidden=true;};
+    const x=el("button","ibtn"); x.append(nestIcon("close"));
+    x.onclick=()=>{box.hidden=true;};
     h.append(titleEl,x);
     listEl=el("div","bc-list");
     const foot=el("div","bc-foot");
     const quoteEl=el("div","bc-quote"); quoteEl.hidden=true; quoteEl.dataset.role="quote";
-    const qbtn=el("button","bc-qbtn","📌 引用刚才选中的文字");
+    const qbtn=el("button","bc-qbtn");
+    qbtn.append(nestIcon("pin"),document.createTextNode(" 引用刚才选中的文字"));
     qbtn.onclick=()=>{
       if(!lastSel){ say("先在正文里用手指选一段字"); return; }
       quote=lastSel; drawQuote();
@@ -81,7 +84,7 @@ try{
     ta.addEventListener("keydown",e=>{
       if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}
     });
-    const s=el("button","bc-send","→"); s.onclick=send;
+    const s=el("button","bc-send"); s.append(nestIcon("send")); s.onclick=send;
     row.append(ta,s);
     foot.append(quoteEl,qbtn,row);
     box.append(h,listEl,foot);
@@ -95,7 +98,7 @@ try{
     if(!quote){ q.hidden=true; return; }
     q.hidden=false;
     q.append(el("span",null,"「"+quote.slice(0,80)+(quote.length>80?"…":"")+"」"));
-    const x=el("button","x","✕"); x.onclick=()=>{quote="";drawQuote();};
+    const x=el("button","x"); x.append(nestIcon("close")); x.onclick=()=>{quote="";drawQuote();};
     q.append(x);
   }
   function grow(){ if(!ta)return; ta.style.height="auto"; ta.style.height=Math.min(ta.scrollHeight,innerHeight*0.3)+"px"; }

@@ -15,12 +15,41 @@ try{
     aiBubble:"#1b212b",meBubble:"#7aa2f7",
     rBubble:14,rCard:9,bubbleMax:88,fs:15,lh:1.6,colw:760,tail:0,
     bgMode:"solid",grad1:"#1b2233",grad2:"#3a2a4d",bgImg:"",bgDim:45,
-    icThink:"💡",icSide:"☰",icDbg:"🐞",send:"发送",
+    icThink:"spark",icSide:"menu",icDbg:"chip",send:"发送",
     offBadge:1,tw:0,twCps:45
   };
   let T=Object.assign({},D,JSON.parse(localStorage.getItem(LS)||"{}"));
   const save=()=>localStorage.setItem(LS,JSON.stringify(T));
   const say=t=>{try{if(typeof toast==="function")toast(t);}catch(e){}};
+
+  /* ── 图标槽：图片直链 / 自绘图标名 / 任意字符（旧存档里的符号不再画出来）── */
+  const isUrl=v=>/^(https?:\/\/|data:image\/|\/)/i.test((v||"").trim());
+  const isIcon=v=>(window.NEST_ICON_NAMES||[]).indexOf((v||"").trim())>=0;
+  const isEmoji=v=>/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u.test(v||"");
+  function paintIc(host,v,w,def){
+    if(!host)return;
+    v=(v||"").trim();
+    if(isEmoji(v))v="";
+    const hasImg=host.querySelector("img");
+    if(isUrl(v)){
+      if(host.dataset.ic===v&&hasImg)return;
+      host.textContent=""; delete host.dataset.ni;
+      const im=document.createElement("img"); im.alt=""; im.src=v;
+      im.style.width=w+"px"; im.style.height=w+"px"; im.style.objectFit="contain";
+      im.onerror=()=>{im.remove();delete host.dataset.ic;paintIc(host,"",w,def);};
+      host.dataset.ic=v; host.append(im); return;
+    }
+    if(hasImg){hasImg.remove(); delete host.dataset.ic;}
+    const name=isIcon(v)?v:(v?null:def);
+    if(name){
+      if(host.dataset.ni===name&&host.querySelector("svg"))return;
+      host.textContent=""; host.dataset.ni=name;
+      if(window.nestIcon)host.append(nestIcon(name,w));
+      return;
+    }
+    delete host.dataset.ni;
+    if(host.textContent!==v)host.textContent=v;
+  }
 
   const st=document.createElement("style");
   st.textContent=`
@@ -77,9 +106,9 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
     }else{
       set("--nest-page-bg",T.bg);
     }
-    const sb=document.querySelector("#btnSide"); if(sb)sb.textContent=T.icSide;
+    const sb=document.querySelector("#btnSide"); if(sb)paintIc(sb,T.icSide,18,"menu");
     const db=[].slice.call(document.querySelectorAll("#bar .ibtn")).find(b=>(b.title||"").indexOf("看这一轮")===0);
-    if(db)db.textContent=T.icDbg;
+    if(db)paintIc(db,T.icDbg,16,"chip");
     const snd=document.querySelector("#btnSend");
     if(snd&&!snd.classList.contains("stop"))snd.textContent=T.send;
     if(T.offBadge)badge.hidden=badge.hidden;   /* 交给轮询控制 */
@@ -92,7 +121,7 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
     const orig=window.thinkEl; thinkWrapped=true;
     window.thinkEl=function(t){
       const d=orig(t);
-      try{const ic=d.querySelector("summary .ic"); if(ic)ic.textContent=T.icThink;}catch(e){}
+      try{const ic=d.querySelector("summary .ic"); if(ic)paintIc(ic,T.icThink,15,"spark");}catch(e){}
       return d;
     };
   }
@@ -139,7 +168,7 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
   /* ── 离线标识 ── */
   const badge=document.createElement("div");
   badge.className="nest-off"; badge.hidden=true;
-  badge.innerHTML='<span class="moon">🌙</span><span class="txt">在自己的时间里</span>';
+  badge.innerHTML='<span class="moon"></span><span class="txt">在自己的时间里</span>';
   badge.onclick=()=>{ say(badge.dataset.tip||"它还不在自己的时间里"); };
   (function put(){
     const bar=document.querySelector("#bar"); if(!bar)return;
@@ -196,7 +225,8 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
     box.append(r);
   }
   function tRow(box,k,lb,w){
-    const i=document.createElement("input"); i.type="text"; i.value=T[k]||"";
+    const i=document.createElement("input"); i.type="text";
+    i.value=isEmoji(T[k])?(D[k]||""):(T[k]||"");
     if(w)i.style.maxWidth=w;
     i.oninput=()=>{T[k]=i.value;save();apply();};
     const r=document.createElement("div"); r.className="sk-row";
@@ -263,7 +293,7 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
       const ok=document.createElement("span"); ok.className="v"; 
       i.oninput=()=>{T.bgImg=i.value.trim();save();apply();};
       const t=document.createElement("button"); t.textContent="试"; t.className="on";
-      t.onclick=()=>{ok.textContent="…";testImg(T.bgImg,g=>{ok.textContent=g?"✓":"✗";ok.style.color=g?"var(--ok)":"var(--err)";});};
+      t.onclick=()=>{ok.textContent="…";testImg(T.bgImg,g=>{ok.textContent="";ok.append(nestIcon(g?"check":"close",14));ok.style.color=g?"var(--ok)":"var(--err)";});};
       r.append(i,t,ok); box.append(r);
       nRow(box,"bgDim","变暗",0,90,5,"%");
     }
@@ -288,8 +318,8 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
 
     box.append(H("离线标识"));
     const ob=document.createElement("div"); ob.className="sk-btns";
-    const obb=document.createElement("button"); obb.textContent=T.offBadge?"🌙 显示：开":"🌙 显示：关";
-    obb.className=T.offBadge?"on":"";
+    const obb=document.createElement("button"); obb.className=T.offBadge?"on":"";
+    obb.append(nestIcon("moon",14),document.createTextNode(T.offBadge?"显示：开":"显示：关"));
     obb.onclick=()=>{T.offBadge=T.offBadge?0:1;save();buildPanel();pollOff();};
     ob.append(obb); box.append(ob);
     box.append(Object.assign(document.createElement("div"),{className:"sk-row",
@@ -312,6 +342,8 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r-sm))}
   /* ── 启动 ── */
   function boot(){
     wrapThink(); wrapHandle(); apply(); buildPanel();
+    const mo=badge.querySelector(".moon");
+    if(mo&&window.nestIcon&&!mo.querySelector("svg"))mo.append(nestIcon("moon",14));
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);
   else boot();

@@ -5,7 +5,7 @@
    后端零新增：走 /api/upload（图）和 /api/upload_file（文件）——
    旧界面就在用同一套，没另起一份。
 
-   ★ 设计上跟旧界面一致的三件事（都是踩出来的，别改）：
+   ※ 设计上跟旧界面一致的三件事（都是踩出来的，别改）：
      1. 挑完**先不发**，停在输入框上头等着配一句话。选好就直接发出去，
         人会来不及反悔，也配不上话。
      2. 图片发之前先压小。手机原图好几兆，不压要等半天。
@@ -63,15 +63,17 @@ try{
     staged.forEach((s,i)=>{
       const c=el("div","att-chip");
       if(s.kind==="img"){
-        // ★ 已经传上去的（表情包那种：只有 url，没有 dataURL）也画得出来
+        // ※ 已经传上去的（表情包那种：只有 url，没有 dataURL）也画得出来
         const im=el("img"); im.src=s.dataURL||s.url||""; im.alt="";
         c.append(im);
       }else{
-        c.append(el("span","fic","📄"));
+        const fic=el("span","fic"); fic.append(nestIcon("file"));
+        c.append(fic);
       }
       c.append(el("span","nm",s.name||"文件"));
       if(s.up) c.append(el("span","pp"));
-      const x=el("button","x","✕");
+      const x=el("button","x");
+      x.append(nestIcon("close",13));
       x.title="不发了";
       x.onclick=()=>{ staged.splice(i,1); draw(); };
       c.append(x);
@@ -85,7 +87,7 @@ try{
     const fin=v=>{ if(!done){ done=true; cb(v); } };
     const rd=new FileReader();
     rd.onload=()=>{
-      /* ★ 兜底：万一 onload / onerror 一个都没来（个别浏览器碰上看不懂的图会这样），
+      /* ※ 兜底：万一 onload / onerror 一个都没来（个别浏览器碰上看不懂的图会这样），
          不能就这么把它咽了 —— 那这张卡片会永远停在那儿、永远发不出去。
          到点就退回原图，至少发得出去。 */
       const to=setTimeout(()=>fin(rd.result), 8000);
@@ -141,7 +143,7 @@ try{
   }
 
   /* ── 一个按钮，点开问你「图片还是文件」──
-     ★ 分两个入口是有原因的：平板上不加 accept，相册往往根本不出现在选择器里。 */
+     ※ 分两个入口是有原因的：平板上不加 accept，相册往往根本不出现在选择器里。 */
   const pic=el("input"); pic.type="file"; pic.accept="image/*"; pic.multiple=true; pic.hidden=true;
   const any=el("input"); any.type="file"; any.multiple=true; any.hidden=true;
   document.body.append(pic, any);
@@ -149,7 +151,7 @@ try{
   any.addEventListener("change",()=>{ take(any.files); any.value=""; });
 
   const btn=el("button",""); btn.id="btnAtt"; btn.type="button";
-  btn.title="发图片 / 发文件"; btn.textContent="📎";
+  btn.title="发图片 / 发文件"; btn.append(nestIcon("attach",19));
   btn.onclick=e=>{
     e.stopPropagation();
     document.querySelectorAll(".menu").forEach(m=>m.remove());
@@ -159,9 +161,9 @@ try{
       b.onclick=()=>{ m.remove(); fn(); };
       m.append(b);
     };
-    mk("🖼  图片 / 照片",()=>pic.click());
-    mk("📄  文件",()=>any.click());
-    if(staged.length) mk("✕  清空这 "+staged.length+" 样",()=>{ staged=[];draw(); });
+    mk("图片 / 照片",()=>pic.click());
+    mk("文件",()=>any.click());
+    if(staged.length) mk("清空这 "+staged.length+" 样",()=>{ staged=[];draw(); });
     document.body.append(m);
     const r=btn.getBoundingClientRect();
     m.style.top=(r.top-6-m.offsetHeight)+"px";
@@ -195,7 +197,7 @@ try{
     const out=[];
     for(let i=0;i<staged.length;i++){
       const s=staged[i];
-      // ★ 已经传上去的（表情包那种只带 url 的）：不再传一遍，直接用。
+      // ※ 已经传上去的（表情包那种只带 url 的）：不再传一遍，直接用。
       if(s.url){ out.push({kind:s.kind,url:s.url,name:s.name}); continue; }
       let d=null;
       try{

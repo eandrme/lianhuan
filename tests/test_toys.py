@@ -196,8 +196,12 @@ class TestTheUi(unittest.TestCase):
         self.js = (web / "nest-toys.js").read_text(encoding="utf-8")
         self.tabs = (web / "nest-tabs.js").read_text(encoding="utf-8")
 
-    def test_it_is_a_tab_and_the_module_is_loaded(self):
-        self.assertIn('["toys","🧸","玩具箱"]', self.tabs)
+    def test_it_lives_inside_together_now(self):
+        """★ 用户定的：玩具箱并进「一起」，不再单独占一格导航。"""
+        notes = (ROOT / "core" / "web" / "nest-notes.js").read_text(encoding="utf-8")
+        self.assertIn('["toys","玩具",secToys]', notes, "「一起」里得有玩具那一档")
+        self.assertIn("NEST_PANES.toys", notes, "那一档得真把玩具箱画出来")
+        self.assertNotIn('["toys"', self.tabs, "导航里不该再有玩具箱这一格")
         self.assertIn('src="/nest-toys.js', self.html)
 
     def test_it_walks_the_real_api(self):

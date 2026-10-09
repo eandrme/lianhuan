@@ -3,7 +3,7 @@
    装法：nest.html 里，nest-tabs.js 那行【下面】再加一行
         <script src="/nest-ui.js?v=1"></script>
    作用：给侧栏【外观】面板追加一节「主界面图标」。
-   底部五个格子 + ＋ / 🔍 / 🔧 都能填字符或图片链接。
+   底部五个格子 + 新对话 / 搜索 / MCP 都能填图标名、字符或图片链接。
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -16,28 +16,44 @@ try{
   const isUrl=v=>/^(https?:\/\/|data:image\/|\/)/i.test((v||"").trim());
   const bad=new Set();
 
-  const DEF={icChat:"💬",icMemory:"🧠",icStudy:"📖",icNotes:"📝",icSetting:"⚙️",
-             icNew:"＋",icSearch:"🔍",icMcp:"🔧"};
+  const DEF={icChat:"chat",icMemory:"memory",icStudy:"study",icNotes:"notes",icSetting:"setting",
+             icNew:"plus",icSearch:"search",icMcp:"mcp"};
   const FIELDS=[["icChat","聊天格"],["icMemory","记忆格"],["icStudy","书房格"],
                 ["icNotes","记事格"],["icSetting","设置格"],
                 ["icNew","新对话"],["icSearch","搜索"],["icMcp","MCP"]];
 
+  /* 值可以是：自绘图标名 / 图片直链 / 任意字符。旧存档里留下的符号不再画出来。 */
+  const isIcon=v=>(window.NEST_ICON_NAMES||[]).indexOf((v||"").trim())>=0;
+  const isEmoji=v=>/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u.test(v||"");
+
+  function draw(elm,v,w){
+    if(!isIcon(v)){
+      delete elm.dataset.ni;
+      if(elm.textContent!==v)elm.textContent=v;
+      return;
+    }
+    if(elm.dataset.ni===v&&elm.querySelector("svg"))return;
+    elm.textContent=""; elm.dataset.ni=v;
+    elm.append(nestIcon(v,w));
+  }
+
   function paint(elm,v,w,def){
     if(!elm)return;
     v=(v||"").trim(); def=def||"";
+    if(isEmoji(v))v="";
+    if(!v)v=def;
     const hasImg=elm.querySelector("img");
-    if(!v){if(hasImg)hasImg.remove(); if(elm.textContent!==def)elm.textContent=def; return;}
     if(isUrl(v)){
-      if(bad.has(v)){if(elm.textContent!==def)elm.textContent=def; return;}
+      if(bad.has(v)){if(hasImg)hasImg.remove(); draw(elm,def,w); return;}
       if(hasImg&&hasImg.getAttribute("src")===v)return;
-      elm.textContent="";
+      elm.textContent=""; delete elm.dataset.ni;
       const im=document.createElement("img"); im.src=v; im.alt="";
       im.style.width=w+"px"; im.style.height=w+"px"; im.style.objectFit="contain"; im.style.display="block";
-      im.onerror=()=>{bad.add(v);im.remove();elm.textContent=def;};
+      im.onerror=()=>{bad.add(v);im.remove();draw(elm,def,w);};
       elm.append(im);
     }else{
       if(hasImg)hasImg.remove();
-      if(elm.textContent!==v)elm.textContent=v;
+      draw(elm,v,w);
     }
   }
 
@@ -62,7 +78,8 @@ try{
     FIELDS.forEach(f=>{
       const T=get();
       const i=el("input"); i.type="text";
-      i.value=(T[f[0]]!=null?T[f[0]]:DEF[f[0]]);
+      const v=(T[f[0]]!=null?String(T[f[0]]):DEF[f[0]]);
+      i.value=isEmoji(v)?DEF[f[0]]:v;
       i.style.maxWidth="70px";
       i.oninput=()=>{set(f[0],i.value);run();};
       const r=el("div","sk-row");

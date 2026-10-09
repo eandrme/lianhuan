@@ -10,7 +10,7 @@
      /api/offline         GET 离线时段状态（总闸在 .env 的 OFFLINE_ENABLED）
      /api/push/status · /api/push/test
 
-   ★ 为什么非要有这一页：这一版之前，巢里**根本没法挑引擎** —— 设置那格写着
+   为什么非要有这一页：这一版之前，巢里**根本没法挑引擎** —— 设置那格写着
      「下一批接上」。于是引擎一直是出厂的回声（界面显示「未接模型」），
      而那两枚窗口开关的总闸（耳语频率）也没处可调。
    ══════════════════════════════════════════════════════════ */
@@ -119,7 +119,7 @@ try{
      三种连接方式（后端 core/mcp_client.py 都实现了，一个字没新增）：
        · Streamable HTTP —— 一个端点，POST JSON-RPC，回包可能是 JSON 也可能是 SSE 流
        · SSE（老的 HTTP+SSE）—— GET 一条流，第一个事件给出 message 端点（就是「短链」）
-       · 本机命令（stdio）—— 起子进程。★ 只能在**本机页面**加：它是起进程，
+       · 本机命令（stdio）—— 起子进程。只能在**本机页面**加：它是起进程，
          跟 /api/mcp/add 同一条线（见 gate.LOCAL_ONLY）。
      请求头随便加：Bearer token、自定义 UA……存进 data/mcp.json（0600），
      界面只回显**名字和末四位** —— 明文不回读。 */
@@ -130,7 +130,8 @@ try{
       +"「本机命令」会在这台机器上起进程，只能在本机页面加。"
       +"请求头里放 token 也没关系 —— 只写进 data/mcp.json（0600），界面只回名字和末四位。"));
     const btns=el("div","set-btns");
-    const bAdd=el("button","pri","＋ 加一个");
+    const bAdd=el("button","pri");
+    bAdd.append(nestIcon("plus"),document.createTextNode(" 加一个"));
     btns.append(bAdd);
     const msg=el("div","set-msg");
     const list=el("div","set-list mcp-list");
@@ -158,7 +159,10 @@ try{
     function draw(){
       list.innerHTML="";
       if(!SERVERS.length){
-        list.append(el("div","set-msg","还没登记过。点「＋ 加一个」，把地址粘进来就行。"));
+        const em=el("div","set-msg");
+        em.append(document.createTextNode("还没登记过。点「"),nestIcon("plus"),
+                  document.createTextNode(" 加一个」，把地址粘进来就行。"));
+        list.append(em);
         return;
       }
       SERVERS.forEach(s=>{
@@ -240,7 +244,8 @@ try{
         const hdWrap=el("div");
         const hdHead=el("div","set-msg","自定义请求头（Bearer token 那种。值留空＝不改已经存着的那把）");
         const hdList=el("div","mcp-hds");
-        const bHdAdd=el("button",null,"＋ 加一行");
+        const bHdAdd=el("button",null);
+        bHdAdd.append(nestIcon("plus"),document.createTextNode(" 加一行"));
         hdWrap.append(hdHead,hdList,bHdAdd);
         const status=el("div","set-msg");
         const row=el("div","set-btns");
@@ -259,7 +264,7 @@ try{
           const vi=el("input","set-in"); vi.type="text";
           vi.placeholder="值，比如 Bearer xxx（留空＝不改）";
           ni.value=n||""; vi.value=v||"";
-          const x=el("button",null,"✕"); x.title="删掉这一行";
+          const x=el("button",null); x.append(nestIcon("close")); x.title="删掉这一行";
           x.onclick=()=>r.remove();
           r.append(ni,vi,x);
           hdList.append(r);
@@ -356,13 +361,14 @@ try{
   /* 设置页自己的 sheet（跟 nest-notes 那个同形；这儿不跨模块借） */
   function sheetEl(title,build){
     const wrap=el("div","sheet"), bx=el("div","box nt-sheet");
-    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
   }
 
-  /* 从别处（顶栏那把 🔧）跳过来：打开设置页并滚到 MCP 那一节 */
+  /* 从别处（顶栏那把扳手）跳过来：打开设置页并滚到 MCP 那一节 */
   window.nestOpenMcpManager=function(){
     const t=document.querySelector('#tabs button[data-tab="setting"]');
     if(t)t.click();
@@ -380,7 +386,7 @@ try{
       +"「连接并识别模型」——认出来之后点一个模型名就存下并切换过去。"
       +"key 只写进这台服务器的 data/secrets.json，界面不回读明文。"));
     const now=el("div","set-now","现在接的：读着…");
-    /* ★ 真机上撞的：「每次关掉页面重新打开都要再配置一遍模型」。
+    /* 真机上撞的：「每次关掉页面重新打开都要再配置一遍模型」。
        一份配置就存着（key/base/model 都在 secrets.json 里，也能真聊），
        可引擎那个设置停在回声 —— 人一看「现在接的：回声」，只好从头再填一遍。
        这儿给一颗一次性的按钮：拿已经存着的那份直接接上，一个字都不用重打。 */
@@ -558,10 +564,13 @@ try{
   async function secThink(box){
     const sec=el("div","set-sec");
     sec.append(el("h4",null,"想多深（深度思考）"));
-    sec.append(el("div","sub","聊天输入框旁边那枚 🧠 就是它：点一下＝**开（多想一层）/ 关（别想）**。"
+    const sub=el("div","sub");
+    sub.append(document.createTextNode("聊天输入框旁边那枚 "),nestIcon("spark"),
+      document.createTextNode(" 就是它：点一下＝**开（多想一层）/ 关（别想）**。"
       +"这里另外两档也在：「偏快」（少想一点）和「自动」（由这家自己定 —— 它可能默认想得很深）。"
-      +"★ 关是真的关：会给这家发 reasoning_effort=none；Claude / 本机 CLI 那两条不吃这个参数，"
+      +"关是真的关：会给这家发 reasoning_effort=none；Claude / 本机 CLI 那两条不吃这个参数，"
       +"那一档在它们那儿只改提示词（下面那行小字会说）。"));
+    sec.append(sub);
     const chips=el("div","set-chips");
     const note=el("div","set-msg","读着…");
     sec.append(chips,note);
@@ -588,7 +597,7 @@ try{
           +((j.effort)?("；还会给这家标 reasoning_effort="+j.effort):"（这一档什么都不标）")
           +"。\n现在这家："+(j.engine_note||"（取决于引擎）")
           +((cur==="off"&&j.can_mute===false)
-              ?("\n⚠ 这条路上「关」关不掉它的思考（它不吃那个参数）—— 思考过程还会出现。"):"");
+              ?("\n注意：这条路上「关」关不掉它的思考（它不吃那个参数）—— 思考过程还会出现。"):"");
       }catch(e){
         note.className="set-msg err";
         note.textContent="读不到："+e.message;
@@ -608,9 +617,12 @@ try{
   async function secWhisper(box){
     const sec=el("div","set-sec");
     sec.append(el("h4",null,"主动消息（总闸）"));
-    sec.append(el("div","sub","这是**所有窗口**的总闸：0 = 彻底安静（出厂就是 0）。"
+    const sub=el("div","sub");
+    sub.append(document.createTextNode("这是**所有窗口**的总闸：0 = 彻底安静（出厂就是 0）。"
       +"拨上去之后，还得那一扇窗的「主动消息」开关也开着，它才会真开口。"
-      +"每扇窗的开关在聊天顶栏（🔔）和「对话窗口」列表里。"));
+      +"每扇窗的开关在聊天顶栏（"),nestIcon("bell"),
+      document.createTextNode("）和「对话窗口」列表里。"));
+    sec.append(sub);
     const row=el("div","set-slide");
     const rng=el("input"); rng.type="range"; rng.min="0"; rng.max="100"; rng.step="5";
     const val=el("div","v","0");
@@ -620,7 +632,7 @@ try{
     sec.append(row,desc,stubNote);
     box.append(sec);
 
-    /* ★ 换算必须跟后端**一模一样**：公式在 core/proactive.daily_max ——
+    /* 换算必须跟后端**一模一样**：公式在 core/proactive.daily_max ——
        `int(round(lv / 100 * 9))`。Python 的 round 是「四舍六入五取偶」，
        JS 的 Math.round 是「.5 一律进位」—— 50 的时候两边差一句（4 vs 5）。
        老界面（index.html）用的是 Math.round，也就是在 50 这个点上说的比真的多一句；
@@ -645,7 +657,7 @@ try{
         desc.className="set-msg err";
         desc.textContent="读不到："+e.message;
       }
-      /* ★ 引擎还是回声那种桩时，滑钮拧到多少它都不会开口 ——
+      /* 引擎还是回声那种桩时，滑钮拧到多少它都不会开口 ——
          不说清楚的话，人会以为「拨了没用＝开关是坏的」。 */
       try{
         const c=await jget("/api/engine/config");
@@ -676,9 +688,12 @@ try{
   async function secOffline(box){
     const sec=el("div","set-sec");
     sec.append(el("h4",null,"离线自由时段"));
-    sec.append(el("div","sub","它自己的一段时间（你久不在的时候）。"
+    const sub=el("div","sub");
+    sub.append(document.createTextNode("它自己的一段时间（你久不在的时候）。"
       +"**服务端总闸在 .env 的 OFFLINE_ENABLED**，这一页只能看状态、不能在这儿拨 —— "
-      +"哪扇窗允许它有这段时间，用聊天顶栏那枚 🌙。"));
+      +"哪扇窗允许它有这段时间，用聊天顶栏那枚 "),nestIcon("moon"),
+      document.createTextNode("。"));
+    sec.append(sub);
     const kv=el("div","set-kv","读着…");
     sec.append(kv);
     box.append(sec);

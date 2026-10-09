@@ -19,16 +19,47 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0f1115">
 <title>巢</title>
+<!-- ★ 图标模块必须**先于**内联脚本加载：外壳自己就要画图标（汉堡/思考/收藏星…），
+     放在后面的话那几处会当场 "nestIcon is not defined"。 -->
+<script src="/nest-icon.js?v=1"></script>
 <style>
 /* ══════ 设计变量：以后只改这一块 ══════ */
 :root{
-  --bg:#0f1115; --panel:#151a21; --panel2:#1b212b; --line:#252c38;
-  --fg:#e9edf4; --dim:#96a0b1; --dim2:#6b7486;
-  --accent:#7aa2f7; --ok:#5ec27f; --err:#e0716f; --warn:#e0b96f;
-  --r:14px; --r-sm:9px; --gap:10px; --pad:14px;
-  --fs:15px; --lh:1.62; --colw:760px; --sidew:300px;
-  --font:system-ui,-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;
+  /* ══ 和纸墨晕 × 海沫玻璃：只改这一块就能换整站的皮 ══
+     和纸底 paper · 墨晕 ink · 海沫玻璃 foam · 唯一强调色 accent */
+  --paper:#F2EDE2; --paper-2:#EDE6D8;
+  --ink-1:#6E8296; --ink-2:#55677C; --ink-3:#93A6B8;
+  --tx-1:#46505C; --tx-2:#7C8794; --tx-3:#A7B0BB;
+  --foam-1:#F6FAFC; --foam-2:#DCEAF3; --foam-3:#C3D9E8;
+  --accent:#6E93B3;
+  /* ── 老名字（各模块读的就是这一套，一个都不许删）── */
+  --bg:var(--paper); --fg:var(--tx-1); --dim:var(--tx-2); --dim2:var(--tx-3);
+  --panel:rgba(255,255,255,.42); --panel2:rgba(255,255,255,.24);
+  --line:rgba(110,130,150,.20);
+  --ok:#6E9E86; --err:#B5796F; --warn:#BC9A62;
+  --r:20px; --r-sm:12px; --gap:10px; --pad:16px;
+  --fs:15px; --lh:1.75; --colw:720px; --sidew:300px;
+  /* ★ 不引 Google Fonts：那台在手机上常常是**连不上**的，而 <link> 是阻塞渲染的 ——
+     一整页会白等它超时。宋体用系统里的：iOS 有 Songti SC，安卓中文机多半有思源宋。
+     想要一模一样的那款字，把字体文件丢进 core/web/fonts/，我再加 @font-face。 */
+  --font:"Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --glass-bg:rgba(255,255,255,.42);
+  --glass-line:rgba(255,255,255,.65);
+  --shadow:0 10px 24px rgba(70,100,130,.10);
+}
+/* ── 深色 · 月光版（照同一套色相，只是把纸换成夜）── */
+:root[data-moon="1"]{
+  --paper:#1C2430; --paper-2:#232E3C;
+  --ink-1:#8FA8BE; --ink-2:#6E8296; --ink-3:#5B6C7E;
+  --tx-1:#DCE4EC; --tx-2:#9FAEBD; --tx-3:#7C8B9A;
+  --accent:#8FB4D4;
+  --panel:rgba(255,255,255,.08); --panel2:rgba(255,255,255,.05);
+  --line:rgba(255,255,255,.12);
+  --ok:#7FB79B; --err:#C98A80; --warn:#CBAA72;
+  --glass-bg:rgba(255,255,255,.08);
+  --glass-line:rgba(255,255,255,.14);
+  --shadow:0 10px 24px rgba(0,0,0,.22);
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
@@ -88,8 +119,13 @@ details.think pre{margin:0;padding:0 12px 10px;font:12.5px/1.55 var(--mono);
   color:var(--dim);white-space:pre-wrap;max-height:320px;overflow:auto}
 details.think .sec{color:var(--dim2)}
 
-.stage{font-size:13px;color:var(--dim);margin:0 0 7px;padding-left:2px}
-.stage::before{content:"· ";color:var(--accent)}
+.stage{font-size:12.5px;color:var(--dim2);margin:0 0 8px;padding-left:2px;
+  display:flex;align-items:center;gap:8px;letter-spacing:.08em}
+.stage .foam{display:inline-flex;gap:4px;align-items:flex-end;height:9px}
+.stage .foam i{width:5px;height:5px;border-radius:50%;background:var(--accent);
+  opacity:.25;animation:bubbleUp 1.6s ease-in-out infinite}
+.stage .foam i:nth-child(2){animation-delay:.22s}
+.stage .foam i:nth-child(3){animation-delay:.44s}
 
 .tools{display:flex;flex-direction:column;gap:5px;margin:0 0 7px}
 .tool{border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);font-size:13px}
@@ -137,12 +173,233 @@ details.think .sec{color:var(--dim2)}
 #gate button{padding:12px;border-radius:var(--r-sm);background:var(--accent);
   color:#0b1020;font-weight:600}
 .muted{color:var(--dim2);font-size:12.5px}
+
+/* ══════════════════════════════════════════════════════════
+   和纸墨晕 × 海沫玻璃
+   ══════════════════════════════════════════════════════════ */
+#bg{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.bg-noise{position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay}
+.bg-warm{position:absolute;inset:0;opacity:.55;
+  background:radial-gradient(120% 80% at 50% 0%,#FFFDF8 0%,rgba(255,253,248,0) 62%)}
+:root[data-moon="1"] .bg-noise{opacity:.10}
+:root[data-moon="1"] .bg-warm{opacity:.30;
+  background:radial-gradient(120% 80% at 50% 0%,rgba(120,160,200,.16) 0%,rgba(0,0,0,0) 60%)}
+:root[data-moon="1"] .bg-art{opacity:.55}
+.bg-art{position:absolute;inset:0;width:100%;height:100%}
+.blob{animation-iteration-count:infinite;animation-timing-function:ease-in-out;animation-direction:alternate}
+.drift1{animation-name:drift1;animation-duration:34s}
+.drift2{animation-name:drift2;animation-duration:40s}
+.drift3{animation-name:drift3;animation-duration:27s}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(20px,26px) scale(1.07)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1.04)}50%{transform:translate(-24px,14px) scale(.96)}}
+@keyframes drift3{0%,100%{transform:translate(-8px,12px) scale(1)}50%{transform:translate(16px,-18px) scale(1.05)}}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.03);opacity:1}}
+@keyframes bubbleUp{0%,100%{opacity:.2;transform:translateY(2px) scale(.8)}50%{opacity:.85;transform:translateY(-2px) scale(1.1)}}
+@keyframes msgIn{0%{opacity:0;filter:blur(6px);transform:translateY(6px)}100%{opacity:1;filter:blur(0);transform:none}}
+@keyframes pageIn{0%{opacity:0;transform:translateX(10px)}100%{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;
+    transition-duration:.2s!important}
+}
+#app{position:relative;z-index:1}
+/* 玻璃：通透，不是磨砂塑料 */
+.glass{
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);
+  box-shadow:var(--shadow);
+}
+/* ── 顶栏：极简，一条细线收尾 ── */
+#bar{display:flex;align-items:center;gap:10px;padding:calc(8px + env(safe-area-inset-top)) var(--pad) 8px;
+  position:sticky;top:0;z-index:6;border-bottom:1px solid var(--line);
+  background:color-mix(in srgb,var(--paper) 72%,transparent);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+#bar .who{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+#bar .who b{font-weight:500;font-size:16px;letter-spacing:.08em;color:var(--tx-1);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw}
+#bar .who span{font-family:var(--mono);font-size:9px;letter-spacing:.22em;color:var(--tx-3);
+  text-transform:uppercase}
+#bar .ibtn{padding:6px;border-radius:12px;color:var(--tx-2)}
+#bar .ibtn:hover{background:var(--panel2);color:var(--tx-1)}
+#bar .me{width:32px;height:32px;border-radius:50%;overflow:hidden;flex:0 0 32px;
+  border:1px solid var(--glass-line);background:var(--panel2);
+  background-size:cover;background-position:center;color:var(--tx-2);font-size:12px;
+  display:flex;align-items:center;justify-content:center}
+#bar .me img{width:100%;height:100%;object-fit:cover;display:block}
+#gate .card{padding:26px 22px;display:flex;flex-direction:column;gap:12px;text-align:center;
+  width:min(340px,86vw);border-radius:26px}
+.gate-mark{width:44px;height:44px;margin:0 auto;color:var(--accent)}
+.gate-mark .ni,.gate-mark svg{width:44px;height:44px}
+/* ── 消息流 ── */
+#stream{padding:18px var(--pad) 22px}
+.empty-verse{display:flex;justify-content:center;align-items:flex-start;gap:16px;
+  margin:14vh auto 0;max-width:var(--colw)}
+.empty-verse .v{writing-mode:vertical-rl;text-orientation:upright;
+  font-size:15px;letter-spacing:.34em;line-height:1;color:var(--dim);opacity:.9;
+  max-height:46vh}
+.empty-verse .ln{width:1px;height:64px;background:currentColor;opacity:.28;color:var(--dim2);
+  margin-top:6px}
+.empty-verse .en{writing-mode:vertical-rl;font-family:var(--mono);font-size:9px;
+  letter-spacing:.28em;color:var(--dim2);text-transform:uppercase;margin-top:4px}
+.empty-verse .mark{width:26px;height:26px;color:var(--accent);opacity:.7;margin:2px auto 0}
+.empty-verse .mark .ni,.empty-verse .mark svg{width:26px;height:26px}
+.turn{margin-bottom:24px;animation:msgIn 420ms cubic-bezier(.22,.8,.3,1) forwards}
+.turn .meta{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--tx-3);
+  text-transform:none;margin-bottom:7px}
+.turn .meta .who{font-family:var(--font);letter-spacing:.06em;font-size:11px}
+/* AI：墨晕形气泡 —— 手撕宣纸那种不规则软边，文字直接坐在纸底上 */
+.turn.ai .bubble{
+  border-radius:22px 30px 26px 18px;
+  background:linear-gradient(135deg,rgba(110,130,150,.13),rgba(110,130,150,.07));
+  border:1px solid rgba(255,255,255,.28);
+  color:var(--tx-1);
+}
+/* 我：冰蓝海沫玻璃 */
+.turn.me .bubble{
+  border-radius:22px 22px 6px 22px;
+  background:rgba(220,234,243,.58);
+  backdrop-filter:blur(14px) saturate(130%);-webkit-backdrop-filter:blur(14px) saturate(130%);
+  border:1px solid rgba(255,255,255,.62);
+}
+:root[data-moon="1"] .turn.ai .bubble{background:rgba(110,140,175,.14);border-color:rgba(255,255,255,.10)}
+:root[data-moon="1"] .turn.me .bubble{background:rgba(110,140,175,.16);border-color:rgba(255,255,255,.14)}
+.bubble{padding:11px 15px;max-width:76%;font-size:var(--fs);line-height:1.8}
+/* 打字中：上浮的海沫 */
+.stage .dots i,.dots i{animation:bubbleUp 1.6s ease-in-out infinite}
+/* ── 输入：悬浮玻璃胶囊 ── */
+#composer{padding:8px var(--pad) calc(8px + env(safe-area-inset-bottom))}
+#composer .row{border-radius:24px;padding:8px 8px 8px 14px;gap:8px;
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid var(--glass-line);box-shadow:var(--shadow)}
+#btnSend{border-radius:18px;background:var(--accent);color:#F7FBFF;font-weight:500;
+  letter-spacing:.06em;padding:9px 16px}
+#btnSend.stop{background:var(--err);color:#FFF6F5}
+/* ── 底部导航：玻璃条 + 中间凸起的心 ── */
+#tabs{position:relative;z-index:5;border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--paper) 70%,transparent);
+  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%)}
+#tabs button{color:var(--tx-3)}
+#tabs button.on{color:var(--accent)}
+#tabs button .lb{font-family:var(--font);font-size:10.5px;letter-spacing:.14em}
+#newChatFab{position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(env(safe-area-inset-bottom) + 54px);z-index:7;
+  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:var(--accent);background:var(--foam-1);border:1px solid var(--glass-line);
+  box-shadow:0 12px 26px rgba(70,100,130,.18);
+  animation:breathe 4s ease-in-out infinite}
+:root[data-moon="1"] #newChatFab{background:rgba(255,255,255,.14);
+  box-shadow:0 12px 26px rgba(0,0,0,.28)}
+#newChatFab .ni,#newChatFab svg{width:24px;height:24px}
+/* ── 抽屉 ── */
+#drawer{position:fixed;inset:0;z-index:60;background:rgba(70,100,130,.18);
+  backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .3s ease}
+#drawer.open{opacity:1;pointer-events:auto}
+#drawer .panel{position:absolute;left:0;top:0;bottom:0;width:min(300px,84vw);
+  padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius:0 26px 26px 0;overflow:auto;
+  background:var(--glass-bg);backdrop-filter:blur(22px) saturate(150%);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);
+  border-right:1px solid var(--glass-line);box-shadow:var(--shadow);
+  transform:translateX(-14px);transition:transform .3s ease}
+#drawer.open .panel{transform:none}
+#drawer .room{display:flex;align-items:center;gap:11px;width:100%;padding:12px 10px;
+  border-radius:14px;color:var(--tx-1);font-size:15px;letter-spacing:.08em}
+#drawer .room:hover{background:var(--panel2)}
+#drawer .room .sp{flex:1}
+#drawer .room .en{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--tx-3)}
+#drawer .h{font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;color:var(--tx-3);
+  margin:16px 8px 6px;text-transform:uppercase}
+#drawer .rule{height:1px;width:44px;background:currentColor;opacity:.3;margin:14px 8px;
+  color:var(--tx-3)}
 </style>
 </head>
 <body>
 
-<div id="gate"><div class="card">
-  <div style="font-size:26px">🪺</div>
+<div id="bg" aria-hidden="true">
+  <!-- ① 纸噪：feTurbulence，overlay 5% -->
+  <svg class="bg-noise" width="100%" height="100%">
+    <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" seed="12"/></filter>
+    <rect width="100%" height="100%" filter="url(#paperNoise)"/>
+  </svg>
+  <!-- ② 暖光：模拟纸张受光 -->
+  <div class="bg-warm"></div>
+  <!-- ③ 墨晕 + 等高线 + 顶部云盖 + 星屑 -->
+  <svg class="bg-art" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <filter id="organic" x="-40%" y="-40%" width="180%" height="180%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" seed="41" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="46" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <filter id="softBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="58"/></filter>
+      <filter id="domeBlur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.6"/></filter>
+      <radialGradient id="domeGrad" cx="50%" cy="6%" r="96%">
+        <stop offset="0%" stop-color="#FBFDFE" stop-opacity="0.95"/>
+        <stop offset="62%" stop-color="#DCEAF3" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#C3D9E8" stop-opacity="0.22"/>
+      </radialGradient>
+    </defs>
+    <!-- 墨晕 1 · 青灰 -->
+    <g class="blob drift1" style="transform-origin:22% 28%">
+      <ellipse cx="22%" cy="28%" rx="21%" ry="16%" fill="#6E8296" opacity="0.20" filter="url(#softBlur)"/>
+      <ellipse cx="22%" cy="28%" rx="19%" ry="14%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.14" filter="url(#organic)"/>
+      <ellipse cx="22%" cy="28%" rx="16%" ry="11.5%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.11"/>
+      <ellipse cx="22%" cy="28%" rx="13%" ry="9%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.09"/>
+      <ellipse cx="22%" cy="28%" rx="9.5%" ry="6.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.07"/>
+    </g>
+    <!-- 墨晕 2 · 水色 -->
+    <g class="blob drift2" style="transform-origin:76% 36%">
+      <ellipse cx="76%" cy="36%" rx="17%" ry="19%" fill="#C3D9E8" opacity="0.30" filter="url(#softBlur)"/>
+      <ellipse cx="76%" cy="36%" rx="15%" ry="17%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.12" filter="url(#organic)"/>
+      <ellipse cx="76%" cy="36%" rx="12%" ry="14%" fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.09"/>
+    </g>
+    <!-- 墨晕 3 · 重墨 -->
+    <g class="blob drift3" style="transform-origin:58% 80%">
+      <ellipse cx="58%" cy="80%" rx="24%" ry="13%" fill="#55677C" opacity="0.15" filter="url(#softBlur)"/>
+      <ellipse cx="58%" cy="80%" rx="21%" ry="11%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.10" filter="url(#organic)"/>
+      <ellipse cx="58%" cy="80%" rx="17%" ry="8.5%" fill="none" stroke="#55677C" stroke-width="0.5" opacity="0.08"/>
+    </g>
+    <!-- ④ 顶部云盖（扇贝边 + 伞骨 + 等高线） -->
+    <g class="dome">
+      <g stroke="#8FB0C9" stroke-width="0.35" opacity="0.30">
+        <line x1="195" y1="-60" x2="14" y2="150"/><line x1="195" y1="-60" x2="66" y2="146"/>
+        <line x1="195" y1="-60" x2="122" y2="142"/><line x1="195" y1="-60" x2="195" y2="140"/>
+        <line x1="195" y1="-60" x2="268" y2="142"/><line x1="195" y1="-60" x2="324" y2="146"/>
+        <line x1="195" y1="-60" x2="376" y2="150"/>
+      </g>
+      <path filter="url(#domeBlur)" fill="url(#domeGrad)" opacity="0.9"
+            d="M0,0 L390,0 L390,52 C382,88 362,98 342,76 C324,100 300,106 282,82
+               C264,108 238,110 220,84 C202,110 176,110 158,82 C140,106 116,102 98,78
+               C80,102 56,96 38,74 C26,88 10,70 0,52 Z"/>
+      <path fill="none" stroke="#6E8296" stroke-width="0.5" opacity="0.16"
+            d="M14,44 C60,72 120,80 195,78 C270,76 330,66 376,42"/>
+      <path fill="none" stroke="#6E8296" stroke-width="0.45" opacity="0.12"
+            d="M38,36 C90,58 140,64 195,63 C250,62 300,54 352,34"/>
+      <path fill="none" stroke="#6E8296" stroke-width="0.4" opacity="0.09"
+            d="M70,26 C115,42 155,47 195,46 C235,45 275,39 320,24"/>
+    </g>
+    <!-- ⑤ 墨点 / 星屑（不闪） -->
+    <g fill="#6E8296" opacity="0.20">
+      <circle cx="12%" cy="16%" r="1.2"/><circle cx="88%" cy="42%" r="0.9"/>
+      <circle cx="34%" cy="86%" r="1.3"/><circle cx="70%" cy="12%" r="0.8"/>
+      <circle cx="52%" cy="64%" r="1.0"/><circle cx="18%" cy="62%" r="0.9"/>
+      <circle cx="82%" cy="74%" r="1.1"/>
+      <!-- 星屑：画出来的四角星（不写字形 —— 字体换一个就不是这个形状了） -->
+      <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
+            transform="translate(44% 34%) scale(1.15)"/>
+      <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
+            transform="translate(81% 72%) scale(1)"/>
+      <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
+            transform="translate(16% 48%) scale(.85)"/>
+      <path d="M0 -5 L1.1 -1.1 L5 0 L1.1 1.1 L0 5 L-1.1 1.1 L-5 0 L-1.1 -1.1 Z"
+            transform="translate(62% 18%) scale(.9)"/>
+    </g>
+  </svg>
+</div>
+
+<div id="gate"><div class="card glass">
+  <div class="gate-mark" id="gateMark"></div>
   <div><b>巢</b></div>
   <div class="muted" id="gateMsg">口令</div>
   <input id="pw" type="password" placeholder="口令" autocomplete="current-password">
@@ -152,12 +409,18 @@ details.think .sec{color:var(--dim2)}
 <div id="app" class="side-off" hidden>
   <div id="chatCol">
     <div id="bar">
-      <span class="brand">巢</span><span class="muted" id="stat"></span>
+      <button class="ibtn tap" id="btnDrawer" title="全部房间与动作"></button>
+      <div class="who">
+        <b id="aiName">他</b>
+        <span id="aiSub">COMPANION</span>
+      </div>
       <span class="sp"></span>
-      <button class="ibtn" id="btnSide" title="侧栏">☰</button>
+      <span id="stat" class="muted"></span>
+      <button class="ibtn tap" id="btnSide" title="侧栏"></button>
+      <button class="me" id="meAva" title="我"></button>
     </div>
     <div id="stream"></div>
-    <div id="composer"><div class="row">
+    <div id="composer"><div class="row glass">
       <textarea id="ta" rows="1" placeholder="跟它说点什么…"></textarea>
       <button id="btnSend">发送</button>
     </div></div>
@@ -169,6 +432,74 @@ details.think .sec{color:var(--dim2)}
 
 <script>
 "use strict";
+/* ══════ 身份：顶栏的名字 · 英文小标 · 双方的圆头像 ══════
+   ★ 存在 /api/config 里：`ai`（他）和 `me`（我）各一份 {name, sign, avatar}。
+     头像走 /api/upload（跟表情包同一条路），存的是一条图片地址。 */
+const IDENT={ai:{},me:{}};
+function paintAva(host,v,fallbackIcon){
+  if(!host)return;
+  host.innerHTML="";
+  const u=(v||"").trim();
+  if(/^(\/|https?:|data:image)/i.test(u)){
+    const im=document.createElement("img"); im.src=u; im.alt="";
+    im.onerror=()=>{ host.innerHTML=""; host.append(nestIcon(fallbackIcon,16)); };
+    host.append(im); return;
+  }
+  if(u){ host.textContent=u.slice(0,2); return; }
+  host.append(nestIcon(fallbackIcon,16));
+}
+function paintIdent(){
+  const nm=$("#aiName"), sub=$("#aiSub");
+  const name=(IDENT.ai.name||"").trim()||"他";
+  if(nm)nm.textContent=name;
+  if(sub){
+    /* 英文小标：有签名就用签名（竖排那种气质），没有就用一个安静的词 */
+    const s=(IDENT.ai.sign||"").trim();
+    sub.textContent=(s?s:"COMPANION").slice(0,18);
+  }
+  paintAva($("#meAva"),IDENT.me.avatar,"person");
+  document.title=name+" · 巢";
+}
+async function loadIdent(){
+  try{
+    const r=await fetch("/api/config",{credentials:"same-origin"});
+    if(r.ok){
+      const c=await r.json();
+      IDENT.ai=Object.assign({},(c&&c.ai)||{});
+      IDENT.me=Object.assign({},(c&&c.me)||{});
+    }
+  }catch(e){}
+  paintIdent();
+  /* 换了助手的人设，顶栏名字跟着走（助手管理里存的是另一位） */
+  try{
+    const w=await fetch("/api/assistants/who?sid="+encodeURIComponent(SID||"main"),
+                        {credentials:"same-origin"});
+    if(w.ok){
+      const j=await w.json();
+      if(j&&j.enabled&&j.assistant&&j.assistant.name){
+        IDENT.ai.name=j.assistant.name;
+        if(j.assistant.sign)IDENT.ai.sign=j.assistant.sign;
+        if(j.assistant.avatar)IDENT.ai.avatar=j.assistant.avatar;
+        paintIdent();
+        $(".brand"); // no-op：老代码里若有 .brand 引用，这里保证不存在也不报错
+      }
+    }
+  }catch(e){}
+}
+window.nestIdent={
+  load:loadIdent,
+  get:()=>IDENT,
+  paint:paintIdent,
+  async save(who,patch){
+    IDENT[who]=Object.assign({},IDENT[who]||{},patch||{});
+    paintIdent();
+    const body={}; body[who]=patch||{};
+    const r=await fetch("/api/config",{method:"POST",credentials:"same-origin",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    return r.ok;
+  }
+};
+
 /* ══════ 基础 ══════ */
 const SEP="|||";
 const $=(s,r=document)=>r.querySelector(s);
@@ -209,7 +540,26 @@ $("#btnLogin").onclick=async()=>{
 $("#pw").addEventListener("keydown",e=>{if(e.key==="Enter")$("#btnLogin").click();});
 
 /* ══════ 启动 ══════ */
+function emptyVerse(lines){
+  const box=el("div","empty-verse");
+  const v=el("div","v",lines||"还没说话");
+  const ln=el("div","ln");
+  const en=el("div","en","SAY SOMETHING");
+  const mk=el("div","mark"); mk.append(nestIcon("nest",26));
+  const col=el("div"); col.append(mk,en);
+  box.append(v,ln,col);
+  return box;
+}
+function paintShellIcons(){
+  const put=(sel,name,size)=>{ const b=$(sel); if(b&&!b.querySelector("svg")&&!b.querySelector("img"))
+    { b.textContent=""; b.append(nestIcon(name,size)); } };
+  put("#btnSide","menu",19);
+  put("#btnDrawer","menu",19);
+  const gm=$("#gateMark"); if(gm&&!gm.querySelector("svg"))gm.append(nestIcon("nest",44));
+}
 async function start(){
+  paintShellIcons();
+  loadIdent();
   S.innerHTML="";
   await loadHistory();
   await checkActive();
@@ -233,7 +583,7 @@ async function loadHistory(){
     const j=await r.json();
     const items=(j.items||[]).filter(x=>(x.role==="user"||x.role==="assistant")&&!x.hidden);
     S.innerHTML="";
-    if(!items.length){S.append(el("div","hint","这里是你和它的家。说点什么。"));}
+    if(!items.length){S.append(emptyVerse("这里是你和它的家"));}
     items.forEach(it=>addTurn({id:it.id,role:it.role,content:it.content,think:it.think,
                                tools:it.tools,t:hm2(it.ts),ts:it.ts,
                                files:it.files,superseded:it.superseded}));
@@ -244,14 +594,16 @@ async function loadHistory(){
 /* ══════ 渲染 ══════ */
 function thinkEl(text){
   const d=el("details","think"),s=el("summary");
-  s.append(el("span","ic","💡"),el("span","lb","思考"),el("span","sec",""));
+  const _i=el("span","ic"); _i.append(nestIcon("spark",15));
+  s.append(_i,el("span","lb","思考"),el("span","sec",""));
   const p=el("pre");p.textContent=text||"";
   d.append(s,p);return d;
 }
 function toolEl(name,state,ms,err,args){
   const d=el("div","tool");d.dataset.state=state||"run";d.dataset.name=name||"";
   const h=el("div","thead");
-  h.append(el("span","ticon",state==="ok"?"✅":state==="err"?"❌":"⏳"));
+  const _t=el("span","ticon"); _t.append(nestIcon(state==="ok"?"check":(state==="err"?"close":"clock"),15));
+  h.append(_t);
   h.append(el("span","tname",name||"tool"));
   if(ms!=null)h.append(el("span","tms",ms+"ms"));
   h.append(el("span","tcar","▾"));
@@ -274,7 +626,10 @@ function stickerEl(f){
   im.onerror=()=>{
     box.classList.add("sticker-bad");
     box.innerHTML="";
-    box.append(el("span","nm","🖼 这张表情包取不到了（"+(f.name||"表情")+"）—— 图可能被清了，或者没登录"));
+    const _n=el("span","nm");
+    _n.append(nestIcon("image",15),document.createTextNode(
+      " 这张表情包取不到了（"+(f.name||"表情")+"）—— 图可能被清了，或者没登录"));
+    box.append(_n);
   };
   a.append(im); box.append(a);
   if(f.name)box.title=f.name;
@@ -293,7 +648,8 @@ function attachEl(fs){
       im.onerror=()=>a.remove();
       a.append(im);
     }else{
-      a.append(el("span","ic","📎"),el("span","nm",f.name||"文件"));
+      const _a=el("span","ic"); _a.append(nestIcon("file",15));
+      a.append(_a,el("span","nm",f.name||"文件"));
     }
     box.append(a);
   });
@@ -346,6 +702,7 @@ function liveTurn(){
   const m=el("div","meta");
   m.append(el("span","who","它"),el("span","time",nowHM()));
   const st=el("div","stage");st.hidden=true;
+  { const f=el("span","foam"); f.append(el("i"),el("i"),el("i")); st.append(f); }
   const th=thinkEl("");th.hidden=true;
   const tl=el("div","tools");
   const bs=el("div","bubbles");
@@ -375,7 +732,13 @@ function settle(L){
 function handle(ev,L){
   switch(ev.type){
     case "recv": JOB=ev.job||JOB; break;
-    case "stage": L.st.hidden=false;L.st.textContent=ev.text||"";toBottom();break;
+    case "stage":{
+      /* ★ 只换那行字，别把三颗上浮的海沫一起抹掉（它们一直在跳） */
+      L.st.hidden=false;
+      let tx=L.st.querySelector(".tx");
+      if(!tx){ tx=el("span","tx"); L.st.append(tx); }
+      tx.textContent=ev.text||"";
+      toBottom();break;}
     case "os":
       if(!L.t0)L.t0=Date.now();
       L.think+=ev.delta||"";
@@ -543,7 +906,7 @@ boot();
     clearTimeout(tT);tT=setTimeout(()=>tEl.classList.remove("on"),2600);
   };
 
-  /* ── 🐞 原始事件面板 ── */
+  /* ── 原始事件面板（调试）── */
   let RAW=[],RAW_ON=false,box=null,body=null;
   function rawToggle(on){
     RAW_ON=(on===undefined)?!RAW_ON:on;
@@ -565,7 +928,7 @@ boot();
     RAW.push(ev);if(RAW.length>300)RAW.shift();
     if(RAW_ON&&body){body.append(el("div",null,JSON.stringify(ev)));box.scrollTop=box.scrollHeight;}
   }
-  const dbg=el("button","ibtn","🐞");
+  const dbg=el("button","ibtn"); dbg.append(nestIcon("chip",19));
   dbg.title="看这一轮收到的原始事件";
   dbg.onclick=()=>rawToggle();
   $("#bar").insertBefore(dbg,$("#btnSide"));
@@ -596,7 +959,8 @@ boot();
   }
   function bump(c,ok,ms,err){
     c.dataset.state=ok?"ok":"err";
-    c.querySelector(".ticon").textContent=ok?"✅":"❌";
+    const _tc=c.querySelector(".ticon");
+    if(_tc){ _tc.textContent=""; _tc.append(nestIcon(ok?"check":"close",15)); }
     if(ms!=null)c.querySelector(".thead").insertBefore(el("span","tms",ms+"ms"),c.querySelector(".tcar"));
     if(err)c.querySelector(".tbody").append(el("pre","terr",err));
   }
@@ -606,7 +970,13 @@ boot();
     rawPush(ev);
     switch(ev.type){
       case "recv": JOB=ev.job||JOB; break;
-      case "stage": L.st.hidden=false;L.st.textContent=ev.text||"";toBottom();break;
+      case "stage":{
+      /* ★ 只换那行字，别把三颗上浮的海沫一起抹掉（它们一直在跳） */
+      L.st.hidden=false;
+      let tx=L.st.querySelector(".tx");
+      if(!tx){ tx=el("span","tx"); L.st.append(tx); }
+      tx.textContent=ev.text||"";
+      toBottom();break;}
       case "os":
         if(!L.t0)L.t0=Date.now();
         L.think+=ev.delta||"";
@@ -698,7 +1068,10 @@ boot();
     if(!meta)return;
     let m=meta.querySelector(".starmark");
     if(!w.classList.contains("starred")){ if(m)m.remove(); return; }
-    if(!m){ m=el("span","starmark","★"); meta.insertBefore(m,meta.firstChild); }
+    if(!m){
+      m=el("span","starmark"); m.append(nestIcon("star",13));
+      meta.insertBefore(m,meta.firstChild);
+    }
   }
 
   async function doDel(w){
@@ -767,7 +1140,6 @@ boot();
 })();
 </script>
   <script src="/nest-skin.js?v=1"></script>
-  <script src="/nest-icon.js?v=1"></script>
   <script src="/nest-tabs.js?v=1"></script>
   <script src="/nest-ui.js?v=1"></script>
   <script src="/nest-memory.js?v=1"></script>
@@ -783,5 +1155,7 @@ boot();
   <script src="/nest-setting.js?v=1"></script>
 <script src="/nest-assistant.js?v=1"></script>
   <script src="/nest-think.js?v=1"></script>
+  <!-- ★ 皮肤层放最后：要能压过各模块自己注入的样式 -->
+  <script src="/nest-skin2.js?v=1"></script>
 </body>
 </html>

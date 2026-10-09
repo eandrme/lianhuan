@@ -57,7 +57,8 @@ try{
 
   function sheet(title,build){
     const wrap=el("div","sheet"), bx=el("div","box cr-sheet");
-    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
@@ -73,8 +74,10 @@ try{
   async function home(){
     clean(); const view=VIEW; view.innerHTML="";
     const top=el("div","cr-top");
-    const add=el("button","pri","＋ 新世界观"); add.onclick=()=>editWorld(0,null);
-    const se=el("button",null,"🔍 找故事"); se.onclick=searchStories;
+    const add=el("button","pri"); add.append(nestIcon("plus"),document.createTextNode(" 新世界观"));
+    add.onclick=()=>editWorld(0,null);
+    const se=el("button",null); se.append(nestIcon("search"),document.createTextNode(" 找故事"));
+    se.onclick=searchStories;
     top.append(add,se); view.append(top);
     const grid=el("div","cr-grid"); view.append(grid);
     grid.append(el("div","hint","读取中…"));
@@ -82,7 +85,7 @@ try{
       const j=await jget("/api/worlds");
       grid.innerHTML="";
       const its=j.items||[];
-      if(!its.length)grid.append(el("div","hint","还没有世界观。点「＋ 新世界观」起一个 —— 比如「海边的旧灯塔」。"));
+      if(!its.length)grid.append(el("div","hint","还没有世界观。点「新世界观」起一个 —— 比如「海边的旧灯塔」。"));
       its.forEach(w=>{
         const c=el("div","cr-card");
         c.append(el("div","nm",w.name||""));
@@ -107,7 +110,8 @@ try{
     try{ d=await jget("/api/worlds/"+wid); }
     catch(e){ view.append(el("div","errbox","读不出来："+e.message)); return; }
     const top=el("div","cr-top");
-    const back=el("button",null,"← 世界观"); back.onclick=()=>home();
+    const back=el("button",null); back.append(nestIcon("back"),document.createTextNode(" 世界观"));
+    back.onclick=()=>home();
     const rn=el("button",null,"改名"); rn.onclick=()=>editWorld(wid,d.world);
     const dl=el("button","danger","删"); dl.style.color="var(--err)"; dl.style.borderColor="var(--err)";
     dl.onclick=async()=>{
@@ -120,7 +124,8 @@ try{
     if(d.world.note){ const c=el("div","cr-card"); c.style.cursor="default"; c.append(el("div","nt",d.world.note)); view.append(c); }
 
     const ch=el("div","cr-h","角色 · "+((d.casts||[]).length));
-    const ca=el("button",null,"＋ 角色"); ca.onclick=()=>editCast(wid,0,null);
+    const ca=el("button",null); ca.append(nestIcon("plus"),document.createTextNode(" 角色"));
+    ca.onclick=()=>editCast(wid,0,null);
     ch.append(ca); view.append(ch);
     (d.casts||[]).forEach(c=>{
       const r=el("div","cr-row");
@@ -133,7 +138,8 @@ try{
     });
 
     const sh=el("div","cr-h","故事 · "+((d.stories||[]).length));
-    const sa=el("button",null,"＋ 写一篇"); sa.onclick=()=>editor(0,wid);
+    const sa=el("button",null); sa.append(nestIcon("plus"),document.createTextNode(" 写一篇"));
+    sa.onclick=()=>editor(0,wid);
     sh.append(sa); view.append(sh);
     (d.stories||[]).forEach(s=>{
       const r=el("div","cr-row");
@@ -189,7 +195,8 @@ try{
   async function listStories(wid,t){
     clean(); const view=VIEW; view.innerHTML="";
     const top=el("div","cr-top");
-    const back=el("button",null,"← 回"); back.onclick=()=>home();
+    const back=el("button",null); back.append(nestIcon("back"),document.createTextNode(" 回"));
+    back.onclick=()=>home();
     top.append(back,el("div","sp"),el("div","nm",t||"故事")); view.append(top);
     try{
       const j=await jget("/api/stories?wid="+wid);
@@ -241,8 +248,10 @@ try{
       catch(e){ view.append(el("div","errbox","读不出来："+e.message)); return; }
     }
     const top=el("div","cr-top");
-    const back=el("button",null,"← 回"); back.onclick=()=>{ st.wid?world(st.wid):home(); };
-    const chat=el("button",null,"💬 一起写"); chat.onclick=()=>openChat();
+    const back=el("button",null); back.append(nestIcon("back"),document.createTextNode(" 回"));
+    back.onclick=()=>{ st.wid?world(st.wid):home(); };
+    const chat=el("button",null); chat.append(nestIcon("chat"),document.createTextNode(" 一起写"));
+    chat.onclick=()=>openChat();
     const save=el("button","pri","保存"); save.onclick=doSave;
     top.append(back,el("div","sp"),chat,save); view.append(top);
 
@@ -326,7 +335,8 @@ try{
         box=el("div","bc-box"); box.hidden=true; ACTIVE_BOX=box;
         const h=el("div","bc-head");
         const tt=el("div","bc-title","一起写 · "+(st.title||""));
-        const x=el("button","ibtn","✕"); x.onclick=()=>{box.hidden=true;};
+        const x=el("button","ibtn"); x.append(nestIcon("close"));
+        x.onclick=()=>{box.hidden=true;};
         h.append(tt,x);
         listEl=el("div","bc-list");
         const foot=el("div","bc-foot");
@@ -337,7 +347,7 @@ try{
         tin.addEventListener("keydown",e=>{
           if(e.key==="Enter"&&!e.shiftKey&&!e.isComposing){e.preventDefault();send();}
         });
-        const s=el("button","bc-send","→"); s.onclick=send;
+        const s=el("button","bc-send"); s.append(nestIcon("send")); s.onclick=send;
         row.append(tin,s); foot.append(row);
         box.append(h,listEl,foot);
         host().append(box);

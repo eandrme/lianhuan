@@ -67,6 +67,51 @@ class TestEveryCallHasADoor(unittest.TestCase):
         self.assertEqual({}, missing, "这些接口前端在喊，服务端没有")
 
 
+class TestNoEmojiAndSelfDrawnIcons(unittest.TestCase):
+    """★ 用户定的：**界面里一个 emoji 都不许有**，图标全是自绘细线。
+
+    两条都查「会不会复发」而不是「现在长什么样」：
+      · 代码（去掉注释之后）里不许出现 emoji 范围的字符
+      · 每一处 nestIcon("名字") 的名字，图标模块里必须真有 —— 没有的话会**静默**
+        退回一个小圆点（界面上看着像少了个图标，日志里什么都没有）
+    """
+
+    @staticmethod
+    def _code_without_comments(text):
+        t = re.sub(r"/\*[\s\S]*?\*/", "", text)
+        t = re.sub(r"(?m)//.*$", "", t)
+        t = re.sub(r"<!--[\s\S]*?-->", "", t)
+        return t
+
+    def test_no_emoji_anywhere_in_the_ui(self):
+        bad = {}
+        for f in NEST_FILES:
+            code = self._code_without_comments((WEB / f).read_text(encoding="utf-8"))
+            hits = re.findall(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]", code)
+            if hits:
+                bad[f] = "".join(sorted(set(hits)))
+        self.assertEqual({}, bad, "这些文件里还有 emoji（换成 nestIcon）")
+
+    def test_every_icon_name_used_really_exists(self):
+        ic = (WEB / "nest-icon.js").read_text(encoding="utf-8")
+        block = ic[ic.index("const P={"):ic.index("\n  };", ic.index("const P={"))]
+        have = set(re.findall(r"^\s*([a-z][a-z0-9]*):\s*\"", block, re.M))
+        self.assertGreater(len(have), 40, "图标集不该这么少")
+        used = set()
+        for f in NEST_FILES:
+            code = self._code_without_comments((WEB / f).read_text(encoding="utf-8"))
+            used |= set(re.findall(r'nestIcon(?:HTML)?\("([a-z0-9]+)"', code))
+        self.assertTrue(used, "一个图标都没用上？")
+        missing = used - have
+        self.assertEqual(set(), missing, "用了图标集里没有的名字（会静默变成一个小圆点）")
+
+    def test_icons_are_lines_not_emoji_or_blocks(self):
+        ic = (WEB / "nest-icon.js").read_text(encoding="utf-8")
+        self.assertIn('setAttribute("fill","none")', ic, "图标只许用线")
+        self.assertIn('setAttribute("stroke","currentColor")', ic, "颜色跟着文字走")
+        self.assertIn('"1.5"', ic, "线宽 1.5（这一套的统一手感）")
+
+
 class TestThePhoneShell(unittest.TestCase):
     def setUp(self):
         self.html = (WEB / "nest.html").read_text(encoding="utf-8")
@@ -77,8 +122,25 @@ class TestThePhoneShell(unittest.TestCase):
         for m in re.finditer(r'<script src="/([^"?]+)', self.html):
             self.assertTrue((WEB / m.group(1)).exists(), "少了这个文件：" + m.group(1))
 
+    def test_the_six_rooms_are_in_the_agreed_order(self):
+        """房间顺序是定下的：聊天 · 记忆 · 巢 · 书房 · 一起 · 我的（书房第 4、一起在它后面）。"""
+        ids = self._tab_ids()
+        self.assertEqual(["chat", "memory", "rooms", "study", "notes", "setting"], ids)
+        self.assertNotIn("toys", ids, "玩具箱并进「一起」了，不再单独占一格")
+
+    def test_the_toy_box_lives_inside_together(self):
+        notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")
+        self.assertRegex(notes, r'"玩具"', "「一起」里得有玩具那一档")
+        self.assertIn("NEST_PANES.toys", notes, "那一档得真把玩具箱画出来")
+
+    @staticmethod
+    def _tab_ids():
+        js = (WEB / "nest-tabs.js").read_text(encoding="utf-8")
+        block = js[js.index("const TABS=["):js.index("];", js.index("const TABS=["))]
+        return re.findall(r'\["(\w+)","', block)
+
     def test_every_tab_has_somebody_implementing_it(self):
-        ids = re.findall(r'\["(\w+)","[^"]*","[^"]*"\]', self.tabs)
+        ids = self._tab_ids()
         self.assertIn("notes", ids)
         for k in ids:
             if k == "chat":
@@ -120,6 +182,30 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn("viewport-fit=cover", self.html)
         self.assertIn("interactive-widget=resizes-content", self.html,
                       "安卓键盘弹出时要缩小可视区，而不是盖住输入框")
+
+    def test_the_shell_is_washi_and_foam(self):
+        """外壳得真是这一套：和纸底、墨晕背景、海沫玻璃、宋体、月光版。"""
+        for bit in ("--paper:#F2EDE2", "--ink-1:#6E8296", "--accent:#6E93B3",
+                    "feTurbulence", "drift1", 'data-moon="1"', "backdrop-filter:blur(18px)"):
+            self.assertIn(bit, self.html, bit)
+        self.assertIn("Noto Serif SC", self.html, "标题那套宋体")
+        # ★ 不引外部字体：手机上连不上时 <link> 会**阻塞渲染**，整页白等它超时
+        self.assertNotIn("fonts.googleapis.com", self.html)
+        self.assertNotIn("cdn.tailwindcss.com", self.html)
+
+    def test_both_avatars_can_be_uploaded(self):
+        skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
+        self.assertIn("nestIdent.save", skin)
+        for who in ('"ai"', '"me"'):
+            self.assertIn(who, skin, "他和我的都要能传")
+        self.assertIn("/api/upload", skin)
+        self.assertIn("paintAva", self.html, "顶栏那两颗圆头像")
+
+    def test_the_memory_screen_has_the_tide_card(self):
+        skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
+        self.assertIn("OUR TIDE", skin)
+        self.assertIn("DAYS TOGETHER", skin)
+        self.assertIn("/api/chat/heat", skin, "天数从真聊天记录算，不编")
 
     def test_the_three_new_sections_are_reachable(self):
         notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")

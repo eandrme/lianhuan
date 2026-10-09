@@ -4,11 +4,11 @@
    装法：nest.html 里，nest-files.js 那行【下面】再加一行
         <script src="/nest-sticker.js?v=1"></script>
 
-   ★ 这一版把**发送**挪进聊天：输入框边上多一枚 😀，点开就是「这张表」，
+   ※ 这一版把**发送**挪进聊天：输入框边上多一枚表情图标，点开就是「这张表」，
      点一张＝放进暂存区（跟发图同一条路，走 `nestAttach.stage`），配句话一起发。
      记事 › 表情包 那一节还是**管**这张表的地方（传图 / 名字 / 标签 / 改 / 删）。
 
-   ★ 助手那边也一样：他手里也有一张表（system 里带着名字和标签），
+   ※ 助手那边也一样：他手里也有一张表（system 里带着名字和标签），
      用 `send_sticker` 挑一张，**贴在他说的话末尾**。规矩是他那边的：
      只点缀、不替代该说的话、一轮最多一张、不是每句都带。
    ══════════════════════════════════════════════════════════ */
@@ -60,7 +60,7 @@ try{
     const bMore=el("button",null,"管理这张表");
     bMore.style.cssText="font-size:12px;color:var(--accent)";
     bMore.onclick=()=>{ closePicker(); openLibrary(); };
-    const bx=el("button",null,"✕");
+    const bx=el("button"); bx.append(nestIcon("close",15));
     bx.onclick=closePicker;
     hd.append(bMore,bx);
     const grid=el("div","grid");
@@ -110,7 +110,7 @@ try{
 
   function mount(){
     const row=$("#composer .row"); if(!row||$("#btnSticker"))return;
-    const b=el("button","ibtn","😀");
+    const b=el("button","ibtn"); b.append(nestIcon("sticker",19));
     b.id="btnSticker"; b.title="表情包（点一张放进这次要说的话）";
     b.onclick=e=>{
       e.stopPropagation();

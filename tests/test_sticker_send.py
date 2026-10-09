@@ -299,8 +299,10 @@ class TestTheUi(unittest.TestCase):
         self.assertNotIn("box.remove()", seg, "不许悄悄摘掉")
 
     def test_the_library_points_at_the_chat_picker(self):
+        """★ 界面里不许有 emoji 了 —— 那一句改成「图标 + 文字」，认的是意思不是字形。"""
         notes = (ROOT / "core" / "web" / "nest-notes.js").read_text(encoding="utf-8")
-        self.assertIn("在聊天输入框边上点 😀", notes)
+        self.assertIn("要发的时候在聊天输入框边上点", notes)
+        self.assertIn('nestIcon("sticker")', notes, "指的就是输入框边上那枚表情包键")
 
 
 if __name__ == "__main__":

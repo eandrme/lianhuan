@@ -13,10 +13,10 @@
      /api/timeline                      optional/homelife（时间线：这个家一天一天怎么起来的）
      /api/chat/starred · /api/chat/{id}/star   core/views（收藏：点过星的那些话）
 
-   ★ 七块都带「改」和「删」—— 这是记事，攒着攒着一定要能收拾。
+   · 七块都带「改」和「删」—— 这是记事，攒着攒着一定要能收拾。
      （原项目的梗库只有录和改、日历只有读和写，都被点过名。）
 
-   ★ 表情包点一下＝把它放进输入框上头，配句话再发 —— 跟发图片同一条路
+   · 表情包点一下＝把它放进输入框上头，配句话再发 —— 跟发图片同一条路
      （走 nest-files 的暂存区，不另起一套发送逻辑）。
    ══════════════════════════════════════════════════════════ */
 (function(){
@@ -33,7 +33,7 @@ try{
         headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
     }catch(e){ return {ok:false,err:"连不上服务器"}; }
     let d=null; try{ d=await r.json(); }catch(e){}
-    // ★ 状态码不对＝没成。老服务端回的是 404 {"error":"…"}，没有 ok 字段 ——
+    // · 状态码不对＝没成。老服务端回的是 404 {"error":"…"}，没有 ok 字段 ——
     //   只判 d.ok===false 会把它当成功，界面说「存上了」其实一个字没落库。
     if(!r.ok||!d||d.ok===false)
       return {ok:false,status:r.status,err:(d&&(d.err||d.error))||("HTTP "+r.status)};
@@ -160,7 +160,8 @@ try{
 
   function sheet(title,build){
     const wrap=el("div","sheet"), bx=el("div","box nt-sheet");
-    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
@@ -194,7 +195,9 @@ try{
       ["health","健康",secHealth],
       ["space","空间",secMoments],
       ["timeline","时间线",secTimeline],
-      ["star","收藏",secStar]
+      ["star","收藏",secStar],
+      /* ★ 玩具箱并进「一起」（不再单独占一格导航）：那一格本来就是「你们俩的东西」 */
+      ["toys","玩具",secToys]
     ];
     SECS.forEach(s=>{
       const b=el("button",(s[0]===SEC?"on":""),s[1]);
@@ -219,7 +222,8 @@ try{
     const top=el("div","nt-top");
     const t1=el("button",(WHO==="ai"?"on":""),"它写的");
     const t2=el("button",(WHO==="me"?"on":""),"我写的");
-    const add=el("button","pri","＋ 写一篇");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 写一篇"));
     top.append(t1,t2,el("div","sp"),add);
     body.append(top);
     const list=el("div"); body.append(list);
@@ -279,7 +283,8 @@ try{
   async function secNotes(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const add=el("button","pri","＋ 说一句");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 说一句"));
     top.append(el("div","sp"),add);
     body.append(top);
     const list=el("div"); body.append(list);
@@ -359,8 +364,8 @@ try{
       fill.style.width=Math.max(0,Math.min(100,v))+"%";
       track.append(fill); row.append(track);
       row.append(el("span","v",String(Math.round(v))));
-      const minus=el("button",null,"−"); minus.title="降一点（-3）";
-      const plus=el("button",null,"＋"); plus.title="涨一点（+3）";
+      const minus=el("button",null); minus.append(nestIcon("down")); minus.title="降一点（-3）";
+      const plus=el("button",null); plus.append(nestIcon("up")); plus.title="涨一点（+3）";
       const bump=async delta=>{
         const r=await jpost("/api/mood/bump",{dimension:d,delta:delta,reason:"人自己拨的"});
         if(r.ok)secMood(body); else say("没拨动："+(r.err||"?"));
@@ -442,11 +447,14 @@ try{
     /* mode：'upcoming'（往后的，默认）· 'all'（连过去的也翻）· 'day'（点中了某一天） */
     let items=[], cur=new Date(), picked="", mode="upcoming";
     const top=el("div","nt-top");
-    const add=el("button","pri","＋ 记一件");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 记一件"));
     const bUp=el("button",null,"往后"), bAll=el("button",null,"全部");
     top.append(el("div","sp"),bUp,bAll,add);
     const mo=el("div","cal-mo");
-    const prev=el("button",null,"‹"), next=el("button",null,"›"), mt=el("div","t");
+    const prev=el("button",null), next=el("button",null), mt=el("div","t");
+    prev.append(nestIcon("back",16)); next.append(nestIcon("forward",16));
+    prev.title="上个月"; next.title="下个月";
     mo.append(prev,mt,next);
     const grid=el("div","cal-grid");
     const list=el("div");
@@ -546,7 +554,7 @@ try{
       return r;
     }
     /* 记一件 / 改一件。后端没有「改」这条 —— 改＝先删旧的再加新的。
-       ★ 纪念日那类 id 是负的（anniversaries 表），删的时候原样传负数，后端认得。 */
+       · 纪念日那类 id 是负的（anniversaries 表），删的时候原样传负数，后端认得。 */
     function editCal(it){
       const isNew=!it;
       sheet(isNew?"记一件":"改这件", bx=>{
@@ -580,7 +588,8 @@ try{
     let items=[], q="";
     const top=el("div","nt-top");
     const si=el("input","q"); si.type="text"; si.placeholder="在梗库里找一个词…";
-    const add=el("button","pri","＋ 录一条");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 录一条"));
     top.append(si,add);
     body.append(top);
     const list=el("div"); body.append(list);
@@ -677,10 +686,14 @@ try{
   async function secSticker(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const hint=el("span",null,"这一节是**管**这张表的（传 / 改名字和标签 / 删）。"
-      +"要发的时候在聊天输入框边上点 😀 —— 助手也能发，他自己照名字和标签挑");
+    const hint=el("span");
+    hint.append(document.createTextNode("这一节是**管**这张表的（传 / 改名字和标签 / 删）。"
+      +"要发的时候在聊天输入框边上点 "),
+      nestIcon("sticker"),
+      document.createTextNode(" —— 助手也能发，他自己照名字和标签挑"));
     hint.style.cssText="font-size:11.5px;color:var(--dim2)";
-    const add=el("button","pri","＋ 传一张");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 传一张"));
     window.nestStickerLibHint=()=>say("表情包在下面 —— 得先传几张");
     top.append(hint,el("div","sp"),add);
     body.append(top);
@@ -706,7 +719,7 @@ try{
         im.title="点一下放进输入框";
         im.onclick=()=>send(s);
         c.append(im);
-        const sd=el("div","send","→"); sd.title="发送"; sd.onclick=()=>send(s);
+        const sd=el("div","send"); sd.append(nestIcon("send")); sd.title="发送"; sd.onclick=()=>send(s);
         c.append(sd);
         c.append(el("div","nm",s.name||"（没名字）"));
         const ops=el("div","ops");
@@ -773,7 +786,8 @@ try{
   async function secHealth(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const add=el("button","pri","＋ 记一天");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 记一天"));
     top.append(el("div","sp"),add);
     body.append(top);
     const list=el("div"); body.append(list);
@@ -861,13 +875,14 @@ try{
     });
   }
   /* ═══ 空间 ═══
-     moments ＋ moment_comments。原项目那一页的排法照搬：分「他发的 / 你发的 / 有评论」，
-     一条一张卡（正文＋配图＋楼里的评论），每条底下留一个「回一句」——
+     moments + moment_comments。原项目那一页的排法照搬：分「他发的 / 你发的 / 有评论」，
+     一条一张卡（正文+配图+楼里的评论），每条底下留一个「回一句」——
      原项目 0805 就是「能贴不能回」被点名的。 */
   async function secMoments(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const add=el("button","pri","＋ 贴一条");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 贴一条"));
     const poke=el("button",null,"戳他发一条");
     const sp=el("div","sp");
     const msg=el("div","hint");
@@ -1034,7 +1049,7 @@ try{
   }
 
   /* ═══ 时间线 ═══
-     `timeline_events` ＋ meta（天气 / 天象 / 在哪）。原项目按 kind 分五条道，
+     `timeline_events` + meta（天气 / 天象 / 在哪）。原项目按 kind 分五条道，
      这儿照搬那五条道和那些中文名 —— kind 里 24 种中英混着，早期英文那批按意思归。 */
   const TL_LANE={"装修":"装修","一起做的事":"一起做的事","intimate":"一起做的事",
     "milestone":"一起做的事","和好":"一起做的事","meal":"一起做的事","饮食":"一起做的事",
@@ -1052,7 +1067,8 @@ try{
   async function secTimeline(body){
     body.innerHTML="";
     const top=el("div","nt-top");
-    const add=el("button","pri","＋ 随手记");
+    const add=el("button","pri");
+    add.append(nestIcon("plus"),document.createTextNode(" 随手记"));
     const sp=el("div","sp");
     const reload=el("button",null,"刷新");
     top.append(add,sp,reload);
@@ -1164,8 +1180,18 @@ try{
     load();
   }
 
+  /* ═══ 玩具箱（本体在 nest-toys.js，这里只是「一起」里的一档）═══ */
+  async function secToys(body){
+    body.innerHTML="";
+    if(window.NEST_PANES&&typeof window.NEST_PANES.toys==="function"){
+      await window.NEST_PANES.toys(body);
+      return;
+    }
+    body.append(el("div","hint","玩具箱模块没装上（nest-toys.js）"));
+  }
+
   /* ═══ 收藏 ═══
-     点过星的那些话。★ 每条都带上文（「你说：…」）—— 原项目 0807 定了这条：
+     点过星的那些话。· 每条都带上文（「你说：…」）—— 原项目 0807 定了这条：
      没有上文，几个月后翻出来不知道当时在聊什么。 */
   async function secStar(body){
     body.innerHTML="";

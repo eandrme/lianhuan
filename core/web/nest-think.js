@@ -6,7 +6,7 @@
    三档（后端 core/think.py 是唯一的语义出处）：偏快 / 自动 / 偏深。
    `/api/think` GET 读、POST 写。
 
-   ★ 这枚开关**不是摆设** —— 后端把它接到两处：
+   ※ 这枚开关**不是摆设** —— 后端把它接到两处：
      ① 一句话进 system（哪家引擎都吃得到）
      ② 档位交给引擎：OpenAI 兼容那条翻成 reasoning_effort（fast→低档、deep→这家
         支持的最高一档），认这个字段的家真会少想/多想；不认的家会被读取报错里的
@@ -36,8 +36,8 @@ try{
     return d;
   };
 
-  /* ★ 这枚是**开关**：开＝偏深（多想一层），**关＝真的别想**。
-     ⚠ 「关」必须真的发 `reasoning_effort:"none"`，不能是「什么都不发」——
+  /* ※ 这枚是**开关**：开＝偏深（多想一层），**关＝真的别想**。
+     注意 「关」必须真的发 `reasoning_effort:"none"`，不能是「什么都不发」——
        后者是「由这家自己定」，而 DeepSeek 这类默认就是 high：人明明关了，
        屏幕上照样满屏思考过程（真机上撞的，就是这个）。
      「偏快」「自动」是另外两种状态，按钮上照实写（快 / 自动），
@@ -92,7 +92,8 @@ try{
     const on=(cur===ON_MODE);
     btn.dataset.m=loaded?cur:"unknown";
     btn.dataset.on=(loaded&&on)?"1":"0";
-    btn.textContent="🧠"+(loaded?(SHORT[cur]||"关"):"…");
+    btn.textContent="";
+    btn.append(nestIcon("memory"),document.createTextNode(loaded?(SHORT[cur]||"关"):"…"));
     const label=(labels[cur]||FALLBACK_LABEL[cur]||cur);
     const note=(notes[cur]||FALLBACK_NOTE[cur]||"");
     btn.title=loaded
@@ -101,7 +102,7 @@ try{
          +((cur!=="off"&&cur!=="deep")?("（现在是「"+label+"」那一档，点一下就是打开深度思考）"):"")
          +"\n长按（或右键）可以选：别想 / 偏快 / 自动 / 偏深"
          +(engNote?("\n现在这家："+engNote):"")
-         +((cur==="off"&&canMute===false)?("\n⚠ 这条引擎路上「关」关不掉它的思考 —— "+engNote):""))
+         +((cur==="off"&&canMute===false)?("\n这条引擎路上「关」关不掉它的思考 —— "+engNote):""))
       : "深度思考：还没读到服务端的档位（点一下试试）";
     btn.setAttribute("aria-label",btn.title);
   }
@@ -116,7 +117,7 @@ try{
         loaded=true;
       }
     }catch(e){
-      // ★ 读不到就**不画一个假的档位**：按钮上写「…」，菜单里说实话
+      // ※ 读不到就**不画一个假的档位**：按钮上写「…」，菜单里说实话
       loaded=false;
       if(!warned){ warned=true; }
     }
@@ -148,7 +149,9 @@ try{
       const tx=el("span","tx");
       tx.append(el("b",null,labels[k]||FALLBACK_LABEL[k]));
       tx.append(el("span","s",notes[k]||FALLBACK_NOTE[k]));
-      b.append(el("span","ck",(k===cur&&loaded)?"✓":""),tx);
+      const ck=el("span","ck");
+      if(k===cur&&loaded) ck.append(nestIcon("check",14));
+      b.append(ck,tx);
       b.onclick=()=>pick(k);
       m.append(b);
     });

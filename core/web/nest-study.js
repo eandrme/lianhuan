@@ -67,7 +67,8 @@ try{
   /* 自己的弹层（tabs 那个 helper 拿不到） */
   function sheet(title,build){
     const wrap=el("div","sheet"), bx=el("div","box");
-    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn");
+    x.append(nestIcon("close"));
     x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
@@ -88,7 +89,8 @@ try{
       b2.onclick=()=>{ b1.classList.remove("on"); b2.classList.add("on");
         if(window.NEST_CREATION)window.NEST_CREATION(view); else say("「创造」还没接上"); };
       tabs.append(b1,b2);
-      const up=el("button","st-up","＋ 放书");
+      const up=el("button","st-up");
+      up.append(nestIcon("plus"),document.createTextNode(" 放书"));
       up.onclick=pickFile;
       top.append(tabs,up);
       const grid=el("div","st-grid");
@@ -99,7 +101,7 @@ try{
         const its=j.items||[];
         grid.innerHTML="";
         if(!its.length){
-          grid.append(el("div","hint","书架还空着 —— 点右上「＋ 放书」，选一个 .txt 文件"));
+          grid.append(el("div","hint","书架还空着 —— 点右上「放书」，选一个 .txt 文件"));
           return;
         }
         its.forEach(b=>grid.append(bookCard(b)));
@@ -166,7 +168,8 @@ try{
       let chs=[];
       try{ chs=(await jget("/api/books/"+b.id+"/chapters")).items||[]; }catch(e){}
       const top=el("div","st-top");
-      const back=el("button",null,"← 书架"); back.onclick=()=>shelf();
+      const back=el("button",null); back.append(nestIcon("back"),document.createTextNode(" 书架"));
+      back.onclick=()=>shelf();
       const tt=el("div","st-title",b.title||""); tt.style.flex="1";
       const annBtn=el("button",null,"批注");
       top.append(back,tt,annBtn);
@@ -207,7 +210,8 @@ try{
       }
       function dot(mk,list){
         const kind=(mk.me&&mk.ai)?"both":(mk.ai?"ai":"me");
-        const d=el("button","st-dot "+kind, kind==="both"?"◉":(kind==="ai"?"○":"●"));
+        const d=el("button","st-dot "+kind);
+        d.append(nestIcon(kind==="both"?"together":(kind==="ai"?"bot":"person")));
         d.title="这里有批注";
         d.onclick=e=>{e.stopPropagation();showNotes(list);};
         return d;
