@@ -253,10 +253,78 @@ class TestTheSwitchIsInTheChatUi(unittest.TestCase):
         self.assertIn("偏快", js)
         self.assertIn("偏深", js)
 
+    def test_it_is_a_plain_on_off_switch(self):
+        """★ 用户要的是「打开和关闭」：点一下＝开/关。
+
+        开＝偏深、关＝自动（自动那一档什么都不发、什么都不加）。
+        偏快是第三种状态，别把它装成「关」—— 长按/右键出三档菜单，设置页里也有一份。"""
+        js = (ROOT / "core" / "web" / "nest-think.js").read_text(encoding="utf-8")
+        self.assertIn('const ON_MODE="deep", OFF_MODE="auto"', js)
+        self.assertIn("cur===ON_MODE ? OFF_MODE : ON_MODE", js, "点一下就是开/关")
+        self.assertIn("openMenu", js, "偏快那一档还在（长按/右键）")
+
     def test_it_does_not_pretend_when_it_cannot_read_the_server(self):
         js = (ROOT / "core" / "web" / "nest-think.js").read_text(encoding="utf-8")
         self.assertIn("loaded=false", js, "读不到就不画一个假的档位")
         self.assertIn('"unknown"', js)
+
+
+class TestASavedConfigNeverNeedsRetyping(unittest.TestCase):
+    """★ 真机上撞的：「每次关掉页面重新打开都要再配置一遍模型」。
+
+    配置其实一直存着（key/base/model 都在 secrets.json 里），只是引擎那个设置
+    停在回声 —— 界面一句「现在接的：回声」就让人以为得从头再填一遍。
+    两条防线：① 设置页给一颗「接上存着的那份配置」；② 每次换引擎都留一行日志，
+    以后再出现「它自己变回去了」，一眼看得出是谁干的。
+    """
+
+    def setUp(self):
+        from fastapi.testclient import TestClient
+        from core.store.sqlite import SqliteStore
+        import core.server as sv
+        self.sv = sv
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.old_store, self.old_secrets = sv.store, sv.SECRETS
+        sv.store = SqliteStore(Path(self.tmp.name) / "t.db")
+        sv.SECRETS = Path(self.tmp.name) / "secrets.json"
+        self.addCleanup(self._restore)
+        self.c = TestClient(sv.app)
+
+    def _restore(self):
+        self.sv.store, self.sv.SECRETS = self.old_store, self.old_secrets
+
+    def test_one_tap_reconnects_the_stored_config_without_a_key(self):
+        # 装作「上次存过一份」：key 在盘上、引擎却停在回声
+        self.sv.SECRETS.write_text(json.dumps(
+            {"api_key": "sk-test-abcdefghijklmn", "api_base": "https://api.deepseek.com",
+             "api_model": "deepseek-flash"}), encoding="utf-8")
+        self.sv.store.set_setting("engine", "echo")
+        r = self.c.post("/api/engine/config",
+                        json={"engine": "api", "base": "https://api.deepseek.com",
+                              "model": "deepseek-flash"})
+        self.assertTrue(r.json()["ok"])
+        cfg = self.c.get("/api/engine/config").json()
+        self.assertEqual("api", cfg["engine"])
+        self.assertTrue(cfg["key_set"], "不重贴 key 也得能接上 —— 它本来就在盘上")
+        self.assertEqual("deepseek-flash", cfg["model"])
+
+    def test_every_engine_write_goes_through_the_logging_helper(self):
+        """三个写引擎的地方（引擎配置 / 换模型 / 老设置接口）都必须留痕。
+
+        ★ 原来一处都不留 —— 引擎「自己变回回声」时查不出是谁干的。"""
+        src = (ROOT / "core" / "server.py").read_text(encoding="utf-8")
+        self.assertEqual(1, src.count('store.set_setting("engine"'),
+                         "只该剩 _set_engine 里那一次直写，别的都走它")
+        self.assertIn("def _set_engine(", src)
+        for why in ("engine/config", "ai_model", "/api/settings"):
+            self.assertIn(why, src, why + " 那一处没走 _set_engine")
+
+    def test_the_settings_page_offers_the_one_tap(self):
+        js = (ROOT / "core" / "web" / "nest-setting.js").read_text(encoding="utf-8")
+        self.assertIn("接上存着的那份配置", js)
+        self.assertIn("stranded", js, "只在「存着配置 + 引擎停在回声」时露出来")
+        self.assertIn("secThink", js, "设置页里也有想多深（偏快那一档住这儿）")
 
 
 if __name__ == "__main__":

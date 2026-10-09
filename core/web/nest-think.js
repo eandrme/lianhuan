@@ -36,8 +36,12 @@ try{
     return d;
   };
 
-  /* 按钮上就那么点地方：一个字代表一档 */
-  const SHORT={fast:"快",auto:"自动",deep:"深"};
+  /* ★ 这枚是**开关**：开＝偏深，关＝自动（跟从前一字不差）。
+     「偏快」是第三种状态 —— 它既不是开也不是关，所以按钮上照实写「快」，
+     点一下是打开深度思考（不是关掉它）；想选回偏快：长按（或右键）出三档菜单，
+     设置页里也有同一份。 */
+  const ON_MODE="deep", OFF_MODE="auto";
+  const SHORT={fast:"快",auto:"关",deep:"开"};
   const ORDER=["fast","auto","deep"];
   const FALLBACK_LABEL={fast:"偏快",auto:"自动",deep:"偏深"};
   const FALLBACK_NOTE={fast:"少想一点，答得快些",auto:"不动它，由这家自己定（默认）",
@@ -50,7 +54,8 @@ try{
   height:38px;padding:0 9px;border-radius:var(--r-sm);color:var(--dim);
   font-size:13.5px;flex:0 0 auto;white-space:nowrap}
 #btnThink:hover{background:var(--panel2);color:var(--fg)}
-#btnThink[data-m="deep"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+#btnThink[data-on="1"]{color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--accent) 45%,transparent)}
 #btnThink[data-m="fast"]{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}
 #btnThink[data-m="unknown"]{color:var(--dim2)}
 .tk-hd{font-size:11.5px;color:var(--dim2);padding:6px 10px 4px}
@@ -79,13 +84,19 @@ try{
   }
 
   function paint(){
+    const on=(cur===ON_MODE);
     btn.dataset.m=loaded?cur:"unknown";
-    btn.textContent="🧠"+(loaded?(SHORT[cur]||"自动"):"…");
+    btn.dataset.on=(loaded&&on)?"1":"0";
+    btn.textContent="🧠"+(loaded?(SHORT[cur]||"关"):"…");
     const label=(labels[cur]||FALLBACK_LABEL[cur]||cur);
     const note=(notes[cur]||FALLBACK_NOTE[cur]||"");
     btn.title=loaded
-      ? ("想多深：现在是「"+label+"」—— "+note+"。点一下换一档。"+(engNote?("\n现在这家："+engNote):""))
-      : "想多深：还没读到服务端的档位（点一下试试）";
+      ? ("深度思考："+(on?"开":"关")+"（现在是「"+label+"」—— "+note+"）\n点一下"
+         +(on?"关掉":"打开")
+         +(cur==="fast"?"（现在是偏快那一档，点一下就是打开深度思考）":"")
+         +"\n长按（或右键）可以选偏快 / 自动 / 偏深三档"
+         +(engNote?("\n现在这家："+engNote):""))
+      : "深度思考：还没读到服务端的档位（点一下试试）";
     btn.setAttribute("aria-label",btn.title);
   }
 
@@ -145,10 +156,30 @@ try{
     setTimeout(()=>document.addEventListener("click",()=>{ if(menu){menu.remove();menu=null;} },{once:true}),0);
   }
 
+  /* ── 开关本身：点一下就是开/关 ──
+     开＝偏深、关＝自动（自动这一档什么参数都不发、什么话都不加，跟从前一字不差）。
+     三档菜单留给长按 / 右键 —— 偏快那一档平时用不到，但别把它藏没了。 */
+  async function toggle(){
+    if(!loaded){
+      await load();
+      if(!loaded){ say("读不到服务端的档位，先别拨 —— 可能是旧版服务端或者没登录"); return; }
+    }
+    await pick(cur===ON_MODE ? OFF_MODE : ON_MODE);
+  }
+
+  let lpTimer=null, lpFired=false;
+  btn.addEventListener("pointerdown",()=>{
+    lpFired=false;
+    lpTimer=setTimeout(()=>{ lpTimer=null; lpFired=true; openMenu(); },550);
+  });
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>
+    btn.addEventListener(ev,()=>{ if(lpTimer){ clearTimeout(lpTimer); lpTimer=null; } }));
+  btn.addEventListener("contextmenu",e=>{ e.preventDefault(); openMenu(); });
   btn.onclick=e=>{
     e.stopPropagation();
+    if(lpFired){ lpFired=false; return; }        // 长按已经开过菜单了，别再顺手拨一下
     if(menu){ menu.remove(); menu=null; return; }
-    openMenu();
+    toggle();
   };
 
   /* 刚进页面时口令还没登录，这一问会 401 —— 门一开重读一遍 */

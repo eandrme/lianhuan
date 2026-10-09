@@ -80,6 +80,7 @@ try{
   window.NEST_PANES.setting=function(box){
     box.innerHTML="";
     secEngine(box);
+    secThink(box);
     secWhisper(box);
     secOffline(box);
     secPush(box);
@@ -93,7 +94,15 @@ try{
       +"「连接并识别模型」——认出来之后点一个模型名就存下并切换过去。"
       +"key 只写进这台服务器的 data/secrets.json，界面不回读明文。"));
     const now=el("div","set-now","现在接的：读着…");
-    sec.append(now);
+    /* ★ 真机上撞的：「每次关掉页面重新打开都要再配置一遍模型」。
+       一份配置就存着（key/base/model 都在 secrets.json 里，也能真聊），
+       可引擎那个设置停在回声 —— 人一看「现在接的：回声」，只好从头再填一遍。
+       这儿给一颗一次性的按钮：拿已经存着的那份直接接上，一个字都不用重打。 */
+    const heal=el("div","set-btns"); heal.hidden=true;
+    const bHeal=el("button","pri","接上存着的那份配置");
+    heal.append(bHeal);
+    const healNote=el("div","set-msg");
+    sec.append(now,healNote,heal);
     const prot=el("div","set-chips");
     const pre=el("div","set-chips");
     const baseI=el("input","set-in"); baseI.type="text"; baseI.placeholder="接口地址，比如 https://api.deepseek.com";
@@ -127,7 +136,32 @@ try{
       now.append(el("b",null,ENGNAME[e]||e));
       now.append(el("span",null,(cfg.model?(" · "+cfg.model):"")
         +(cfg.key_set?(" · key…"+cfg.key_tail):" · 还没 key")));
+      // 存着一份完整配置、引擎却停在回声 —— 这是「要重配一遍」的真正由来
+      const stranded=(e==="echo" && cfg.key_set && cfg.base && cfg.model);
+      heal.hidden=!stranded;
+      if(stranded){
+        healNote.className="set-msg err";
+        healNote.textContent="你存着一份配置（"+cfg.model+" · key…"+cfg.key_tail
+          +"），但当前引擎停在回声 —— 点下面那颗接上就行，不用再填一遍。";
+      }else{
+        healNote.textContent="";
+      }
     }
+
+    bHeal.onclick=async()=>{
+      const base=(baseI.value.trim()||cfg.base||"");
+      const model=(modelI.value.trim()||cfg.model||"");
+      if(!base||!model){ msg.className="set-msg err"; msg.textContent="存着的那份缺地址或模型名，还是得先认一遍"; return; }
+      bHeal.disabled=true;
+      const r=await jpost("/api/engine/config",
+        {engine:/anthropic/i.test(base)?"anthropic":"api", base:base, model:model});
+      bHeal.disabled=false;
+      if(!r.ok){ msg.className="set-msg err"; msg.textContent="没接上："+(r.err||"?"); return; }
+      await loadCfg();
+      msg.className="set-msg ok"; msg.textContent="接上了 —— 现在说话的就是这家。";
+      if(window.__nestWhisperReload)window.__nestWhisperReload();
+      checkNow(sec,msg);
+    };
 
     async function loadCfg(){
       try{
@@ -232,6 +266,52 @@ try{
       line.textContent="存下了，但这会儿连不上："+(d.err||"?")
         +"\n（key 或地址不对、或者这台服务器连不出去）—— 聊天里发一句话更能确定。";
     }
+  }
+
+  /* ═══ 想多深（深度思考）═══ */
+  async function secThink(box){
+    const sec=el("div","set-sec");
+    sec.append(el("h4",null,"想多深（深度思考）"));
+    sec.append(el("div","sub","聊天输入框旁边那枚 🧠 就是它：点一下＝开（偏深）/ 关（自动）。"
+      +"这里多一个「偏快」—— 平常用不到，打电话或者着急的时候用得上。"));
+    const chips=el("div","set-chips");
+    const note=el("div","set-msg","读着…");
+    sec.append(chips,note);
+    box.append(sec);
+    let cur="auto";
+    const NAMES={fast:"偏快",auto:"自动",deep:"偏深"};
+    function paint(){
+      chips.innerHTML="";
+      ["fast","auto","deep"].forEach(k=>{
+        const b=el("button",(k===cur?"on":""),NAMES[k]);
+        b.onclick=()=>set(k);
+        chips.append(b);
+      });
+    }
+    async function load(){
+      try{
+        const j=await jget("/api/think");
+        cur=j.mode||"auto";
+        paint();
+        note.className="set-msg";
+        note.textContent="现在是「"+(j.labels&&j.labels[cur]||NAMES[cur])+"」—— "
+          +((j.notes&&j.notes[cur])||"")
+          +"\n落到两处：一句话进 system（哪家引擎都吃得到）"
+          +((j.effort)?("；还会给这家标 reasoning_effort="+j.effort):"")
+          +"。\n现在这家："+(j.engine_note||"（取决于引擎）");
+      }catch(e){
+        note.className="set-msg err";
+        note.textContent="读不到："+e.message;
+      }
+    }
+    async function set(k){
+      const before=cur; cur=k; paint();
+      const r=await jpost("/api/think",{mode:k});
+      if(!r.ok){ cur=before; paint(); note.className="set-msg err"; note.textContent="没换成："+(r.err||"?"); return; }
+      say("想多深：换成「"+NAMES[k]+"」了");
+      load();
+    }
+    load();
   }
 
   /* ═══ 主动消息总闸：耳语频率 ═══ */
