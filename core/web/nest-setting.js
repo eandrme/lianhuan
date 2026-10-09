@@ -553,17 +553,19 @@ try{
   async function secThink(box){
     const sec=el("div","set-sec");
     sec.append(el("h4",null,"想多深（深度思考）"));
-    sec.append(el("div","sub","聊天输入框旁边那枚 🧠 就是它：点一下＝开（偏深）/ 关（自动）。"
-      +"这里多一个「偏快」—— 平常用不到，打电话或者着急的时候用得上。"));
+    sec.append(el("div","sub","聊天输入框旁边那枚 🧠 就是它：点一下＝**开（多想一层）/ 关（别想）**。"
+      +"这里另外两档也在：「偏快」（少想一点）和「自动」（由这家自己定 —— 它可能默认想得很深）。"
+      +"★ 关是真的关：会给这家发 reasoning_effort=none；Claude / 本机 CLI 那两条不吃这个参数，"
+      +"那一档在它们那儿只改提示词（下面那行小字会说）。"));
     const chips=el("div","set-chips");
     const note=el("div","set-msg","读着…");
     sec.append(chips,note);
     box.append(sec);
     let cur="auto";
-    const NAMES={fast:"偏快",auto:"自动",deep:"偏深"};
+    const NAMES={off:"别想（关）",fast:"偏快",auto:"自动",deep:"偏深（开）"};
     function paint(){
       chips.innerHTML="";
-      ["fast","auto","deep"].forEach(k=>{
+      ["off","fast","auto","deep"].forEach(k=>{
         const b=el("button",(k===cur?"on":""),NAMES[k]);
         b.onclick=()=>set(k);
         chips.append(b);
@@ -578,8 +580,10 @@ try{
         note.textContent="现在是「"+(j.labels&&j.labels[cur]||NAMES[cur])+"」—— "
           +((j.notes&&j.notes[cur])||"")
           +"\n落到两处：一句话进 system（哪家引擎都吃得到）"
-          +((j.effort)?("；还会给这家标 reasoning_effort="+j.effort):"")
-          +"。\n现在这家："+(j.engine_note||"（取决于引擎）");
+          +((j.effort)?("；还会给这家标 reasoning_effort="+j.effort):"（这一档什么都不标）")
+          +"。\n现在这家："+(j.engine_note||"（取决于引擎）")
+          +((cur==="off"&&j.can_mute===false)
+              ?("\n⚠ 这条路上「关」关不掉它的思考（它不吃那个参数）—— 思考过程还会出现。"):"");
       }catch(e){
         note.className="set-msg err";
         note.textContent="读不到："+e.message;

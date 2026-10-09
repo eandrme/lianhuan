@@ -27,8 +27,8 @@ from core import think                                            # noqa: E402
 
 
 class TestThinkMapping(unittest.TestCase):
-    def test_only_three_modes_and_unknown_falls_back_to_auto(self):
-        self.assertEqual(("fast", "auto", "deep"), think.MODES)
+    def test_the_four_modes_and_unknown_falls_back_to_auto(self):
+        self.assertEqual(("off", "fast", "auto", "deep"), think.MODES)
         self.assertEqual("auto", think.DEFAULT)
 
         class S:
@@ -40,9 +40,17 @@ class TestThinkMapping(unittest.TestCase):
         self.assertEqual("auto", think.mode(S(None)))
 
     def test_effort_mapping(self):
-        self.assertIsNone(think.effort("auto"), "自动＝什么都不标，行为跟从前一模一样")
+        self.assertIsNone(think.effort("auto"), "自动＝什么都不标，由这家自己定")
         self.assertEqual("low", think.effort("fast"))
         self.assertEqual("max", think.effort("deep"))
+        self.assertEqual("none", think.effort("off"),
+                         "★「关」必须真的发 none —— 什么都不发＝这家自己定，DeepSeek 默认 high，"
+                         "人明明关了屏幕上照样满屏思考过程（真机上撞的）")
+
+    def test_only_the_api_engine_can_really_mute(self):
+        self.assertTrue(think.can_mute("api"))
+        for e in ("anthropic", "cli", "echo"):
+            self.assertFalse(think.can_mute(e), e + " 那条路上「关」关不掉它的思考")
 
     def test_effort_respects_what_the_provider_allows(self):
         """这家只认到 medium，那「偏深」就按它认的最高那档走 —— 不是不发。"""
@@ -52,10 +60,21 @@ class TestThinkMapping(unittest.TestCase):
                          "连 low 都不认就从它认的里面挑最低的")
         self.assertIsNone(think.effort("deep", []), "一个都不认就别发")
 
+    def test_off_degrades_to_the_lowest_this_provider_has(self):
+        """这家没有 none 的时候，「关」退到它最低那一档 —— 还会想一点，但界面照实说。"""
+        self.assertEqual("minimal", think.effort("off", ["minimal", "low", "high"]))
+        self.assertEqual("low", think.effort("off", ["low", "medium"]))
+        self.assertEqual("none", think.effort("off", ["none", "low"]))
+
+    def test_fast_never_collapses_into_none(self):
+        """「偏快」是「想快点」，不是「别想」—— 不能因为它认 none 就把 fast 做成静音。"""
+        self.assertEqual("low", think.effort("fast", ["none", "low", "high"]))
+
     def test_the_nudge_says_something_different_per_mode(self):
         self.assertEqual("", think.nudge("auto"), "自动那一档不加任何话")
-        f, d = think.nudge("fast"), think.nudge("deep")
-        self.assertTrue(f and d and f != d)
+        o, f, d = think.nudge("off"), think.nudge("fast"), think.nudge("deep")
+        self.assertTrue(o and f and d and len({o, f, d}) == 3)
+        self.assertIn("别展开推演", o, "不吃那个参数的路上，这句话是唯一还能起作用的杠杆")
         self.assertIn("快", f)
         self.assertIn("多想一层", d)
 
@@ -144,9 +163,11 @@ class TestTheEngineReallyGetsIt(unittest.TestCase):
         self.assertNotIn("reasoning_effort", seen[0], "默认这一档跟以前一字不差")
         self.assertIn("好", "".join(d.get("text", "") for d in out if d.get("type") == "s"))
 
-    def test_fast_and_deep_are_translated(self):
+    def test_fast_deep_and_off_are_translated(self):
         self.assertEqual("low", self._run("fast")[0][0].get("reasoning_effort"))
         self.assertEqual("max", self._run("deep")[0][0].get("reasoning_effort"))
+        self.assertEqual("none", self._run("off")[0][0].get("reasoning_effort"),
+                         "★ 关＝真的发 none（真机上撞的：不发＝这家默认 high，照样满屏思考）")
 
     def test_a_provider_that_rejects_it_gets_a_second_chance(self):
         """★ 不认「偏深」这档的家不能让整轮说话失败 ——
@@ -190,8 +211,15 @@ class TestThinkApiAndWiring(unittest.TestCase):
     def test_get_shape(self):
         j = self.c.get("/api/think").json()
         self.assertEqual("auto", j["mode"], "出厂是自动")
-        self.assertEqual(["fast", "auto", "deep"], j["modes"])
+        self.assertEqual(["off", "fast", "auto", "deep"], j["modes"])
         self.assertIn("engine_note", j, "界面要能说清「你现在这家能照办到什么程度」")
+        self.assertIn("can_mute", j, "界面要能说清「这一档在它这儿关不关得掉」")
+
+    def test_off_is_accepted_and_says_none(self):
+        self.assertEqual(200, self.c.post("/api/think", json={"mode": "off"}).status_code)
+        j = self.c.get("/api/think").json()
+        self.assertEqual("off", j["mode"])
+        self.assertEqual("none", j["effort"])
 
     def test_post_only_accepts_the_three(self):
         self.assertEqual(200, self.c.post("/api/think", json={"mode": "deep"}).status_code)
@@ -259,12 +287,14 @@ class TestTheSwitchIsInTheChatUi(unittest.TestCase):
         开＝偏深、关＝自动（自动那一档什么都不发、什么都不加）。
         偏快是第三种状态，别把它装成「关」—— 长按/右键出三档菜单，设置页里也有一份。"""
         js = (ROOT / "core" / "web" / "nest-think.js").read_text(encoding="utf-8")
-        self.assertIn('const ON_MODE="deep", OFF_MODE="auto"', js)
+        self.assertIn('const ON_MODE="deep", OFF_MODE="off"', js,
+                      "关那一档必须是 off（真的别想），不是 auto（由这家自己定）")
         self.assertIn("cur===ON_MODE ? OFF_MODE : ON_MODE", js, "点一下就是开/关")
         self.assertIn("openMenu", js, "偏快那一档还在（长按/右键）")
 
     def test_it_does_not_pretend_when_it_cannot_read_the_server(self):
         js = (ROOT / "core" / "web" / "nest-think.js").read_text(encoding="utf-8")
+        self.assertIn("canMute", js, "关不掉的地方要照实说")
         self.assertIn("loaded=false", js, "读不到就不画一个假的档位")
         self.assertIn('"unknown"', js)
 

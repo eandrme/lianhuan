@@ -1466,6 +1466,9 @@ def think_get():
     return {"mode": m, "modes": list(_think.MODES),
             "labels": _think.LABELS, "notes": _think.NOTES,
             "effort": _think.effort(m),
+            # ★ 「关」在这条引擎路上是不是真的关得掉 —— 关不掉的地方（Claude / CLI）
+            #   界面得说实话，不能让人以为拨了就一定没有思考过程。
+            "can_mute": _think.can_mute(eng),
             "engine": eng,
             "engine_note": _think.ENGINE_NOTE.get(eng, "")}
 

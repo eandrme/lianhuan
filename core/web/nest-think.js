@@ -36,17 +36,22 @@ try{
     return d;
   };
 
-  /* ★ 这枚是**开关**：开＝偏深，关＝自动（跟从前一字不差）。
-     「偏快」是第三种状态 —— 它既不是开也不是关，所以按钮上照实写「快」，
-     点一下是打开深度思考（不是关掉它）；想选回偏快：长按（或右键）出三档菜单，
-     设置页里也有同一份。 */
-  const ON_MODE="deep", OFF_MODE="auto";
-  const SHORT={fast:"快",auto:"关",deep:"开"};
-  const ORDER=["fast","auto","deep"];
-  const FALLBACK_LABEL={fast:"偏快",auto:"自动",deep:"偏深"};
-  const FALLBACK_NOTE={fast:"少想一点，答得快些",auto:"不动它，由这家自己定（默认）",
+  /* ★ 这枚是**开关**：开＝偏深（多想一层），**关＝真的别想**。
+     ⚠ 「关」必须真的发 `reasoning_effort:"none"`，不能是「什么都不发」——
+       后者是「由这家自己定」，而 DeepSeek 这类默认就是 high：人明明关了，
+       屏幕上照样满屏思考过程（真机上撞的，就是这个）。
+     「偏快」「自动」是另外两种状态，按钮上照实写（快 / 自动），
+     点一下是打开深度思考；想选回它们：长按（或右键）出菜单，设置页里也有同一份。 */
+  const ON_MODE="deep", OFF_MODE="off";
+  const SHORT={off:"关",fast:"快",auto:"自动",deep:"开"};
+  const ORDER=["off","fast","auto","deep"];
+  const FALLBACK_LABEL={off:"别想",fast:"偏快",auto:"自动",deep:"偏深"};
+  const FALLBACK_NOTE={off:"关掉：让它别再想（真的把推理档打到最低）",
+                       fast:"少想一点，答得快些",
+                       auto:"不动它，由这家自己定 —— 它可能默认想得很深",
                        deep:"多想一层再答，慢一些"};
-  const DONE={fast:"好，我说快些",auto:"好，我自己看着办",deep:"好，我多想一层"};
+  const DONE={off:"好，我不兜圈子了",fast:"好，我说快些",
+              auto:"好，我自己看着办",deep:"好，我多想一层"};
 
   const css=document.createElement("style");
   css.textContent=`
@@ -70,7 +75,7 @@ try{
 `;
   document.head.append(css);
 
-  let cur="auto", labels={}, notes={}, engNote="", loaded=false, menu=null;
+  let cur="auto", labels={}, notes={}, engNote="", canMute=null, loaded=false, menu=null;
   let warned=false;
 
   const btn=el("button",""); btn.id="btnThink"; btn.type="button";
@@ -92,10 +97,11 @@ try{
     const note=(notes[cur]||FALLBACK_NOTE[cur]||"");
     btn.title=loaded
       ? ("深度思考："+(on?"开":"关")+"（现在是「"+label+"」—— "+note+"）\n点一下"
-         +(on?"关掉":"打开")
-         +(cur==="fast"?"（现在是偏快那一档，点一下就是打开深度思考）":"")
-         +"\n长按（或右键）可以选偏快 / 自动 / 偏深三档"
-         +(engNote?("\n现在这家："+engNote):""))
+         +(on?"关掉（真的别想）":"打开（多想一层）")
+         +((cur!=="off"&&cur!=="deep")?("（现在是「"+label+"」那一档，点一下就是打开深度思考）"):"")
+         +"\n长按（或右键）可以选：别想 / 偏快 / 自动 / 偏深"
+         +(engNote?("\n现在这家："+engNote):"")
+         +((cur==="off"&&canMute===false)?("\n⚠ 这条引擎路上「关」关不掉它的思考 —— "+engNote):""))
       : "深度思考：还没读到服务端的档位（点一下试试）";
     btn.setAttribute("aria-label",btn.title);
   }
@@ -106,6 +112,7 @@ try{
       if(j&&j.mode in SHORT){
         cur=j.mode;
         labels=j.labels||{}; notes=j.notes||{}; engNote=j.engine_note||"";
+        canMute=j.can_mute;
         loaded=true;
       }
     }catch(e){
