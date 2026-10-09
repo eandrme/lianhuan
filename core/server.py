@@ -34,6 +34,7 @@ from .memory import build_injection
 from .protocol import DONE, SAY, SEP, THINK, sse, split_say
 from .store.base import Memory as StoredMemory, Turn as StoredTurn
 from .store.sqlite import SqliteStore
+from . import think as _think
 
 HERE = Path(__file__).parent
 WEB = HERE / "web"
@@ -422,8 +423,18 @@ async def chat(req: Request):
     if msg.startswith("▎引用"):
         msg_for_engine += ("\n〔上面第一行 ▎ 开头的那句是**引用**的原话,不是这会儿说的。"
                            "下面这句是冲着那一句来的,先对准它再回,别当成新起的话头。〕")
+    # ── 想多深（/api/think）：主聊天界面那枚开关 ──────────────────
+    # ★ 两半都在这儿接上，所以它**不是空开关**：
+    #   ① 一句话进 system —— 哪家引擎（Claude / 本机 CLI / 不认参数的家）都吃得到
+    #   ② 档位随 turn 交给引擎 —— OpenAI 兼容那条会翻成 reasoning_effort，
+    #      认这个字段的家（DeepSeek V4、o 系那类）是真会少想/多想的
+    # ★ 只管聊天这条路：主动消息 / 离线 / 哄睡不读它（用户拨的是聊天界面那枚）。
+    _think_mode = _think.mode(store)
+    _think_nudge = _think.nudge(_think_mode)
+    if _think_nudge:
+        system = system + "\n\n" + _think_nudge
     turn = EngineTurn(message=msg_for_engine, system=system, history=history,
-                      session_id=session_id, images=images)
+                      session_id=session_id, images=images, think=_think_mode)
 
     job = jobs.new(msg)
     gen_at_start = getattr(store, "generation", 0)      # 这一轮开始时的档案世代
@@ -1425,15 +1436,29 @@ async def ai_model_set(req: Request):
 
 @app.get("/api/think")
 def think_get():
-    return {"mode": store.get_setting("think", "medium")}
+    """想多深这一档 —— 三档、每档干什么、现在这家引擎能不能真照办。
+
+    ★ 之前这个接口只写不读（settings 里一个值、没有任何地方看它），
+      老界面那个「想多深」弹层等于摆设。现在它落到 system 一句话 ＋ 引擎参数两处，
+      这两样都看得见效果 —— 所以这儿也把「这一家能照办到什么程度」说出来。"""
+    m = _think.mode(store)
+    eng = store.get_setting("engine", "echo")
+    return {"mode": m, "modes": list(_think.MODES),
+            "labels": _think.LABELS, "notes": _think.NOTES,
+            "effort": _think.effort(m),
+            "engine": eng,
+            "engine_note": _think.ENGINE_NOTE.get(eng, "")}
 
 
 @app.post("/api/think")
 async def think_set(req: Request):
     b = await req.json()
-    mode = b.get("mode") or "medium"
+    mode = b.get("mode")
+    if mode not in _think.MODES:
+        return JSONResponse({"ok": False, "err": "只有 fast / auto / deep 三档"},
+                            status_code=400)
     store.set_setting("think", mode)
-    return {"ok": True, "mode": mode}
+    return {"ok": True, "mode": mode, "effort": _think.effort(mode)}
 
 
 # ══ Web Push ＋ 主动找你（0831 定的：主动消息也是有用的，要做）══

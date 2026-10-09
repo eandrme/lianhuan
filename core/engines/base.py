@@ -30,6 +30,10 @@ class Turn:
     #: ★ 不是每个模型都看得见 —— 认不出来的引擎**照旧忽略它**，不要因为多了个字段就崩。
     #:   看不见是选模型的人该知道的事，不该让「发图」这个动作本身出错。
     images: list[str] = field(default_factory=list)
+    #: 想多深：`fast` | `auto` | `deep`。★ 语义和换算在 `core/think.py`，别在各家引擎里
+    #: 另发明一套。引擎愿意就翻成自家的参数（OpenAI 兼容那条翻成 `reasoning_effort`）；
+    #: 不认识的老实忽略 —— 提示词那一半由 server 拼好，照样生效。
+    think: str = "auto"
 
 
 class Engine:

@@ -36,6 +36,12 @@ from typing import AsyncIterator
 from ..protocol import DONE, SAY, SEP, STAGE, THINK, USAGE, sse
 from .base import Engine, Turn, upstream_error
 
+#: 这一家认不认 reasoning_effort —— 记住，别每轮都撞一次。
+#:   {(base, model): ["low","high","max"]}  ← 从它报错里抄出来的可选值
+#:   {(base, model): "no"}                  ← 报错里也没说清楚，就当它不认
+#: ★ 进程级、不落盘：这是「这家这会儿认什么」，不是用户的配置。
+_EFFORT_MEMO: dict = {}
+
 #: 句末标点。在这些字符后面断句
 END = "。！？…!?"
 #: 太短的不单独成句，接着攒 —— 不然「嗯。」「好。」会各占一个气泡
@@ -68,6 +74,58 @@ class OpenAICompatEngine(Engine):
             return json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             return {}
+
+    # ── 想多深（core/think.py）：把它翻成这家认的那个参数 ──────────
+    def _effort(self, turn) -> str | None:
+        """这一轮要不要标 `reasoning_effort`、标哪一档。
+
+        ★ 不认这个字段的家会把可选值列在 400/422 的报错里（DeepSeek 实测：
+          ``unknown variant `banana`, expected one of `none`, `minimal`, … `max` ``）——
+          我们从那儿抄下来，下次只从它认的里面挑。抄不到就当它不认，一个字段都不塞。
+        """
+        mode = (getattr(turn, "think", "auto") or "auto")
+        if mode == "auto":
+            return None                       # 自动＝什么都不标，行为跟从前一模一样
+        memo = _EFFORT_MEMO.get((self.base, self.model))
+        if memo == "no":
+            return None
+        try:
+            from .. import think as _think
+            return _think.effort(mode, memo if isinstance(memo, list) else None)
+        except Exception:
+            return None
+
+    def _remember_effort_reject(self, status: int, body: str) -> bool:
+        """这一家是不是因为 `reasoning_effort` 拒的？是就记住，并让调用方去掉字段重来一次。"""
+        if status not in (400, 422) or "reasoning_effort" not in (body or ""):
+            return False
+        try:
+            from .. import think as _think
+            lv = _think.allowed_from_error(body)
+        except Exception:
+            lv = []
+        _EFFORT_MEMO[(self.base, self.model)] = (lv or "no")
+        print(f"[think] {self.model} 不认 reasoning_effort，改按 {lv or '不标'} 走", flush=True)
+        return True
+
+    async def _post_json(self, client, url: str, headers: dict, payload: dict, turn):
+        """带 effort 发一次；这一家不认就**去掉字段重来一次**（只重一次）。
+
+        ★ 为什么不干脆每次都不带：那「想多深」对认这个字段的家就永远是摆设。
+          为什么不干脆每次都带：不认的家会让整轮说话直接失败 —— 那是拿聊天去赌。
+          带一次、被拒就退，两头都不赌。
+        """
+        r = await client.post(url, headers=headers, json=payload)
+        if r.status_code in (400, 422):
+            body = ""
+            try:
+                body = r.text
+            except Exception:
+                pass
+            if self._remember_effort_reject(r.status_code, body):
+                payload = {k: v for k, v in payload.items() if k != "reasoning_effort"}
+                r = await client.post(url, headers=headers, json=payload)
+        return r
 
     def __init__(self, base: str | None = None, model: str | None = None, key: str | None = None):
         sec = self._secrets()
@@ -200,11 +258,14 @@ class OpenAICompatEngine(Engine):
             try:
                 while rounds < 5:
                     rounds += 1
-                    r = await client.post(
-                        f"{self.base}/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {self._key}",
-                                 "Content-Type": "application/json"},
-                        json={"model": self.model, "messages": msgs, "tools": self.tools})
+                    _payload = {"model": self.model, "messages": msgs, "tools": self.tools}
+                    _eff = self._effort(turn)
+                    if _eff:
+                        _payload["reasoning_effort"] = _eff
+                    r = await self._post_json(
+                        client, f"{self.base}/v1/chat/completions",
+                        {"Authorization": f"Bearer {self._key}",
+                         "Content-Type": "application/json"}, _payload, turn)
                     if r.status_code != 200:
                         yield sse("error", text=upstream_error(r.status_code, r.text, self.model))
                         yield sse(DONE, session_id=turn.session_id)
@@ -265,49 +326,67 @@ class OpenAICompatEngine(Engine):
 
         try:
             self._client = httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=15.0), transport=_browser_transport())
-            async with self._client.stream(
+            _attempt = 0
+            while True:
+              _attempt += 1
+              _payload = {"model": self.model, "messages": msgs, "stream": True,
+                          # ★ 0904：流式默认**不给** usage，得显式要。不认这个字段的家会忽略它。
+                          "stream_options": {"include_usage": True}}
+              _eff = self._effort(turn)
+              if _eff:
+                  _payload["reasoning_effort"] = _eff
+              _retry = False
+              async with self._client.stream(
                 "POST", f"{self.base}/v1/chat/completions",
                 headers={"Authorization": f"Bearer {self._key}", "Content-Type": "application/json"},
-                json={"model": self.model, "messages": msgs, "stream": True,
-                      # ★ 0904：流式默认**不给** usage，得显式要。不认这个字段的家会忽略它。
-                      "stream_options": {"include_usage": True}},
-            ) as r:
+                json=_payload,
+              ) as r:
                 if r.status_code != 200:
                     body = (await r.aread()).decode("utf-8", "replace")[:300]
-                    # ★ 把真实原因说出来。「出错了」这三个字帮不了任何人 ——
-                    #   余额不足、key 写错、模型名打错，处理方式完全不同
-                    yield sse("error", text=upstream_error(r.status_code, body, self.model))
-                    yield sse(DONE, session_id=turn.session_id)
-                    return
+                    # ★ 这一家不认「想多深」那个字段：去掉它重来一次（只一次），
+                    #   并且把「它认哪几档」记下来，下一轮直接按它认的挑 —— 不硬塞、不静默失败。
+                    if _attempt == 1 and self._remember_effort_reject(r.status_code, body):
+                        yield sse(STAGE, text="这家不认「想多深」那一档，这次按它认的来")
+                        _retry = True
+                    else:
+                        # ★ 把真实原因说出来。「出错了」这三个字帮不了任何人 ——
+                        #   余额不足、key 写错、模型名打错，处理方式完全不同
+                        yield sse("error", text=upstream_error(r.status_code, body, self.model))
+                        yield sse(DONE, session_id=turn.session_id)
+                        return
 
-                async for line in r.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    payload = line[6:].strip()
-                    if payload == "[DONE]":
-                        break
-                    try:
-                        d = json.loads(payload)
-                    except Exception:
-                        continue
-                    _u = d.get("usage")
-                    if _u:                       # (0904) 末尾那一帧才带
-                        used["tin"] = int(_u.get("prompt_tokens") or 0)
-                        used["tout"] = int(_u.get("completion_tokens") or 0)
-                        used["tcache_r"] = int((_u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)
-                    delta = (d.get("choices") or [{}])[0].get("delta") or {}
-                    # 推理模型（deepseek-reasoner、o 系列）把思考放在单独的字段里
-                    rc = delta.get("reasoning_content")
-                    if rc:
-                        yield sse(THINK, delta=rc)
-                    txt = delta.get("content")
-                    if txt:
-                        for kind, s in feed(txt):
-                            if kind == "t":
-                                yield sse(THINK, delta=s)
-                                continue
-                            said = True
-                            yield sse(SAY, text=s)
+                if not _retry:
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        payload = line[6:].strip()
+                        if payload == "[DONE]":
+                            break
+                        try:
+                            d = json.loads(payload)
+                        except Exception:
+                            continue
+                        _u = d.get("usage")
+                        if _u:                       # (0904) 末尾那一帧才带
+                            used["tin"] = int(_u.get("prompt_tokens") or 0)
+                            used["tout"] = int(_u.get("completion_tokens") or 0)
+                            used["tcache_r"] = int((_u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)
+                        delta = (d.get("choices") or [{}])[0].get("delta") or {}
+                        # 推理模型（deepseek-reasoner、o 系列）把思考放在单独的字段里
+                        rc = delta.get("reasoning_content")
+                        if rc:
+                            yield sse(THINK, delta=rc)
+                        txt = delta.get("content")
+                        if txt:
+                            for kind, s in feed(txt):
+                                if kind == "t":
+                                    yield sse(THINK, delta=s)
+                                    continue
+                                said = True
+                                yield sse(SAY, text=s)
+              if _retry:
+                  continue
+              break
 
             for kind, s in feed("", flush=True):
                 if kind == "t":
