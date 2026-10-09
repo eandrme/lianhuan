@@ -190,7 +190,7 @@ def upcoming_block(store: Store, limit: int = 6) -> str:
 
 def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
                     exclude_id: int | None = None, include_dialogue: bool = True,
-                    here: str = "text") -> str:
+                    here: str = "text", persona: dict | None = None) -> str:
     """拼出这一轮的 system prompt。
 
     ★ 顺序有讲究：人设在最前（它决定「用什么口吻读下面这些」），
@@ -198,8 +198,12 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
 
     ★ `exclude_id`：刚说的那句要排掉。它已经作为 message 单独交给引擎了，
       再留在「最近说的话」里 = 同一句话出现两遍，模型会以为人在重复自己。
+
+    ★ `persona`：**换助手**的时候由上层传进来（`core/assistants.py` 拼好的那份）。
+      不传＝照旧读全局那份（老行为一字不差）。
     """
-    persona = store.get_setting("persona", {}) or {}
+    if persona is None:
+        persona = store.get_setting("persona", {}) or {}
     # 「日常补一句」（设置 › 你想我怎么样）。界面上写着「每一轮都加在我脑子里」——
     # ★ 0831 自查抓的：它以前根本没进过注入，用户写了等于没写。
     extra = (store.get_setting("persona_extra", "") or "").strip()

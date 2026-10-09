@@ -105,6 +105,11 @@ try{
     secEngine(box);
     secThink(box);
     secMcp(box);
+    /* 助手管理（nest-assistant.js）—— 它不在就跳过，这一节别把整页带塌 */
+    if(typeof window.nestAssistantSection==="function"){
+      try{ window.nestAssistantSection(box); }
+      catch(e){ console.error("nest-assistant section:",e); }
+    }
     secWhisper(box);
     secOffline(box);
     secPush(box);

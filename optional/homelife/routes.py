@@ -30,7 +30,10 @@ def bind(store, say) -> None:
         "CREATE TABLE IF NOT EXISTS diary (id INTEGER PRIMARY KEY AUTOINCREMENT,"
         " who TEXT DEFAULT 'ai', kind TEXT DEFAULT 'diary', mood TEXT, content TEXT NOT NULL, ts REAL)",
         "CREATE TABLE IF NOT EXISTS letters (id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " tags TEXT DEFAULT '', content TEXT NOT NULL, day TEXT, ts REAL)",
+        " tags TEXT DEFAULT '', content TEXT NOT NULL, day TEXT, ts REAL,"
+        # ★ who：这封信是哪位助手写的（空＝通用／主助手）。一个助手一沓信，
+        #   助手管理里就看他这一沓。老库这一列靠下面的 ALTER 补。
+        " who TEXT DEFAULT '')",
         "CREATE TABLE IF NOT EXISTS moments (id INTEGER PRIMARY KEY AUTOINCREMENT,"
         " author TEXT DEFAULT 'me', content TEXT NOT NULL, image TEXT, ts REAL)",
         "CREATE TABLE IF NOT EXISTS moment_comments (id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -57,13 +60,15 @@ def bind(store, say) -> None:
     store.db.commit()
     # 老库迁移：mood_state 原来没有 updated_at 这一列（0831 平移 12 维时加的）——
     # CREATE IF NOT EXISTS 对已有的表不加列，得自己 ALTER
-    try:
-        cols = [r[1] for r in store.db.execute("PRAGMA table_info(mood_state)")]
-        if "updated_at" not in cols:
-            store.db.execute("ALTER TABLE mood_state ADD COLUMN updated_at REAL")
-            store.db.commit()
-    except Exception as e:
-        print("[homelife] mood_state 迁移失败:", e, flush=True)
+    for table, col, ddl in (("mood_state", "updated_at", "ALTER TABLE mood_state ADD COLUMN updated_at REAL"),
+                            ("letters", "who", "ALTER TABLE letters ADD COLUMN who TEXT DEFAULT ''")):
+        try:
+            cols = [r[1] for r in store.db.execute(f"PRAGMA table_info({table})")]
+            if col not in cols:
+                store.db.execute(ddl)
+                store.db.commit()
+        except Exception as e:
+            print(f"[homelife] {table}.{col} 迁移失败:", e, flush=True)
 
 
 def _d(ts):  return datetime.fromtimestamp(ts or 0).strftime("%Y-%m-%d")
@@ -124,11 +129,42 @@ async def api_diary_add(req: Request):
 
 # ── 信 ────────────────────────────────────────────────────
 @router.get("/api/letters")
-def api_letters():
+def api_letters(who: str = ""):
+    """信箱。`?who=<助手 id>` 只看那位写的那一沓；不带＝全部。
+
+    ★ 一带 who 就**只回那一沓**（不把 who 为空的那堆也倒进来）—— 助手管理里要的是
+      「他写的信」，混进别人写的就不叫分类了。"""
+    sql, args = "SELECT * FROM letters", ()
+    if who.strip():
+        sql += " WHERE COALESCE(who,'')=?"
+        args = (who.strip(),)
     rows = [{"id": r["id"], "tags": r["tags"] or "", "content": r["content"],
-             "day": r["day"] or _d(r["ts"]), "src": "local"}
-            for r in _store.db.execute("SELECT * FROM letters ORDER BY id DESC LIMIT 200")]
-    return JSONResponse({"letters": rows}) if False else JSONResponse({"items": rows, "letters": rows})
+             "day": r["day"] or _d(r["ts"]), "who": r["who"] or "", "src": "local"}
+            for r in _store.db.execute(sql + " ORDER BY id DESC LIMIT 200", args)]
+    return JSONResponse({"items": rows, "letters": rows})
+
+
+@router.post("/api/letters")
+async def api_letter_add(req: Request):
+    """自己写一封（不经过模型）。助手管理里「替他写一封」和「我写一封」都走这儿。"""
+    b = await req.json()
+    content = (b.get("content") or "").strip()
+    if not content:
+        return JSONResponse({"ok": False, "err": "空的信寄不出去"}, status_code=400)
+    cur = _store.db.execute(
+        "INSERT INTO letters(tags,content,day,ts,who) VALUES(?,?,?,?,?)",
+        (str(b.get("tags") or "")[:200], content[:8000],
+         str(b.get("day") or "") or _d(time.time()), time.time(),
+         str(b.get("who") or "")[:40]))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "id": cur.lastrowid})
+
+
+@router.post("/api/letters/{lid}/del")
+def api_letter_del(lid: int):
+    _store.db.execute("DELETE FROM letters WHERE id=?", (lid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
 
 
 # ── 空间（动态 ＋ 楼中回复，AI 会接话）──────────────────────

@@ -111,6 +111,9 @@ PORTABLE_SETTINGS = (
     "distill", "think", "persona_extra",
     # ★ 每扇对话窗口的两枚开关（主动消息 / 离线模式）—— 换台机器还得是这个脾气。
     "nest_window_flags",
+    # ★ 助手那一层（名字 / 小字 / 头像 / 提示词 / 自己的 MCP / 挂了哪些窗口）—— 那是
+    #   「家」的一部分，搬家当然要跟着走；不然搬完家，人设和工具许可全回出厂。
+    "assistants",
 )
 
 

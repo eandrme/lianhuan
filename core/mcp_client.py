@@ -525,9 +525,15 @@ def _fn_name(server: str, tool: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", f"{server}__{tool}")[:64]
 
 
-def openai_tools() -> list:
+def openai_tools(only=None) -> list:
+    """给模型的 MCP 工具。`only` 给一组 server 名字 ＝ 只要这几个的（助手那一层用）。
+
+    `only=None` ＝ 不限（老行为）；`only=[]` ＝ 一个都不给。"""
+    want = None if only is None else {str(x) for x in only}
     out = []
     for n, s in _servers.items():
+        if want is not None and n not in want:
+            continue
         if not s.tools:
             continue
         for t in s.tools:

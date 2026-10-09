@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 
 from . import windows as _winflags
 from . import datadir as _datadir
+from . import assistants as _asst
 
 router = APIRouter()
 _store = None          # server 启动时注入
@@ -546,8 +547,11 @@ def _nest_sid(r) -> str:
 
 
 @router.get("/api/nest/threads")
-def nest_threads(limit: int = 80):
-    """所有对话窗口（按 session_id 分组）。空 session_id = 老数据 = 主窗口。"""
+def nest_threads(limit: int = 80, with_assistant: int = 0):
+    """所有对话窗口（按 session_id 分组）。空 session_id = 老数据 = 主窗口。
+
+    `with_assistant=1` 时每个窗口多带一个 `assistant`（挂在哪位助手下面）——
+    助手管理那一页要按助手给窗口分组，别让前端再猜一遍。"""
     lim = max(1, min(int(limit or 80), 300))
     rows = list(_store.db.execute("SELECT * FROM turns ORDER BY id DESC LIMIT 4000"))
     seen, out = {}, []
@@ -564,7 +568,74 @@ def nest_threads(limit: int = 80):
     out.sort(key=lambda x: -(x["t1"] or 0))
     for it in out:
         it["title"] = it["title"] or "（空窗口）"
+        if with_assistant:
+            a = _asst.assistant_of(_store, it["sid"])
+            it["assistant"] = a["id"] if a else ""
     return JSONResponse({"items": out[:lim]})
+
+
+# ══════════ 助手管理：一位助手下面挂几扇窗 ══════════
+# ★ 语义和数据都在 core/assistants.py 一处定义（含「没配过助手＝老行为」那条兼容线），
+#   这里只管读和写。
+@router.get("/api/assistants")
+def assistants_list():
+    items = _asst.all_items(_store)
+    return JSONResponse({"ok": True, "items": items, "enabled": bool(items),
+                         "default_id": _asst.default_id(_store)})
+
+
+@router.post("/api/assistants/save")
+async def assistants_save(req: Request):
+    try:
+        b = await req.json()
+    except Exception:
+        return JSONResponse({"ok": False, "err": "读不懂这段 JSON"}, status_code=400)
+    aid = str(b.get("id") or "").strip()
+    fields = {}
+    for k in ("name", "sign", "avatar", "prompt"):
+        if k in b:
+            fields[k] = b[k]
+    if "mcp" in b:
+        # null / "all" ＝ 不限（所有连上的 MCP 都给）；数组 ＝ 只给这几个
+        v = b.get("mcp")
+        fields["mcp"] = None if v in (None, "all", "全部") else [str(x) for x in (v or [])]
+    if aid:
+        out = _asst.save(_store, aid, **fields)
+        if out is None:
+            return JSONResponse({"ok": False, "err": "没有这位助手"}, status_code=404)
+        return JSONResponse({"ok": True, "item": out})
+    item = _asst.create(_store, **fields)
+    return JSONResponse({"ok": True, "item": item})
+
+
+@router.post("/api/assistants/del")
+async def assistants_del(req: Request):
+    b = await req.json()
+    ok = _asst.remove(_store, str(b.get("id") or ""))
+    return JSONResponse({"ok": ok, "items": _asst.all_items(_store)},
+                        status_code=(200 if ok else 404))
+
+
+@router.post("/api/assistants/window")
+async def assistants_window(req: Request):
+    """把一个窗口挂到某位助手名下；`id` 空＝摘下来（回到第一位助手名下）。"""
+    b = await req.json()
+    sid = _asst.norm_sid(b.get("sid"))
+    aid = str(b.get("id") or "").strip()
+    if not aid:
+        _asst.detach_window(_store, sid)
+    elif not _asst.attach_window(_store, sid, aid):
+        return JSONResponse({"ok": False, "err": "没有这位助手"}, status_code=404)
+    return JSONResponse({"ok": True, "items": _asst.all_items(_store)})
+
+
+@router.get("/api/assistants/who")
+def assistants_who(sid: str = "main"):
+    """这个窗口现在挂在哪位助手下面（聊天顶栏那颗身份牌要用）。"""
+    a = _asst.assistant_of(_store, sid)
+    if a is None:
+        return JSONResponse({"ok": True, "enabled": False, "assistant": None})
+    return JSONResponse({"ok": True, "enabled": True, "assistant": a})
 
 
 @router.get("/api/nest/thread")

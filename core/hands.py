@@ -134,6 +134,54 @@ def all_tools() -> list:
     return TOOLS + mcp_client.openai_tools()
 
 
+def tools_for(all_of: list, allow) -> list:
+    """按助手的许可过滤工具表。`allow=None` ＝ 不限（老行为一字不差）。
+
+    ★ 只筛 **MCP 那部分**：内置的手（写记忆 / 记心情 / 写信…）是这台机器自己的功能，
+      跟「这位助手能连哪几个 MCP server」是两件事，别一起收走。
+      认一个 MCP 工具名靠它前面的 `server__` 前缀（`mcp_client` 就是这么拼的）。
+    """
+    if allow is None:
+        return all_of
+    from . import mcp_client
+    keep = {t["function"]["name"] for t in mcp_client.openai_tools(only=allow)}
+
+    def _is_mcp(n: str) -> bool:
+        # ★ 靠**命名**认，不靠「它现在还在不在 openai_tools() 里」——
+        #   后者会在「连接断了 / 表是刚筛过的」这些时候漏判，工具就漏出去了。
+        #   MCP 的名字永远是 `server__tool`（mcp_client 拼的），内置的手一个下划线都不带双。
+        return "__" in str(n)
+
+    return [t for t in all_of
+            if not _is_mcp(t["function"]["name"]) or t["function"]["name"] in keep]
+
+
+def exec_guard(allow, assistant_id=None):
+    """包一层执行。两件事：
+
+    · **许可之外**的 MCP 工具当场拒掉 —— 表是「发出去时」的样子，而这一轮可能跑着
+      跑着用户把 MCP 关了，模型也可能自己编一个名字出来。凡是 MCP 的工具名
+      （带 `server__` 前缀）而这位助手没开那个 server，就不给动。
+    · `write_letter` 时把**当前助手**注进去（`_who`）—— 信才分得清是谁写的。
+      这件事不能让模型自己填：它填错了，信就跑别人那沓去了。
+    """
+    if allow is None and not assistant_id:
+        return execute
+
+    async def _run(name: str, args: dict):
+        if allow is not None and "__" in str(name):
+            server = str(name).split("__", 1)[0]
+            if server not in {str(x) for x in allow}:
+                return {"ok": False, "err": f"「{server}」这个 MCP 没给这位助手开 —— "
+                                            f"要用就去 设置 › 助手管理 里手动勾"}
+        if assistant_id and name == "write_letter":
+            args = dict(args or {})
+            args["_who"] = assistant_id
+        return await execute(name, args)
+
+    return _run
+
+
 async def execute(name: str, args: dict) -> dict:
     from . import mcp_client
     r = await mcp_client.execute(name, args)     # MCP 的先认领
@@ -344,9 +392,12 @@ async def execute(name: str, args: dict) -> dict:
     if name == "write_letter":
         import time as _tm
         from datetime import date as _dd
-        _store.db.execute("INSERT INTO letters(tags,content,day,ts) VALUES(?,?,?,?)",
+        # ★ `_who`：这封信是哪位助手写的。**不是模型自己填的** —— 由 exec_guard
+        #   按当前窗口挂的那位助手注入（模型瞎填也盖掉）。空＝通用／主助手。
+        _store.db.execute("INSERT INTO letters(tags,content,day,ts,who) VALUES(?,?,?,?,?)",
                           (str(args.get("tags") or ""), str(args.get("content") or "")[:8000],
-                           _dd.today().isoformat(), _tm.time()))
+                           _dd.today().isoformat(), _tm.time(),
+                           str(args.get("_who") or "")[:40]))
         _store.db.commit()
         return {"ok": True, "note": "放进信箱了"}
     if name == "add_calendar":

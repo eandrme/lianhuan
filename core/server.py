@@ -36,6 +36,8 @@ from .store.base import Memory as StoredMemory, Turn as StoredTurn
 from .store.sqlite import SqliteStore
 from . import think as _think
 from . import datadir as _datadir
+from . import assistants as _asst
+from . import windows as _winflags
 
 HERE = Path(__file__).parent
 WEB = HERE / "web"
@@ -380,7 +382,15 @@ async def chat(req: Request):
     # ★ 备料时把刚落的这句排掉：它已经作为 message 单独给引擎了，
     #   留在上下文里等于同一句说两遍。落库必须在前（不能丢话），所以只能在这儿排。
     # ★ include_dialogue=False：原话只走下面的 `history`，进一次就够（见 recall 里那段注释）
-    system = build_injection(store, msg, exclude_id=uid, include_dialogue=False, here=channel)
+    # ── 助手那一层：这个窗口挂在哪位助手下面 ──────────────────
+    # ★ 没配过助手（老库 / 刚装好）→ assistant 是 None，下面三处一个字都不改。
+    #   配过之后：人设换成他这份、系统提示词换成他这份、工具按他的许可过滤。
+    assistant = _asst.assistant_of(store, session_id)
+    system = build_injection(store, msg, exclude_id=uid, include_dialogue=False, here=channel,
+                             persona=_asst.persona_for(store, assistant))
+    _sign = _asst.sign_line(assistant)
+    if _sign:
+        system += "\n\n" + _sign
     # ★ 0831（GPT 三轮 P0-03）：真实模型出现过「没调用工具、库里没变化，
     #   却用完成语气回话」。产品这边把真实状态做可见了（工具脚注、失败明说），
     #   模型这边就靠这条硬规矩。
@@ -434,6 +444,13 @@ async def chat(req: Request):
     _think_nudge = _think.nudge(_think_mode)
     if _think_nudge:
         system = system + "\n\n" + _think_nudge
+    # ── MCP：这位助手能用的那几个（第一位的 None＝不限，老行为一字不差）──
+    _allow = _asst.mcp_allow(store, session_id)
+    _eng = pick_engine()
+    if getattr(_eng, "tools", None) is not None:
+        _eng.tools = _hands.tools_for(_eng.tools, _allow)
+        _eng.exec_tool = _hands.exec_guard(_allow, (assistant or {}).get("id"))
+
     turn = EngineTurn(message=msg_for_engine, system=system, history=history,
                       session_id=session_id, images=images, think=_think_mode)
 
@@ -505,7 +522,9 @@ async def chat(req: Request):
                 channel=channel, call_id=call_id,
                 session_id=session_id, ts=time.time()))
 
-    job.task = asyncio.create_task(jobs.run(job, pick_engine(), turn, on_done=on_done))
+    # ★ 用**刚才那一个**引擎实例（工具已经按这位助手过滤过了）——
+    #   再 pick_engine() 一次会拿到一份没过滤的，助手白设。
+    job.task = asyncio.create_task(jobs.run(job, _eng, turn, on_done=on_done))
     _maybe_distill()
     return StreamingResponse(jobs.watch(job), media_type="text/event-stream", headers=SSE_HEADERS)
 
@@ -1546,7 +1565,27 @@ def _proactive_add_turn(role: str, content: str, session_id=None) -> None:
                               session_id=(session_id or None), ts=time.time()))
 
 
-_proactive.bind(store, engine_turn=EngineTurn, pick_engine=pick_engine,
+def _pick_engine_for_active():
+    """主动消息 / 离线自由时段走的那条取引擎的路。
+
+    ★ 这两条路也会用手（写日记、记心情、翻记忆…）。不筛的话，它们就**绕过了**
+      「这位助手的 MCP 白名单」—— 那是静默越权：界面上没给他开，半夜自己用上了。
+      它们说话的对象就是「现在这扇窗」，所以按 `active_sid` 认助手，跟 /chat 一个口径。
+    """
+    eng = pick_engine()
+    try:
+        sid = _winflags.active_sid(store)
+        allow = _asst.mcp_allow(store, sid)
+        asst = _asst.assistant_of(store, sid)
+        if getattr(eng, "tools", None) is not None:
+            eng.tools = _hands.tools_for(eng.tools, allow)
+        eng.exec_tool = _hands.exec_guard(allow, (asst or {}).get("id"))
+    except Exception as e:                                       # noqa: BLE001
+        print("[assistant] 主动/离线那条筛工具失败（这一拍按不限走）:", e, flush=True)
+    return eng
+
+
+_proactive.bind(store, engine_turn=EngineTurn, pick_engine=_pick_engine_for_active,
                 add_turn=_proactive_add_turn, mood_inject=_home_mood_inject,
                 send_push=_push.send_push, activity=jobs.activity)
 
