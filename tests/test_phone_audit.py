@@ -127,6 +127,10 @@ class TestThePhoneShell(unittest.TestCase):
             self.assertIn(f'"{k}"', notes)
         for api in ("/api/moments", "/api/timeline", "/api/chat/starred"):
             self.assertIn(api, notes)
+        # 记事里每一样都要能收拾（用户定的那条），空间 / 时间线也不例外
+        for api in ("/api/moments/", "/api/timeline/"):
+            self.assertIn(api + '"+x.id+"/edit', notes)
+            self.assertIn(api + '"+x.id+"/del', notes)
 
     def test_messages_can_actually_be_starred(self):
         """收藏得有入口，而且收藏完要真写进库（不是只在界面上点个亮）。"""

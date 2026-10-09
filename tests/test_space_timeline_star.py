@@ -60,6 +60,14 @@ class TestSpace(_HomeCase):
         self.assertEqual("回一句", one["comments"][0]["content"])
         self.assertEqual("me", one["comments"][0]["author"])
 
+    def test_edit_a_moment(self):
+        mid = self.c.post("/api/moments/mine", json={"content": "写错了"}).json()["id"]
+        self.assertTrue(self.c.post(f"/api/moments/{mid}/edit",
+                                    json={"content": "写对了"}).json()["ok"])
+        self.assertEqual("写对了", self.c.get("/api/moments").json()["items"][0]["content"])
+        self.assertEqual(400, self.c.post(f"/api/moments/{mid}/edit",
+                                          json={"content": ""}).status_code)
+
     def test_delete_takes_the_comments_with_it(self):
         mid = self.c.post("/api/moments/mine", json={"content": "要删的"}).json()["id"]
         self.c.post(f"/api/moments/{mid}/comment", json={"content": "楼里的"})
@@ -79,6 +87,24 @@ class TestSpace(_HomeCase):
 
 
 class TestTimeline(_HomeCase):
+    def test_edit_and_delete_a_note(self):
+        """★ 时间线是这个家怎么起来的流水，记错了得能划掉。"""
+        self.c.post("/api/timeline", json={"kind": "装修", "content": "写错了"})
+        tid = self.c.get("/api/timeline").json()["items"][0]["id"]
+        self.assertTrue(self.c.post(f"/api/timeline/{tid}/edit",
+                                    json={"content": "写对了", "kind": "note"}).json()["ok"])
+        it = self.c.get("/api/timeline").json()["items"][0]
+        self.assertEqual("写对了", it["content"])
+        self.assertEqual("note", it["kind"], "换道也要能换")
+        self.assertTrue(self.c.post(f"/api/timeline/{tid}/del").json()["ok"])
+        self.assertEqual([], self.c.get("/api/timeline").json()["items"])
+
+    def test_edit_needs_something_to_say(self):
+        self.c.post("/api/timeline", json={"kind": "note", "content": "有内容"})
+        tid = self.c.get("/api/timeline").json()["items"][0]["id"]
+        self.assertEqual(400, self.c.post(f"/api/timeline/{tid}/edit",
+                                         json={"content": "  "}).status_code)
+
     def test_write_a_note_and_read_it_back(self):
         self.assertTrue(self.c.post("/api/timeline",
                                     json={"kind": "装修", "content": "换了阳台的灯"}).json()["ok"])

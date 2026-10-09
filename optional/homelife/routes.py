@@ -239,6 +239,19 @@ async def api_moment_comment(mid: int, req: Request):
     return JSONResponse({"ok": True})
 
 
+@router.post("/api/moments/{mid}/edit")
+async def api_moment_edit(mid: int, req: Request):
+    """改一条动态的正文（配图不动 —— 换图走「重贴一条」）。"""
+    b = await req.json()
+    content = (b.get("content") or "").strip()
+    if not content:
+        return JSONResponse({"ok": False, "err": "正文不能空"}, status_code=400)
+    cur = _store.db.execute("UPDATE moments SET content=? WHERE id=?",
+                            (content[:2000], mid))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "gone": cur.rowcount})
+
+
 @router.post("/api/moments/{mid}/del")
 def api_moment_del(mid: int):
     """删一条动态（连同它楼里的评论）。自己的空间，删就是删。"""
@@ -280,6 +293,32 @@ async def api_timeline_add(req: Request):
                        json.dumps(b.get("meta") or {}, ensure_ascii=False), time.time()))
     _store.db.commit()
     return JSONResponse({"ok": True})
+
+
+@router.post("/api/timeline/{tid}/edit")
+async def api_timeline_edit(tid: int, req: Request):
+    """改时间线里那一条（写错了、或想换条道）。"""
+    b = await req.json()
+    content = (b.get("content") or "").strip()
+    if not content:
+        return JSONResponse({"ok": False, "err": "不能空着"}, status_code=400)
+    if b.get("kind"):
+        _store.db.execute("UPDATE timeline_events SET content=?, kind=? WHERE id=?",
+                          (content[:500], str(b["kind"])[:20], tid))
+    else:
+        _store.db.execute("UPDATE timeline_events SET content=? WHERE id=?",
+                          (content[:500], tid))
+    _store.db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/api/timeline/{tid}/del")
+def api_timeline_del(tid: int):
+    """删一条。★ 这是一份「这个家怎么起来的」的流水，记错了得能划掉 ——
+    不然错的那条会一直躺在时间线上，越攒越像真的。"""
+    cur = _store.db.execute("DELETE FROM timeline_events WHERE id=?", (tid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "gone": cur.rowcount})
 
 
 # ── 心情（AI 自己涨落：随时间衰减回基线 + 事件记账 + 回复末尾自己标）────

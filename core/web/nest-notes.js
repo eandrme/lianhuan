@@ -900,13 +900,29 @@ try{
       head.append(el("span",(mineOf(x)?"tag ai":"tag me"),mineOf(x)?"他":"你"));
       head.append(el("span",null,(x.day||"")+" "+(x.t||"")));
       const ops=el("div","nt-ops");
+      const be=el("button",null,"改");
+      be.onclick=()=>{
+        sheet("改这条",(bx,close)=>{
+          const t=el("textarea"); t.value=x.content||"";
+          bx.append(t);
+          const row=el("div","nt-btns");
+          const ok=el("button","pri","存下"), no=el("button",null,"取消");
+          row.append(ok,no); bx.append(row);
+          no.onclick=close;
+          ok.onclick=async()=>{
+            const v=t.value.trim(); if(!v){say("正文不能空");return;}
+            const r=await jpost("/api/moments/"+x.id+"/edit",{content:v});
+            if(r.ok){ say("改好了"); close(); load(); } else say("没改成："+(r.err||"?"));
+          };
+        });
+      };
       const bd=el("button","danger","删");
       bd.onclick=async()=>{
         if(!confirm("删掉这条？楼里的评论也一起没。"))return;
         const r=await jpost("/api/moments/"+x.id+"/del",{});
         if(r.ok){say("删了");load();} else say("删不掉："+(r.err||"?"));
       };
-      ops.append(bd); head.append(ops);
+      ops.append(be,bd); head.append(ops);
       c.append(head);
       if(x.content)c.append(el("div","nt-txt",x.content));
       if(x.image){
@@ -1068,6 +1084,39 @@ try{
         c.append(el("div","kd",x.name));
         const ago=el("div","dt",x.days===0?"今天":(x.days<0?(-x.days+" 天前"):(x.days+" 天后")));
         c.append(ago);
+        const ops=el("div","nt-ops");
+        const be=el("button",null,"改");
+        be.onclick=()=>{
+          sheet("改这一条",(bx,close)=>{
+            const t=el("textarea"); t.value=x.text;
+            bx.append(t);
+            bx.append(el("div","lb","归到哪一道"));
+            const sel=el("select");
+            [["note","随手记"],["装修","装修"],["一起做的事","一起做的事"],
+             ["travel","我一个人"],["对方的事","你的事"]].forEach(([v,n])=>{
+              const o=el("option",null,n); o.value=v;
+              if(v===x.kind)o.selected=true;
+              sel.append(o);
+            });
+            bx.append(sel);
+            const row=el("div","nt-btns");
+            const ok=el("button","pri","存下"), no=el("button",null,"取消");
+            row.append(ok,no); bx.append(row);
+            no.onclick=close;
+            ok.onclick=async()=>{
+              const v=t.value.trim(); if(!v){say("不能空着");return;}
+              const r=await jpost("/api/timeline/"+x.id+"/edit",{content:v,kind:sel.value});
+              if(r.ok){ say("改好了"); close(); load(); } else say("没改成："+(r.err||"?"));
+            };
+          });
+        };
+        const bd=el("button","danger","删");
+        bd.onclick=async()=>{
+          if(!confirm("把这一条从时间线上划掉？"))return;
+          const r=await jpost("/api/timeline/"+x.id+"/del",{});
+          if(r.ok){ say("划掉了"); load(); } else say("删不掉："+(r.err||"?"));
+        };
+        ops.append(be,bd); c.append(ops);
         list.append(c);
       });
     }
@@ -1078,7 +1127,8 @@ try{
       catch(e){ list.innerHTML=""; failed(list,e); return; }
       ALL=(j.items||[]).map(x=>{
         const m=(x.meta&&typeof x.meta==="object")?x.meta:{};
-        return {day:x.date||"",time:x.time||"",lane:TL_LANE[x.kind]||"随手记",
+        return {id:x.id,kind:x.kind||"",day:x.date||"",time:x.time||"",
+                lane:TL_LANE[x.kind]||"随手记",
                 name:TL_NAME[x.kind]||x.kind||"记事",text:x.content||"",
                 ctx:[m.weather,m.sky,m.where,m.project].filter(Boolean).join(" · "),
                 days:x.days};
