@@ -89,6 +89,55 @@ def set_enabled(name: str, on: bool) -> bool:
     return True
 
 
+def _mask(v: str) -> str:
+    """请求头给人看的那一点 —— **不回显明文**（里面往往就是 Bearer token）。"""
+    v = str(v or "")
+    if not v:
+        return ""
+    return ("…" + v[-4:]) if len(v) > 8 else "…"
+
+
+def save_http(name: str, url: str, kind: str = "http",
+              headers: dict | None = None) -> None:
+    """登记 / 更新一条 HTTP(S) 的 MCP（Streamable HTTP 或老的 HTTP+SSE）。
+
+    ★ 请求头的合并规矩（跟「引擎那把 key」同一条）：**值传空串＝沿用已经存着的那把**。
+      前端不回显密文，编辑时那一格本来就是空的 —— 拿空串去覆盖，等于把人家的
+      Bearer token 抹掉，而且他看不出来。传了名字才会覆盖/新增；这次没带的名字＝删掉。
+    """
+    f = _cfg_file()
+    try:
+        cfg = json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        cfg = {}
+    servers = cfg.setdefault("mcpServers", {})
+    old = servers.get(name) or {}
+    old_h = dict(old.get("headers") or {}) if isinstance(old.get("headers"), dict) else {}
+    h: dict = {}
+    for k, v in (headers or {}).items():
+        k = str(k or "").strip()
+        if not k:
+            continue
+        v = str(v or "").strip()
+        h[k] = v if v else str(old_h.get(k) or "")
+    spec: dict = {"url": (url or "").strip()}
+    k = (kind or "http").strip().lower()
+    if k in ("sse", "http+sse", "eventsource"):
+        spec["type"] = "sse"
+    else:
+        spec["type"] = "http"          # ★ 明说，别让它再靠地址猜
+    if h:
+        spec["headers"] = h
+    if "enabled" in old:                # 拨过的开关别被一次编辑重置
+        spec["enabled"] = old["enabled"]
+    servers[name] = spec
+    _write_cfg(cfg)
+
+
+def spec_of(name: str) -> dict:
+    return dict(load_cfg().get(name) or {})
+
+
 def drop_server(name: str) -> None:
     f = _cfg_file()
     try:
@@ -431,17 +480,44 @@ def status() -> list:
     out = []
     for n, spec in cfg.items():
         s = _servers.get(n)
+        hh = spec.get("headers") if isinstance(spec.get("headers"), dict) else {}
+        hh = hh or {}
         out.append({
             "name": n,
             "type": (spec.get("type") or ("http" if spec.get("url") else "stdio")),
             "url": spec.get("url") or "",
             "command": spec.get("command") or "",
             "enabled": enabled_of(spec),
+            # ★ 只有名字和前四位尾巴 —— 请求头里往往就是 Bearer token，界面不回显明文
+            "header_names": sorted(hh.keys()),
+            "headers_masked": {k: _mask(v) for k, v in hh.items()},
             "tools": [t.get("name") for t in (s.tools if s else [])],
             "ok": bool(s and s.tools),
             "err": (s.err if s else "") or "",
         })
     return out
+
+
+async def probe(spec: dict, timeout: float = 75.0) -> dict:
+    """拿一份**还没保存**的配置试连一次：不写文件、不进 _servers、不留连接。
+
+    ★ 跟「引擎那把 key 认一下」同一个道理：填好就想知道通不通，不该逼人先存一遍
+      （存了才发现连不上，还得回来改）。连上了就把它认到几个工具一起报出来。
+    """
+    s = _make("probe", spec)
+    try:
+        await asyncio.wait_for(s.start(), timeout=timeout)
+    except asyncio.TimeoutError:
+        await s.close()
+        return {"ok": False, "err": f"连了 {int(timeout)} 秒没连上（超时）", "tools": []}
+    except Exception as e:                                     # noqa: BLE001
+        await s.close()
+        return {"ok": False, "err": f"{type(e).__name__}: {e}"[:200], "tools": []}
+    try:
+        return {"ok": not s.err, "err": s.err or "",
+                "tools": [t.get("name") for t in s.tools]}
+    finally:
+        await s.close()
 
 
 def _fn_name(server: str, tool: str) -> str:

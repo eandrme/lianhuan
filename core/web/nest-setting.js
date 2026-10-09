@@ -71,6 +71,29 @@ try{
 .set-list{max-height:210px;overflow:auto;margin-top:8px}
 .set-kv{font-size:12.5px;color:var(--dim);line-height:1.9}
 .set-kv b{color:var(--fg);font-weight:600}
+/* MCP 总管理 */
+.mcp-list{max-height:none}
+.mcp-row{border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px;
+  margin-bottom:8px;background:var(--panel2)}
+.mcp-hd{display:flex;align-items:center;gap:7px}
+.mcp-hd b{font-size:14px}
+.mcp-hd .sp{flex:1}
+.mcp-tag{font-size:11px;color:var(--dim2);border:1px solid var(--line);border-radius:6px;
+  padding:1px 6px;white-space:nowrap}
+.mcp-sw{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;
+  color:var(--dim2);white-space:nowrap}
+.mcp-sw.on{color:var(--ok);border-color:var(--ok)}
+.mcp-url{font:12px/1.5 var(--mono);color:var(--dim);word-break:break-all;margin:5px 0 3px}
+.mcp-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11.5px;color:var(--dim2)}
+.mcp-st.ok{color:var(--ok)}
+.mcp-st.bad{color:var(--err)}
+.mcp-st.dim{color:var(--dim2)}
+.mcp-h{word-break:break-all}
+.mcp-hds{margin-top:4px}
+.mcp-hdrow{display:flex;gap:6px;margin-top:6px;align-items:center}
+.mcp-hdrow .set-in{min-width:0}
+.mcp-hdrow button{flex:0 0 auto;color:var(--err);border:1px solid var(--line);
+  border-radius:7px;padding:6px 10px}
 `;
   document.head.append(css);
 
@@ -81,9 +104,267 @@ try{
     box.innerHTML="";
     secEngine(box);
     secThink(box);
+    secMcp(box);
     secWhisper(box);
     secOffline(box);
     secPush(box);
+  };
+
+  /* ═══ MCP 工具包（总管理）═══
+     三种连接方式（后端 core/mcp_client.py 都实现了，一个字没新增）：
+       · Streamable HTTP —— 一个端点，POST JSON-RPC，回包可能是 JSON 也可能是 SSE 流
+       · SSE（老的 HTTP+SSE）—— GET 一条流，第一个事件给出 message 端点（就是「短链」）
+       · 本机命令（stdio）—— 起子进程。★ 只能在**本机页面**加：它是起进程，
+         跟 /api/mcp/add 同一条线（见 gate.LOCAL_ONLY）。
+     请求头随便加：Bearer token、自定义 UA……存进 data/mcp.json（0600），
+     界面只回显**名字和末四位** —— 明文不回读。 */
+  async function secMcp(box){
+    const sec=el("div","set-sec"); sec.id="mcp-sec";
+    sec.append(el("h4",null,"MCP 工具包"));
+    sec.append(el("div","sub","给它的手。手机上加 MCP 用 Streamable HTTP 或 SSE 那种地址；"
+      +"「本机命令」会在这台机器上起进程，只能在本机页面加。"
+      +"请求头里放 token 也没关系 —— 只写进 data/mcp.json（0600），界面只回名字和末四位。"));
+    const btns=el("div","set-btns");
+    const bAdd=el("button","pri","＋ 加一个");
+    btns.append(bAdd);
+    const msg=el("div","set-msg");
+    const list=el("div","set-list mcp-list");
+    sec.append(btns,msg,list);
+    box.append(sec);
+
+    let LOCAL=false, SERVERS=[];
+    const KIND_NAME={http:"Streamable HTTP",sse:"SSE",stdio:"本机命令"};
+
+    async function load(){
+      list.innerHTML=""; list.append(el("div","set-msg","读着…"));
+      let j;
+      try{ j=await jget("/api/mcp"); }
+      catch(e){
+        list.innerHTML="";
+        msg.className="set-msg err";
+        msg.textContent="读不到（"+e.message+"）—— 服务端太旧就得先重启一下";
+        return;
+      }
+      SERVERS=Array.isArray(j)?j:(j.servers||[]);
+      LOCAL=!!j.local;
+      draw();
+    }
+
+    function draw(){
+      list.innerHTML="";
+      if(!SERVERS.length){
+        list.append(el("div","set-msg","还没登记过。点「＋ 加一个」，把地址粘进来就行。"));
+        return;
+      }
+      SERVERS.forEach(s=>{
+        const row=el("div","mcp-row");
+        const head=el("div","mcp-hd");
+        head.append(el("b",null,s.name));
+        head.append(el("span","mcp-tag",KIND_NAME[s.type]||s.type));
+        head.append(el("span","sp"));
+        const sw=el("button",(s.enabled?"mcp-sw on":"mcp-sw"),s.enabled?"开":"关");
+        sw.title=s.enabled?"正拿在它手里（点一下关掉，工具一起收走）":"关着（点一下连上）";
+        sw.onclick=async()=>{
+          const r=await jpost("/api/mcp/toggle",{name:s.name,enabled:!s.enabled});
+          if(r.ok){ say(s.name+(s.enabled?" 关了":" 开了")); load(); }
+          else{ msg.className="set-msg err"; msg.textContent="没拨成："+(r.err||"?"); }
+        };
+        head.append(sw);
+        row.append(head);
+        row.append(el("div","mcp-url",s.url||s.command||""));
+
+        const meta=el("div","mcp-meta");
+        if(s.header_names&&s.header_names.length){
+          meta.append(el("span","mcp-h",
+            "请求头："+s.header_names.map(n=>n+(s.headers_masked&&s.headers_masked[n]
+              ?" "+(s.headers_masked[n]):"")).join(" · ")));
+        }
+        if(!s.enabled) meta.append(el("span","mcp-st dim","没连（关着）"));
+        else if(s.ok) meta.append(el("span","mcp-st ok",(s.tools||[]).length+" 个工具："
+          +(s.tools||[]).slice(0,4).join("、")+((s.tools||[]).length>4?"…":"")));
+        else meta.append(el("span","mcp-st bad","没连上"+(s.err?("："+s.err):"")));
+        row.append(meta);
+
+        const ops=el("div","set-btns");
+        const bTest=el("button",null,"测一下");
+        bTest.onclick=async()=>{
+          bTest.disabled=true; bTest.textContent="连…";
+          const r=await jpost("/api/mcp/probe",{kind:s.type,url:s.url,command:s.command});
+          bTest.disabled=false; bTest.textContent="测一下";
+          if(r.ok) say(s.name+"：连上了，"+(r.tools||[]).length+" 个工具");
+          else{
+            msg.className="set-msg err";
+            msg.textContent=s.name+" 没连上："+(r.err||r.error||"?");
+          }
+        };
+        const bEdit=el("button",null,"改");
+        bEdit.onclick=()=>edit(s);
+        const bDel=el("button",null,"删");
+        bDel.onclick=async()=>{
+          if(!confirm("删掉「"+s.name+"」？它会立刻断掉，工具也从它手里收走。"))return;
+          const r=await jpost("/api/mcp/save",{name:s.name,kind:s.type,remove:true});
+          if(r.ok){ say("删了"); load(); }
+          else{
+            if(r.status===403){ msg.className="set-msg err"; msg.textContent=r.err; return; }
+            msg.className="set-msg err"; msg.textContent="删不掉："+(r.err||"?");
+          }
+        };
+        ops.append(bTest,bEdit,bDel);
+        row.append(ops);
+        list.append(row);
+      });
+    }
+
+    bAdd.onclick=()=>edit(null);
+    load();
+
+    /* ── 加 / 改：一张表单 ── */
+    function edit(s){
+      const isNew=!s;
+      const cur=s||{type:"http",url:"",command:"",name:"",header_names:[]};
+      let kind=cur.type||"http";
+      sheetEl(isNew?"加一个 MCP":"改「"+cur.name+"」", (bx,close)=>{
+        const nameI=el("input","set-in full"); nameI.type="text";
+        nameI.placeholder="名字：字母数字 _-（会变成工具名前缀）"; nameI.value=cur.name||"";
+        if(!isNew) nameI.value=cur.name||"";
+        const kindBox=el("div","set-chips");
+        const urlI=el("input","set-in full"); urlI.type="text";
+        const cmdI=el("input","set-in full"); cmdI.type="text";
+        cmdI.placeholder="本机命令，比如 npx -y @modelcontextprotocol/server-filesystem /tmp";
+        const hint=el("div","set-msg");
+        const hdWrap=el("div");
+        const hdHead=el("div","set-msg","自定义请求头（Bearer token 那种。值留空＝不改已经存着的那把）");
+        const hdList=el("div","mcp-hds");
+        const bHdAdd=el("button",null,"＋ 加一行");
+        hdWrap.append(hdHead,hdList,bHdAdd);
+        const status=el("div","set-msg");
+        const row=el("div","set-btns");
+        const bProbe=el("button",null,"测试连接");
+        const bSave=el("button","pri","存下来");
+        const bCancel=el("button",null,"取消");
+        row.append(bProbe,bSave,bCancel);
+        bx.append(el("div","set-msg","名字"),nameI,kindBox,
+                  el("div","set-msg","地址 / 命令"),urlI,cmdI,
+                  hint,hdWrap,row,status);
+        urlI.placeholder="地址：https://example.com/mcp（Streamable HTTP）或 …/sse（SSE）";
+
+        function headerRow(n,v){
+          const r=el("div","mcp-hdrow");
+          const ni=el("input","set-in"); ni.type="text"; ni.placeholder="名字，比如 Authorization";
+          const vi=el("input","set-in"); vi.type="text";
+          vi.placeholder="值，比如 Bearer xxx（留空＝不改）";
+          ni.value=n||""; vi.value=v||"";
+          const x=el("button",null,"✕"); x.title="删掉这一行";
+          x.onclick=()=>r.remove();
+          r.append(ni,vi,x);
+          hdList.append(r);
+          return r;
+        }
+        (cur.header_names||[]).forEach(n=>headerRow(n,""));
+
+        function paintKind(){
+          kindBox.innerHTML="";
+          [["http","Streamable HTTP"],["sse","SSE"],["stdio","本机命令"]].forEach(p=>{
+            const b=el("button",(kind===p[0]?"on":""),p[1]);
+            if(p[0]==="stdio"&&!LOCAL) b.title="只能在本机页面加（它会起进程）";
+            b.onclick=()=>{ 
+              if(p[0]==="stdio"&&!LOCAL){
+                status.className="set-msg err";
+                status.textContent="「本机命令」只能在这台机器上用本机页面加 —— 它会起进程。"
+                  +"手机上想加 MCP，用 Streamable HTTP 或 SSE 那种地址。";
+                return;
+              }
+              kind=p[0]; paintKind();
+            };
+            kindBox.append(b);
+          });
+          const std=(kind==="stdio");
+          urlI.hidden=std; cmdI.hidden=!std; hdWrap.hidden=std;
+          hint.className="set-msg";
+          hint.textContent = std
+            ? "本机命令：在这台机器上起一个进程（用户自己贴的命令，等于自己运行程序）。"
+            : (kind==="sse"
+                ? "SSE（老的 HTTP+SSE）：粘那条 **/sse** 短链。它 GET 一条流，"
+                  +"第一个事件会把真正的 message 端点告诉你，之后的请求都发到那儿。"
+                : "Streamable HTTP：粘那一个端点（一般长这样 …/mcp）。POST JSON-RPC，"
+                  +"回包可能是 JSON，也可能是一条 SSE 流，两种都认。");
+        }
+        paintKind();
+
+        const payload=()=>({
+          name:nameI.value.trim(),
+          old_name:(isNew?undefined:(cur.name||"")),
+          kind:kind,
+          url:urlI.value.trim(),
+          command:cmdI.value.trim(),
+          headers:[...hdList.querySelectorAll(".mcp-hdrow")].map(r=>({
+            name:r.children[0].value.trim(), value:r.children[1].value.trim()})),
+        });
+
+        bHdAdd.onclick=()=>headerRow("","");
+        bCancel.onclick=close;
+        bProbe.onclick=async()=>{
+          const p=payload();
+          if(!p.name){ status.className="set-msg err"; status.textContent="先起个名字"; return; }
+          bProbe.disabled=true; bProbe.textContent="连着…";
+          status.className="set-msg"; status.textContent="拿这份还没保存的配置试连一次…";
+          const r=await jpost("/api/mcp/probe",p);
+          bProbe.disabled=false; bProbe.textContent="测试连接";
+          if(r.ok){
+            status.className="set-msg ok";
+            status.textContent="连上了 —— 它认到 "+(r.tools||[]).length+" 个工具"
+              +((r.tools||[]).length?("："+r.tools.slice(0,6).join("、")
+                +(r.tools.length>6?"…":"")):"（一个都没报，可能是它那边没开 tools）");
+          }else{
+            status.className="set-msg err";
+            status.textContent="没连上："+(r.err||r.error||"?");
+          }
+        };
+        bSave.onclick=async()=>{
+          const p=payload();
+          if(!p.name){ status.className="set-msg err"; status.textContent="先起个名字"; return; }
+          bSave.disabled=true; bSave.textContent="存…";
+          const r=await jpost("/api/mcp/save",p);
+          bSave.disabled=false; bSave.textContent="存下来";
+          if(r.ok&&r.server&&r.server.ok){
+            status.className="set-msg ok";
+            status.textContent="存下了，也连上了（"+(r.server.tools||[]).length+" 个工具）";
+            say("加好了："+p.name);
+            close(); load();
+            return;
+          }
+          if(r.ok){
+            status.className="set-msg err";
+            status.textContent="存下了，但这会儿没连上："
+              +((r.server&&r.server.err)||"（原因没报）")
+              +" —— 配置留着，改完再点「测试连接」。";
+            load();
+            return;
+          }
+          status.className="set-msg err";
+          status.textContent="没存上："+(r.err||r.error||"?");
+        };
+      });
+    }
+  }
+
+  /* 设置页自己的 sheet（跟 nest-notes 那个同形；这儿不跨模块借） */
+  function sheetEl(title,build){
+    const wrap=el("div","sheet"), bx=el("div","box nt-sheet");
+    const h=el("div","bh"), b=el("b",null,title), x=el("button","x ibtn","✕");
+    x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
+    wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
+    document.body.append(wrap); build(bx,()=>wrap.remove()); return wrap;
+  }
+
+  /* 从别处（顶栏那把 🔧）跳过来：打开设置页并滚到 MCP 那一节 */
+  window.nestOpenMcpManager=function(){
+    const t=document.querySelector('#tabs button[data-tab="setting"]');
+    if(t)t.click();
+    setTimeout(()=>{
+      const s=document.getElementById("mcp-sec");
+      if(s&&s.scrollIntoView)s.scrollIntoView({block:"start"});
+    },400);
   };
 
   /* ═══ 大模型引擎 ═══ */

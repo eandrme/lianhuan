@@ -387,13 +387,131 @@ async def api_offline_run(dry: int = 0):
     except Exception as e:
         return {"ok": False, "err": str(e)}
     return {"ok": True, "dry": bool(dry), "note": "看 journalctl -u lianhuan -f | grep -i offline"}
-# ===== MCP 开关：列表 + 拨动 =====
+# ===== MCP 总管理：列表 / 加改删 / 试连 / 拨动 =====
+# ★ 这一节是 `/api/mcp` 的**唯一**注册处（server.py 里再写一份会被这儿挡住 ——
+#   FastAPI 按注册顺序匹配，views 的 router 先挂上；真撞过一次，白写半天）。
 from fastapi import Body
 from . import mcp_client as _mcp
+from . import gate as _gate
+
+
+def _caller_is_local(request: Request) -> bool:
+    """这次请求是不是「明确允许的本机」。跟中间件里那道判断同一个口径 ——
+    千万别在别处另写一套（两套口径迟早会对不上）。"""
+    peer = request.client.host if request.client else ""
+    addr = _gate.client_addr(peer, request.headers.get("x-forwarded-for", ""))
+    here = _gate.local_addr(addr)
+    return bool(here and (not _gate.on() or _gate.allow_local_commands()))
+
+
+MCP_KINDS = {"http", "sse", "stdio"}
+
+
+def _mcp_spec_from(b: dict) -> tuple:
+    """把界面填的那份变成一条装配单。返回 (spec, 错误)。"""
+    kind = (b.get("kind") or "http").strip().lower()
+    if kind not in MCP_KINDS:
+        return {}, "连接方式只有 Streamable HTTP / SSE / 本机命令三种"
+    if kind == "stdio":
+        cmdline = (b.get("command") or "").strip()
+        if not cmdline:
+            return {}, "本机命令要填（比如 npx -y 某个包）"
+        parts = cmdline.split()
+        return {"command": parts[0], "args": parts[1:], "env": b.get("env") or {}}, ""
+    url = (b.get("url") or "").strip()
+    if not url:
+        return {}, "地址要填（那一串 https://…/mcp 或 …/sse）"
+    if not url.lower().startswith(("http://", "https://")):
+        return {}, "地址要以 http:// 或 https:// 开头"
+    headers = {}
+    for pair in (b.get("headers") or []):
+        if isinstance(pair, dict):                       # [{"name":…, "value":…}]
+            headers[str(pair.get("name") or "")] = pair.get("value") or ""
+        elif isinstance(pair, (list, tuple)) and len(pair) == 2:   # 也认 {名字: 值}
+            headers[str(pair[0] or "")] = pair[1] or ""
+    return {"url": url, "headers": headers}, ""
+
 
 @router.get("/api/mcp")
-async def api_mcp_list():
-    return {"ok": True, "servers": _mcp.status()}
+async def api_mcp_list(request: Request):
+    """列 MCP server。★ 请求头只回**名字和末四位** —— 里面往往就是 Bearer token。
+
+    `local` 是「这次请求是不是本机」，界面拿它决定「本机命令」那一档能不能选
+    （起进程只在本机开放，见 gate.LOCAL_ONLY 那条注释）。"""
+    return {"ok": True, "servers": _mcp.status(), "local": _caller_is_local(request)}
+
+
+@router.post("/api/mcp/save")
+async def api_mcp_save(request: Request):
+    """加一条 / 改一条 / 删一条。
+
+    ★ 本机命令（stdio）只能在本机操作 —— 那是**起进程**，跟 /api/mcp/add 同一条线
+      （手机上点「保存」要的是一句能照着做的话，不是一条规矩）。
+      Streamable HTTP / SSE 不在这条线里：它不发命令，只是这台机器往外连一个你
+      自己填的地址、带你自己填的头 —— 所以手机上也能加。"""
+    import re as _re
+    b = await request.json()
+    name = _re.sub(r"[^\w-]", "", (b.get("name") or ""))[:24]
+    if not name:
+        return JSONResponse({"ok": False, "error": "给它起个名字（字母数字和 _-）"},
+                            status_code=400)
+    old = _mcp.spec_of(name)
+    old_kind = (old.get("type") or ("http" if old.get("url") else "stdio")).strip().lower()
+    local = _caller_is_local(request)
+
+    if b.get("remove"):
+        # 已存着的那条是不是「本机命令」由**服务端**说了算，不听调用方报的 kind
+        if old_kind == "stdio" and not local:
+            return JSONResponse({"ok": False, "error": "「本机命令」那条只能在这台机器上删 —— "
+                                                       "它会把这台机器上的那个进程停掉。"},
+                                status_code=403)
+        _mcp.drop_server(name)
+        return {"ok": True, "removed": name}
+
+    spec, err = _mcp_spec_from(b)
+    if err:
+        return JSONResponse({"ok": False, "error": err}, status_code=400)
+    kind = (b.get("kind") or "http").strip().lower()
+    if kind == "stdio" and not local:
+        return JSONResponse({"ok": False, "error": "「本机命令」只能在这台机器上（127.0.0.1）"
+                                                   "用本机页面加 —— 它会在这台机器上起一个进程。"
+                                                   "手机上想加 MCP，用 Streamable HTTP 或 SSE 那种地址。"},
+                            status_code=403)
+    old_name = _re.sub(r"[^\w-]", "", (b.get("old_name") or ""))[:24]
+    if old_name and old_name != name:
+        _mcp.drop_server(old_name)          # 改了名字＝把旧那条摘掉，别留僵尸
+    if kind == "stdio":
+        _mcp.save_server(name, spec["command"], spec["args"], spec.get("env") or {})
+    else:
+        _mcp.save_http(name, spec["url"], kind, spec["headers"])
+    await _mcp.start_all()                  # 立刻连一次（连不上也照样存下，错误照实回）
+    st = next((x for x in _mcp.status() if x["name"] == name), None)
+    return {"ok": bool(st and st["ok"]), "server": st}
+
+
+@router.post("/api/mcp/probe")
+async def api_mcp_probe(request: Request):
+    """拿**还没保存**的这份配置试连一次 —— 不落盘、不留连接。
+
+    连上了就报它认到几个工具；连不上就把真实原因（HTTP 401 / 地址不对 / 超时）说出来。"""
+    b = await request.json()
+    spec, err = _mcp_spec_from(b)
+    if err:
+        return JSONResponse({"ok": False, "error": err}, status_code=400)
+    kind = (b.get("kind") or "http").strip().lower()
+    if kind == "stdio" and not _caller_is_local(request):
+        return JSONResponse({"ok": False, "error": "「本机命令」只能在这台机器上试 —— 它会起进程"},
+                            status_code=403)
+    if kind == "stdio":
+        mcp_spec = {"command": spec["command"], "args": spec["args"], "env": spec.get("env") or {}}
+    else:
+        mcp_spec = {"url": spec["url"], "type": "sse" if kind == "sse" else "http"}
+        if spec["headers"]:
+            mcp_spec["headers"] = spec["headers"]
+    out = await _mcp.probe(mcp_spec)
+    return {"ok": bool(out.get("ok")), "error": out.get("err") or "",
+            "tools": out.get("tools") or []}
+
 
 @router.post("/api/mcp/toggle")
 async def api_mcp_toggle(payload: dict = Body(...)):

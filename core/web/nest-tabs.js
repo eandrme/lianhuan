@@ -214,9 +214,18 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
           out.append(r);
         });
       }else{
-        out.append(el("div","res","（下面是后端真实返回，我照它改界面）"));
-        out.append(el("pre","js",JSON.stringify(j,null,1).slice(0,2500)));
+        out.append(el("div","res","还没登记过。"));
       }
+      /* 这一格只管拨开关；加/删/改在设置页那一节（那边才是总管理） */
+      const bar=el("button",null,"＋ 加一个 / 管理");
+      bar.style.cssText="padding:8px 12px;border:1px solid var(--accent);border-radius:9px;"+
+                        "color:var(--accent);margin-top:8px";
+      bar.onclick=()=>{
+        const wrap=out.closest(".sheet"); if(wrap)wrap.remove();
+        if(typeof window.nestOpenMcpManager==="function")window.nestOpenMcpManager();
+        else say("去 设置 › MCP 工具包");
+      };
+      out.append(bar);
     });
   }
 

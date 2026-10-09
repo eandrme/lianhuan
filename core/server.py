@@ -1558,9 +1558,10 @@ async def _mcp_startup():
     asyncio.create_task(_proactive.run_forever())
 
 
-@app.get("/api/mcp")
-def api_mcp():
-    return {"servers": _mcp.status()}
+# ══════════ MCP：总管理那一套在 core/views.py ══════════
+# ★ 别再在这儿写一份 —— FastAPI 按注册顺序匹配，views 的 router 先挂上，
+#   写在这儿会被它挡住（真撞过一次：加了半天不生效，还以为是前端没接）。
+#   下面只剩两条**老接口**（stdio 专用、且走 gate.LOCAL_ONLY 那条本机线）。
 
 
 @app.post("/api/mcp/add")
