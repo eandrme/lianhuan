@@ -42,8 +42,16 @@ from .protocol import SAY
 
 # ───────────────────── 基础 ─────────────────────
 
-_DB = os.environ.get("LIANHUAN_DB", "data/lianhuan.db")
-DATA_DIR = Path(_DB).parent
+from . import datadir as _dd
+
+_DB = str(_dd.home_db())
+
+
+def home_dir() -> Path:
+    """★ 写东西之前现算一次。原先是个模块级常量 —— 谁先 import 谁说了算，
+      测试里就把私密库、状态文件写到**真家**里去过（真机上撞的）。"""
+    return _dd.home_dir()
+
 
 READONLY_TOOLS = {
     "search_memory", "read_timeline", "read_calendar", "read_workbook",
@@ -140,9 +148,9 @@ def in_quiet(now: float | None = None) -> bool:
 
 def _fernet():
     from cryptography.fernet import Fernet
-    kp = DATA_DIR / "private.key"
+    kp = home_dir() / "private.key"
     if not kp.exists():
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        home_dir().mkdir(parents=True, exist_ok=True)
         kp.write_bytes(Fernet.generate_key())
         try:
             os.chmod(kp, 0o600)
@@ -153,8 +161,8 @@ def _fernet():
 
 def _pdb():
     import sqlite3
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    c = sqlite3.connect(str(DATA_DIR / "private.db"))
+    home_dir().mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(str(home_dir() / "private.db"))
     c.execute("CREATE TABLE IF NOT EXISTS priv ("
               "id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, kind TEXT, blob BLOB)")
     c.commit()
@@ -201,11 +209,11 @@ def recent_private(limit: int = 3) -> list:
 
 def audit(tool: str, failed: bool, err: str = "") -> None:
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        home_dir().mkdir(parents=True, exist_ok=True)
         rec = {"t": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                "tool": str(tool)[:60], "fail": 1 if failed else 0,
                "err": str(err)[:200] if failed else ""}
-        with open(DATA_DIR / "offline_audit.log", "a", encoding="utf-8") as fh:
+        with open(home_dir() / "offline_audit.log", "a", encoding="utf-8") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         pass
@@ -214,7 +222,7 @@ def audit(tool: str, failed: bool, err: str = "") -> None:
 # ───────────────────── 状态（独立文件，不碰主库） ─────────────────────
 
 def _state_path() -> Path:
-    return DATA_DIR / "offline_state.json"
+    return home_dir() / "offline_state.json"
 
 
 def _state() -> dict:
@@ -226,7 +234,7 @@ def _state() -> dict:
 
 def _save_state(d: dict) -> None:
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        home_dir().mkdir(parents=True, exist_ok=True)
         _state_path().write_text(json.dumps(d, ensure_ascii=False), "utf-8")
     except Exception:
         pass
@@ -252,7 +260,7 @@ def _payload(st: dict) -> dict:
 def _publish(st: dict | None = None) -> None:
     """给前端徽章看的一份静态快照（data/plays/_offline.json）。"""
     try:
-        p = DATA_DIR / "plays" / "_offline.json"
+        p = home_dir() / "plays" / "_offline.json"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(_payload(st or _state()), ensure_ascii=False), "utf-8")
     except Exception:
@@ -359,7 +367,7 @@ def _db_user_ts() -> float:
 
 def _file_seen() -> float:
     try:
-        v = float(json.loads((DATA_DIR / "last_seen.json").read_text("utf-8")).get("ts") or 0)
+        v = float(json.loads((home_dir() / "last_seen.json").read_text("utf-8")).get("ts") or 0)
         return v / 1000.0 if v > 1e11 else v
     except Exception:
         return 0.0

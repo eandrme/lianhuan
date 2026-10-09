@@ -202,7 +202,7 @@ async def execute(name: str, args: dict) -> dict:
             return {"ok": False, "err": "文件名或内容不像样"}
         if len(html) > 400_000:
             return {"ok": False, "err": "太大了（上限 400KB）"}
-        d = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "plays"
+        d = _dd.home_dir() / "plays"
         d.mkdir(parents=True, exist_ok=True)
         (d / (fn + ".html")).write_text(html, encoding="utf-8")
         return {"ok": True, "url": "/plays/" + fn + ".html", "note": "上架了，玩具厅里能看到"}
@@ -253,7 +253,7 @@ async def execute(name: str, args: dict) -> dict:
             _store.db.commit()
             return {"ok": True}
     if name == "list_plays":
-        d = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "plays"
+        d = _dd.home_dir() / "plays"
         if not d.exists():
             return {"items": []}
         return {"items": sorted(p.name for p in d.glob("*.html"))}
@@ -441,7 +441,8 @@ if callable(_orig_execute2):
             raise
         finally:
             try:
-                p = _P(_os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "tool_calls.jsonl"
+                from . import datadir as _dd
+                p = _dd.home_dir() / "tool_calls.jsonl"
                 p.parent.mkdir(parents=True, exist_ok=True)
                 rec = {"t": _dt.datetime.now().strftime("%m-%d %H:%M:%S"),
                        "tool": str(name)[:80], "ok": 1 if ok else 0,

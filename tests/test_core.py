@@ -877,16 +877,29 @@ class TestEngineTellsTheTruth(unittest.TestCase):
     而 /api/ai_model 照样把 `api` 报出去 —— 界面显示一个名字，说话的是另一个。"""
 
     def test_reports_the_engine_that_actually_talks(self):
+        """★ 这条原来用「删 sys.modules 再 import」来换个库 —— 那**换不动**：
+        `del sys.modules["core.server"]` 不会删掉父包 `core` 上的那个属性，
+        于是 `from core import server` 拿回的还是**绑着真库**的旧模块，
+        下面两句 `set_setting("engine", …)` 全写进了用户真正的家 ——
+        他接好的模型每跑一次测试就被打回回声（表现出来是「每次开页面都要重配模型」）。
+        现在改成老老实实换 store / SECRETS，跟别的测试一个写法，绝不可能碰到真库。"""
         import tempfile as _tf
         import os as _os
+        from core import server as srv
+        from core.store.sqlite import SqliteStore
         d = _tf.mkdtemp()
-        old_db = _os.environ.get("LIANHUAN_DB")
+        old_store, old_secrets = srv.store, srv.SECRETS
         old_key = _os.environ.pop("LIANHUAN_API_KEY", None)
-        _os.environ["LIANHUAN_DB"] = str(Path(d) / "q.db")
-        for m in [k for k in list(sys.modules) if k.startswith("core.server")]:
-            del sys.modules[m]
+        srv.store = SqliteStore(Path(d) / "q.db")
+        srv.SECRETS = Path(d) / "secrets.json"
+
+        def restore():
+            srv.store, srv.SECRETS = old_store, old_secrets
+            if old_key is not None:
+                _os.environ["LIANHUAN_API_KEY"] = old_key
+        self.addCleanup(restore)
+
         try:
-            from core import server as srv
             srv.store.set_setting("engine", "api")        # 配过 api，但这会儿没 key
             got = srv.ai_model()
             self.assertNotEqual("api", got["model"], "报出去的必须是真正在说话的那个")
@@ -900,14 +913,8 @@ class TestEngineTellsTheTruth(unittest.TestCase):
             self.assertEqual("echo", srv.ai_model()["model"])
             self.assertIsNone(srv.ai_model().get("fallback_note"))
         finally:
-            if old_db is None:
-                _os.environ.pop("LIANHUAN_DB", None)
-            else:
-                _os.environ["LIANHUAN_DB"] = old_db
             if old_key is not None:
                 _os.environ["LIANHUAN_API_KEY"] = old_key
-            for m in [k for k in list(sys.modules) if k.startswith("core.server")]:
-                del sys.modules[m]
 
 
 class TestSearchWaitsForTheApiLayer(unittest.TestCase):

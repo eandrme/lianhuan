@@ -72,7 +72,8 @@ class AnthropicEngine(Engine):
         ★ 优先级跟隔壁一致：**界面 > 环境变量 > 默认**。界面是刚点下去的明确意图，它说了算。"""
         try:
             import pathlib
-            f = pathlib.Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "secrets.json"
+            from .. import datadir as _dd
+            f = _dd.home_dir() / "secrets.json"
             return json.loads(f.read_text(encoding="utf-8"))
         except Exception:
             return {}

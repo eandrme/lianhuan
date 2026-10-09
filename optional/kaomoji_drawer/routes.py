@@ -20,7 +20,8 @@ _LOCK = threading.Lock()
 
 
 def _file() -> Path:
-    return Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "kaomoji_v2.json"
+    from core import datadir as _dd
+    return _dd.home_dir() / "kaomoji_v2.json"
 
 
 def _read() -> dict:

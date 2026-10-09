@@ -28,7 +28,8 @@ def main() -> None:
     ap.add_argument("--clear", action="store_true", help="只清空，不灌")
     a = ap.parse_args()
 
-    store = SqliteStore(os.environ.get("LIANHUAN_DB", "data/lianhuan.db"))
+    from . import datadir as _dd
+    store = SqliteStore(_dd.home_db())
 
     if a.clear:
         store.import_all({"turns": [], "memories": []}, mode="replace")

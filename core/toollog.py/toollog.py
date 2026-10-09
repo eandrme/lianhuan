@@ -10,8 +10,9 @@ import json
 import os
 from pathlib import Path
 
-_DB = os.environ.get("LIANHUAN_DB", "data/lianhuan.db")
-DATA_DIR = Path(_DB).parent
+from .. import datadir as _dd
+
+DATA_DIR = _dd.home_dir()
 LOG = DATA_DIR / "tool_calls.jsonl"
 MAX_BYTES = 2 * 1024 * 1024
 KEEP_LINES = 2000

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from . import windows as _winflags
+from . import datadir as _datadir
 
 router = APIRouter()
 _store = None          # server 启动时注入
@@ -408,7 +409,7 @@ async def api_tools_log(limit: int = 50):
     import json as _j
     import os as _os
     from pathlib import Path as _P
-    p = _P(_os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "tool_calls.jsonl"
+    p = _datadir.home_dir() / "tool_calls.jsonl"
     try:
         lines = p.read_text(encoding="utf-8").splitlines()[-max(1, min(int(limit or 50), 300)):]
     except Exception:

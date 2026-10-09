@@ -149,7 +149,8 @@ async def api_calendar_add_inner(b):
 @router.get("/api/gallery")
 def api_gallery(limit: int = 150):
     import os
-    d = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "uploads"
+    from core import datadir as _dd
+    d = _dd.home_dir() / "uploads"
     items = []
     if d.is_dir():
         for f in d.iterdir():

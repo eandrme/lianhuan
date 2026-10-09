@@ -18,7 +18,13 @@ import os
 from pathlib import Path
 
 _store = None
-_PEM = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "vapid_private.pem"
+
+
+def _pem() -> Path:
+    """VAPID 私钥落在哪儿。★ **每次现算**：原先模块级算好，变成「谁先 import 谁说了算」——
+    测试里先 import 了 push，就把真家的钥匙文件写出来了。"""
+    from . import datadir
+    return datadir.home_dir() / "vapid_private.pem"
 SUB = os.environ.get("VAPID_SUB", "mailto:admin@example.com")
 
 
@@ -34,13 +40,13 @@ def bind(store) -> None:
 def _vapid():
     """拿 VAPID 密钥对；没有就当场生成一对存起来（只在第一次）。"""
     from py_vapid import Vapid
-    if not _PEM.exists():
+    if not _pem().exists():
         v = Vapid()
         v.generate_keys()
-        _PEM.parent.mkdir(parents=True, exist_ok=True)
-        v.save_key(str(_PEM))
-        os.chmod(_PEM, 0o600)
-    return Vapid.from_file(str(_PEM))
+        _pem().parent.mkdir(parents=True, exist_ok=True)
+        v.save_key(str(_pem()))
+        os.chmod(_pem(), 0o600)
+    return Vapid.from_file(str(_pem()))
 
 
 def public_key() -> str:
@@ -86,7 +92,7 @@ def send_push(title: str, body: str, url: str = "/") -> int:
     for s in rows:
         info = {"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}}
         try:
-            webpush(info, payload, vapid_private_key=str(_PEM),
+            webpush(info, payload, vapid_private_key=str(_pem()),
                     vapid_claims={"sub": SUB}, ttl=86400)
             sent += 1
         except WebPushException as e:

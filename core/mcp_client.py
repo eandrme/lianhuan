@@ -16,6 +16,8 @@ import json
 import os
 import re
 from pathlib import Path
+
+from . import datadir as _dd
 from urllib.parse import urljoin
 
 _servers: dict = {}          # name -> _Server
@@ -26,7 +28,7 @@ PROTO = "2025-06-18"         # 对 server 声明的协议版本；某个 server 
 # ────────────────────── 装配单 ──────────────────────
 
 def _cfg_file() -> Path:
-    return Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "mcp.json"
+    return _dd.home_dir() / "mcp.json"
 
 
 def load_cfg() -> dict:

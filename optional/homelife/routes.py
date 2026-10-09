@@ -521,7 +521,8 @@ def api_plays():
     import os
     import re
     from pathlib import Path
-    d = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "plays"
+    from core import datadir as _dd
+    d = _dd.home_dir() / "plays"
     d.mkdir(parents=True, exist_ok=True)
     out = []
     for f in sorted(d.glob("*.html")):
@@ -620,7 +621,8 @@ async def api_sticker_add(req: Request):
     #   以后聊天里带上它也会被附件那一关悄悄丢掉。不如当场说实话。
     import os as _os
     from pathlib import Path as _P
-    up = (_P(_os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent
+    from core import datadir as _dd2
+    up = (_dd2.home_dir()
           / "uploads" / url.split("/", 2)[-1])
     if not (up.is_file() and up.name == url.split("/", 2)[-1]):
         return JSONResponse({"ok": False, "err": "服务器上没有这张图 —— 先传一次再存"},

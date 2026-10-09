@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+from . import datadir as _dd
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -108,7 +110,7 @@ async def _engawa_enable():
     command = _engawa_executable()
     if not command.is_file():
         raise RuntimeError("Engawa 运行时还没安装")
-    cache = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "engawa-cache"
+    cache = _dd.home_dir() / "engawa-cache"
     mcp_client.save_server("engawa", str(command), [], {"ENGAWA_CACHE_DIR": str(cache)})
     await mcp_client.start_all()
     state = next((item for item in mcp_client.status() if item["name"] == "engawa"), None)
@@ -432,7 +434,7 @@ def plan_pack(pid: str):
     p = next((x for x in PACKS if x["id"] == pid), None)
     if p is None:
         return JSONResponse({"error": "没有这个包"}, status_code=404)
-    plans = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "plans"
+    plans = _dd.home_dir() / "plans"
     plans.mkdir(parents=True, exist_ok=True)
     f = plans / f"{pid}.md"
     body = (f"# 装配单 · {p['name']}\n\n"

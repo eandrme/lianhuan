@@ -35,6 +35,7 @@ from .protocol import DONE, SAY, SEP, THINK, sse, split_say
 from .store.base import Memory as StoredMemory, Turn as StoredTurn
 from .store.sqlite import SqliteStore
 from . import think as _think
+from . import datadir as _datadir
 
 HERE = Path(__file__).parent
 WEB = HERE / "web"
@@ -43,7 +44,7 @@ WEB = HERE / "web"
 BLOCKS = HERE.parent / "blocks"
 
 app = FastAPI(title="连环 · 开源版")
-store = SqliteStore(os.environ.get("LIANHUAN_DB", "data/lianhuan.db"))
+store = SqliteStore(_datadir.home_db())
 jobs = JobRegistry()
 
 # ── 门（0830 加的，默认整个不生效）────────────────────────────
@@ -208,7 +209,7 @@ app.include_router(_home_router)
 
 @app.get("/plays/{name}")
 def get_play(name: str):
-    p = _safe(Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "plays", name)
+    p = _safe(_datadir.home_dir() / "plays", name)
     return FileResponse(p) if p else JSONResponse({"error": "没有这个小玩意"}, status_code=404)
 
 
@@ -912,7 +913,7 @@ app.include_router(_packs_router)
 
 
 # ── 上传（头像 / 空间配图）────────────────────────────────
-UPLOADS = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "uploads"
+UPLOADS = _datadir.home_dir() / "uploads"
 
 
 @app.post("/api/upload")
@@ -953,7 +954,7 @@ def get_upload(name: str):
 
 # 发文件（图以外的：pdf/txt/zip…）。照原项目 /api/upload_file 平移：
 # 名字清洗后带 uuid 前缀防撞，25MB 封顶。
-FILES_DIR = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "files"
+FILES_DIR = _datadir.home_dir() / "files"
 
 
 @app.post("/api/upload_file")
@@ -1125,7 +1126,26 @@ def _hist_files_note(t) -> str:
 
 
 # ── 接 API：界面里填（普通用户唯一顺手的路）───────────────
-SECRETS = Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "secrets.json"
+SECRETS = _datadir.home_dir() / "secrets.json"
+
+
+def _set_engine(want: str, why: str) -> None:
+    """换引擎**只走这一个口子** —— 顺手记一行日志。
+
+    ★ 真机上撞的：人在界面上接好了模型（key/base/model 都进了 secrets.json、
+      也真聊出了真模型的回复），过一阵回来发现引擎又变回回声了 ——
+      于是他每次开页面都觉得「还得再配一遍」。写 engine 这个设置的地方有三处
+      （引擎配置 / 换模型 / 老设置接口），原先谁干的没有一处留痕，查不出来。
+    ★ 现在每次改动都在 journalctl 里留一行：`[engine] echo → api（engine/config）`。
+      以后再有「它自己变回去了」，一眼就知道是谁干的。
+    """
+    try:
+        old = store.get_setting("engine", "echo")
+    except Exception:
+        old = "?"
+    store.set_setting("engine", want)
+    if old != want:
+        print(f"[engine] {old} → {want}（{why}）", flush=True)
 
 
 def _secrets() -> dict:
@@ -1216,7 +1236,7 @@ async def engine_config_set(req: Request):
         pass
     # ★ 原来这儿写死了 "api" —— 填了 Claude 的地址也会被切回 OpenAI 那条，
     #   于是「贴了 key 还是不通」，而且没有任何地方说得清为什么（0904 抓的）。
-    store.set_setting("engine", want)
+    _set_engine(want, "engine/config")
     return {"ok": True, "engine": want}
 
 
@@ -1413,7 +1433,7 @@ async def ai_model_set(req: Request):
     if want in engines:
         if not engines[want].ready:
             return JSONResponse({"ok": False, "error": engines[want].needs[:200]}, status_code=428)
-        store.set_setting("engine", want)
+        _set_engine(want, "ai_model（传的是引擎名）")
         return {"ok": True, "model": want}
     # ② 0904 新增：传的是模型名 → 在**当前这家**里换个模型，不动引擎。
     #    这是聊天框那颗 ▾ 走的路。
@@ -1672,7 +1692,7 @@ def get_settings():
 async def set_settings(req: Request):
     b = await req.json()
     if "engine" in b:
-        store.set_setting("engine", b["engine"])
+        _set_engine(b["engine"], "老设置接口 /api/settings")
     return {"ok": True}
 
 

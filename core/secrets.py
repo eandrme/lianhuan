@@ -11,7 +11,8 @@ from pathlib import Path
 
 
 def _file() -> Path:
-    return Path(os.environ.get("LIANHUAN_DB", "data/lianhuan.db")).parent / "secrets.json"
+    from . import datadir as _dd
+    return _dd.home_dir() / "secrets.json"
 
 
 def get(key: str) -> str:

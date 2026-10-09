@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .. import datadir
 from .base import Memory, Store, Turn
 
 SCHEMA = """
@@ -114,8 +115,10 @@ PORTABLE_SETTINGS = (
 
 
 class SqliteStore(Store):
-    def __init__(self, path: str | Path = "data/lianhuan.db"):
-        self.path = Path(path)
+    def __init__(self, path: str | Path = datadir.DEFAULT):
+        # ★ 默认路径过一道闸：跑在测试里、又没人显式指过 LIANHUAN_DB 时，
+        #   绝不落在用户真正的家（真机上撞过：测试把人接好的模型打回了回声）。
+        self.path = datadir.guard_default(Path(path))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         #: ★ 0831（GPT 四轮 P0-02，数据破坏级）：原来全进程共用**一把连接**，
         #: 而写锁只包住 import ——「别人的 commit() 会把我这个没写完的事务一起提交掉」。
