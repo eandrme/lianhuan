@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 记事 ⑥：日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康
+   巢 · 记事 ⑥：日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
    装法：nest.html 再加一行 <script src="/nest-notes.js?v=1"></script>
 
    后端各归各家，前端一处收口：
@@ -8,6 +8,10 @@
      /api/calendar · /api/calendar/add  optional/homeplus
      /api/memes · /api/stickers         optional/homelife
      /api/health_recent · /api/health   optional/homelife（一天一条）
+     /api/moments · …/mine · …/new · …/{id}/comment · …/{id}/del
+                                        optional/homelife（空间：贴一条 + 楼里接话）
+     /api/timeline                      optional/homelife（时间线：这个家一天一天怎么起来的）
+     /api/chat/starred · /api/chat/{id}/star   core/views（收藏：点过星的那些话）
 
    ★ 七块都带「改」和「删」—— 这是记事，攒着攒着一定要能收拾。
      （原项目的梗库只有录和改、日历只有读和写，都被点过名。）
@@ -187,7 +191,10 @@ try{
       ["cal","日历",secCal],
       ["memes","梗库",secMemes],
       ["sticker","表情包",secSticker],
-      ["health","健康",secHealth]
+      ["health","健康",secHealth],
+      ["space","空间",secMoments],
+      ["timeline","时间线",secTimeline],
+      ["star","收藏",secStar]
     ];
     SECS.forEach(s=>{
       const b=el("button",(s[0]===SEC?"on":""),s[1]);
@@ -850,6 +857,311 @@ try{
         else say("没存上："+(r.err||"?"));
       };
     });
+  }
+  /* ═══ 空间 ═══
+     moments ＋ moment_comments。原项目那一页的排法照搬：分「他发的 / 你发的 / 有评论」，
+     一条一张卡（正文＋配图＋楼里的评论），每条底下留一个「回一句」——
+     原项目 0805 就是「能贴不能回」被点名的。 */
+  async function secMoments(body){
+    body.innerHTML="";
+    const top=el("div","nt-top");
+    const add=el("button","pri","＋ 贴一条");
+    const poke=el("button",null,"戳他发一条");
+    const sp=el("div","sp");
+    const msg=el("div","hint");
+    top.append(add,poke,sp);
+    const chips=el("div","nt-chips");
+    const list=el("div");
+    body.append(top,chips,msg,list);
+    let ALL=[], FILT="全部";
+    const TABS=[["全部","这儿贴的都是随手想给对方看的"],
+                ["他发的","他贴上去的"],["你发的","你贴上去的"],
+                ["有评论","底下接过话的那些"]];
+    function mineOf(x){ return !x.author||x.author==="ai"; }   /* true＝他发的 */
+    function paint(){
+      const n={"他发的":0,"你发的":0,"有评论":0};
+      ALL.forEach(x=>{ n[mineOf(x)?"他发的":"你发的"]++; if((x.comments||[]).length)n["有评论"]++; });
+      chips.innerHTML="";
+      TABS.forEach(([k,hint])=>{
+        const b=el("button",(k===FILT?"on":null),k===FILT?k:(k+" "+(k==="全部"?ALL.length:n[k])));
+        b.title=hint;
+        b.onclick=()=>{FILT=k;paint();};
+        chips.append(b);
+      });
+      list.innerHTML="";
+      const rows=ALL.filter(x=>FILT==="全部"?true:(FILT==="有评论"?((x.comments||[]).length>0)
+                                            :(FILT==="他发的"?mineOf(x):!mineOf(x))));
+      if(!rows.length){ list.append(el("div","hint","这一档还空着。")); return; }
+      rows.forEach(x=>list.append(momentCard(x)));
+    }
+    function momentCard(x){
+      const c=el("div","nt-card");
+      const head=el("div","nt-meta");
+      head.append(el("span",(mineOf(x)?"tag ai":"tag me"),mineOf(x)?"他":"你"));
+      head.append(el("span",null,(x.day||"")+" "+(x.t||"")));
+      const ops=el("div","nt-ops");
+      const bd=el("button","danger","删");
+      bd.onclick=async()=>{
+        if(!confirm("删掉这条？楼里的评论也一起没。"))return;
+        const r=await jpost("/api/moments/"+x.id+"/del",{});
+        if(r.ok){say("删了");load();} else say("删不掉："+(r.err||"?"));
+      };
+      ops.append(bd); head.append(ops);
+      c.append(head);
+      if(x.content)c.append(el("div","nt-txt",x.content));
+      if(x.image){
+        const im=el("img"); im.src=x.image; im.loading="lazy";
+        im.style.cssText="max-width:100%;border-radius:10px;margin-top:8px;display:block";
+        c.append(im);
+      }
+      (x.comments||[]).forEach(cm=>{
+        const d=el("div"); d.style.cssText="margin-top:8px;padding-left:9px;border-left:2px solid var(--line)";
+        const h=el("div","nt-meta");
+        h.append(el("span",(cm.author==="ai"?"tag ai":"tag me"),cm.author==="ai"?"他":"你"));
+        h.append(el("span",null,cm.t||""));
+        const o2=el("div","nt-ops");
+        const bx=el("button","danger","删");
+        bx.onclick=async()=>{
+          const r=await jpost("/api/moments/comment/"+cm.id+"/del",{});
+          if(r.ok){say("删了");load();} else say("删不掉");
+        };
+        o2.append(bx); h.append(o2);
+        d.append(h,el("div","nt-txt",cm.content||""));
+        c.append(d);
+      });
+      const rep=el("div","nt-btns");
+      const bReply=el("button",null,"回一句");
+      rep.append(bReply);
+      c.append(rep);
+      bReply.onclick=()=>{
+        const wrap=sheet("回一句",(bx,close)=>{
+          const t=el("textarea"); t.placeholder="说点什么…";
+          bx.append(t);
+          const row=el("div","nt-btns");
+          const ok=el("button","pri","发出去"), no=el("button",null,"取消");
+          row.append(ok,no); bx.append(row);
+          no.onclick=close;
+          ok.onclick=async()=>{
+            const v=t.value.trim(); if(!v){say("空的");return;}
+            ok.disabled=true;
+            const r=await jpost("/api/moments/"+x.id+"/comment",{content:v});
+            if(r.ok){ say("回了 —— 他看到会接一句"); close(); setTimeout(load,1200); }
+            else{ ok.disabled=false; say("没回上："+(r.err||"?")); }
+          };
+        });
+      };
+      return c;
+    }
+    async function load(){
+      list.innerHTML="";
+      loading(list);
+      let j;
+      try{ j=await jget("/api/moments"); }
+      catch(e){ list.innerHTML=""; failed(list,e); return; }
+      ALL=j.items||[];
+      msg.textContent = ALL.length? "" : "还没贴过。贴一条，他会接话。";
+      paint();
+    }
+    add.onclick=()=>{
+      sheet("贴一条",(bx,close)=>{
+        const t=el("textarea"); t.placeholder="随手想给对方看的一句话…";
+        bx.append(t);
+        bx.append(el("div","lb","配张图（可以不配）"));
+        let img="";
+        const row=el("div","nt-btns");
+        const bPic=el("button",null,"选一张图"), bSend=el("button","pri","贴出去"), bNo=el("button",null,"取消");
+        const prev=el("div");
+        row.append(bPic,bSend,bNo);
+        bx.append(row,prev);
+        bPic.onclick=()=>{
+          const inp=el("input"); inp.type="file"; inp.accept="image/*"; inp.hidden=true;
+          document.body.append(inp);
+          inp.addEventListener("change",()=>{
+            const f=(inp.files||[])[0]; inp.remove(); if(!f)return;
+            bPic.disabled=true; bPic.textContent="传…";
+            shrink(f,async du=>{
+              if(!du){ bPic.disabled=false; bPic.textContent="选一张图"; say("这张图读不出来"); return; }
+              const up=await jpost("/api/upload",{dataURL:du});
+              bPic.disabled=false; bPic.textContent="换一张";
+              if(!up||!up.url){ say("没传上去："+((up&&up.err)||"网络？")); return; }
+              img=up.url; prev.innerHTML="";
+              const im=el("img"); im.src=img;
+              im.style.cssText="max-width:100%;border-radius:10px;margin-top:8px";
+              prev.append(im);
+            });
+          });
+          inp.click();
+        };
+        bNo.onclick=close;
+        bSend.onclick=async()=>{
+          const v=t.value.trim();
+          if(!v&&!img){ say("写一句，或者配张图"); return; }
+          bSend.disabled=true;
+          const r=await jpost("/api/moments/mine",{content:v,image:img||null});
+          bSend.disabled=false;
+          if(r.ok){ say("贴上去了 —— 他可能会在楼里接一句"); close(); setTimeout(load,1500); }
+          else say("没贴上："+(r.err||"?"));
+        };
+      });
+    };
+    poke.onclick=async()=>{
+      if(!confirm("让他自己发一条？他会用自己的引擎写一句（花一次调用）。"))return;
+      poke.disabled=true; poke.textContent="他在写…";
+      const r=await jpost("/api/moments/new",{});
+      poke.disabled=false; poke.textContent="戳他发一条";
+      if(r.ok){ say("他贴了一条"); load(); }
+      else say("这回没写出来"+((r.err)?("："+r.err):"")+" —— 引擎接上了再试");
+    };
+    load();
+  }
+
+  /* ═══ 时间线 ═══
+     `timeline_events` ＋ meta（天气 / 天象 / 在哪）。原项目按 kind 分五条道，
+     这儿照搬那五条道和那些中文名 —— kind 里 24 种中英混着，早期英文那批按意思归。 */
+  const TL_LANE={"装修":"装修","一起做的事":"一起做的事","intimate":"一起做的事",
+    "milestone":"一起做的事","和好":"一起做的事","meal":"一起做的事","饮食":"一起做的事",
+    "order":"一起做的事","conversation":"一起做的事","relationship":"一起做的事",
+    "night_talk":"一起做的事","日常":"一起做的事","daily":"一起做的事","event":"一起做的事",
+    "夜":"一起做的事","我一个人":"我一个人","travel":"我一个人","errand":"我一个人",
+    "对方的事":"你的事","学业纠结":"你的事","情绪事件":"你的事","情绪":"你的事","sleep":"你的事"};
+  const TL_NAME={travel:"出门走走",errand:"跑腿",auto:"随手记",note:"手记",intimate:"亲密",
+    conversation:"聊了很久",milestone:"里程碑",meal:"吃饭",order:"点单",event:"事件",
+    daily:"日常",relationship:"我们俩",night_talk:"夜谈",sleep:"睡"};
+  const TL_TABS=["全部","装修","一起做的事","我一个人","你的事","随手记"];
+  const TL_HINT={"全部":"这个家一天一天是怎么起来的","装修":"在这台电脑上改过的东西",
+    "一起做的事":"你们俩一块儿干的","我一个人":"出门走走、钓鱼那些",
+    "你的事":"你告诉他的","随手记":"顺手记下来的一笔"};
+  async function secTimeline(body){
+    body.innerHTML="";
+    const top=el("div","nt-top");
+    const add=el("button","pri","＋ 随手记");
+    const sp=el("div","sp");
+    const reload=el("button",null,"刷新");
+    top.append(add,sp,reload);
+    const chips=el("div","nt-chips");
+    const msg=el("div","hint");
+    const list=el("div");
+    body.append(top,chips,msg,list);
+    let ALL=[], FILT="全部";
+    function paint(){
+      const cnt={};
+      ALL.forEach(x=>{cnt[x.lane]=(cnt[x.lane]||0)+1;});
+      chips.innerHTML="";
+      TL_TABS.forEach(k=>{
+        const b=el("button",(k===FILT?"on":null),k+" "+(k==="全部"?ALL.length:(cnt[k]||0)));
+        b.title=TL_HINT[k]||"";
+        b.onclick=()=>{FILT=k;paint();};
+        chips.append(b);
+      });
+      list.innerHTML="";
+      const rows=ALL.filter(x=>FILT==="全部"||x.lane===FILT);
+      if(!rows.length){ list.append(el("div","hint","这一档还空着。")); return; }
+      let lastDay="";
+      rows.forEach(x=>{
+        if(x.day!==lastDay){ lastDay=x.day; list.append(el("div","nt-lb",x.day+(x.days===0?" · 今天":""))); }
+        const c=el("div","crow");
+        c.style.cssText="border-bottom:1px solid var(--line);padding:9px 2px";
+        c.append(el("div","dt",x.time||""));
+        const tt=el("div","tt",x.text);
+        if(x.ctx)tt.append(el("em",null," · "+x.ctx));
+        c.append(tt);
+        c.append(el("div","kd",x.name));
+        const ago=el("div","dt",x.days===0?"今天":(x.days<0?(-x.days+" 天前"):(x.days+" 天后")));
+        c.append(ago);
+        list.append(c);
+      });
+    }
+    async function load(){
+      list.innerHTML=""; loading(list);
+      let j;
+      try{ j=await jget("/api/timeline?limit=200"); }
+      catch(e){ list.innerHTML=""; failed(list,e); return; }
+      ALL=(j.items||[]).map(x=>{
+        const m=(x.meta&&typeof x.meta==="object")?x.meta:{};
+        return {day:x.date||"",time:x.time||"",lane:TL_LANE[x.kind]||"随手记",
+                name:TL_NAME[x.kind]||x.kind||"记事",text:x.content||"",
+                ctx:[m.weather,m.sky,m.where,m.project].filter(Boolean).join(" · "),
+                days:x.days};
+      });
+      msg.textContent = ALL.length? "" : "还没记过。他做了点什么、你顺手记一笔，都会落在这儿。";
+      paint();
+    }
+    reload.onclick=load;
+    add.onclick=()=>{
+      sheet("随手记一笔",(bx,close)=>{
+        const t=el("textarea"); t.placeholder="比如：今天把阳台的灯换了";
+        bx.append(t);
+        bx.append(el("div","lb","归到哪一道"));
+        const sel=el("select");
+        [["note","随手记"],["装修","装修"],["一起做的事","一起做的事"],
+         ["travel","我一个人"],["对方的事","你的事"]].forEach(([v,n])=>{
+          const o=el("option",null,n); o.value=v; sel.append(o);
+        });
+        bx.append(sel);
+        const row=el("div","nt-btns");
+        const ok=el("button","pri","记下"), no=el("button",null,"取消");
+        row.append(ok,no); bx.append(row);
+        no.onclick=close;
+        ok.onclick=async()=>{
+          const v=t.value.trim(); if(!v){say("写一句");return;}
+          const r=await jpost("/api/timeline",{kind:sel.value,content:v});
+          if(r.ok){ say("记下了"); close(); load(); } else say("没记上："+(r.err||"?"));
+        };
+      });
+    };
+    load();
+  }
+
+  /* ═══ 收藏 ═══
+     点过星的那些话。★ 每条都带上文（「你说：…」）—— 原项目 0807 定了这条：
+     没有上文，几个月后翻出来不知道当时在聊什么。 */
+  async function secStar(body){
+    body.innerHTML="";
+    const top=el("div","nt-top");
+    const hint=el("div","hint","聊天里每条消息右边的「⋯ › 收藏」按一下就存到这儿。");
+    top.append(hint);
+    const list=el("div");
+    body.append(top,list);
+    async function load(){
+      list.innerHTML=""; loading(list);
+      let j;
+      try{ j=await jget("/api/chat/starred"); }
+      catch(e){ list.innerHTML=""; failed(list,e); return; }
+      const its=j.items||[];
+      list.innerHTML="";
+      if(!its.length){ list.append(el("div","hint","还没收藏过。聊天里按「⋯ › 收藏」，那句话就存到这儿。")); return; }
+      its.forEach(x=>{
+        const c=el("div","nt-card");
+        const head=el("div","nt-meta");
+        head.append(el("span",(x.role==="user"?"tag me":"tag ai"),x.role==="user"?"你说的":"他说的"));
+        head.append(el("span",null,x.t||""));
+        const ops=el("div","nt-ops");
+        const bd=el("button","danger","取消收藏");
+        bd.onclick=async()=>{
+          const r=await jpost("/api/chat/"+x.id+"/star",{});
+          if(r.ok){ say(r.starred?"收下了":"取消了"); load(); } else say("没成："+(r.err||"?"));
+        };
+        const bg=el("button",null,"去聊天");
+        bg.onclick=()=>{ const b=$('#tabs button[data-tab="chat"]'); if(b)b.click(); };
+        ops.append(bg,bd); head.append(ops);
+        c.append(head);
+        if(x.ask){
+          const q=el("div","nt-meta");
+          q.style.marginTop="2px";
+          q.append(el("span",null,"你说："+x.ask));
+          c.append(q);
+        }
+        c.append(el("div","nt-txt",x.content||""));
+        if(x.think){
+          const d=el("details"); d.style.marginTop="8px";
+          const sm=el("summary","nt-meta","当时的思考过程");
+          d.append(sm,el("div","nt-txt",x.think));
+          c.append(d);
+        }
+        list.append(c);
+      });
+    }
+    load();
   }
 }catch(e){console.error("nest-notes:",e);}
 })();

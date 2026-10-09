@@ -138,6 +138,10 @@ async def _gate_mw(request: Request, call_next):
     if not _gate.on():
         return _secured(await call_next(request))
 
+    # ②' 门面文件（图标 / manifest / sw.js）不带 cookie 也给 —— 见 gate.PUBLIC_ASSETS
+    if _gate.public_asset(path):
+        return _secured(await call_next(request))
+
     # ③ 开到网络上了：先报门
     if _gate.check_cookie(request.cookies.get(_gate.COOKIE) or ""):
         return _secured(await call_next(request))

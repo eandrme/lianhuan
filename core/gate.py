@@ -36,6 +36,19 @@ MAXAGE = 30 * 86400
 LOCAL_ONLY = {"/api/mcp/add", "/api/mcp/del"}
 
 
+#: 「门面」文件：**不带 cookie 也给**。
+#: ★ 不是偷懒，是 iOS 的规矩：把页面「加到主屏」时它去抓 apple-touch-icon，
+#:   那一下**不一定带 cookie** —— 带不上就抓不到图，主屏上变成一张网页截图，
+#:   而不是我们画的那个图标。manifest 同理（Android / Chrome 那边）。
+#: 这几样都是公开的牌子货，没有秘密，放行不影响门后面的家。
+PUBLIC_ASSETS = ("/icons/", "/manifest.json", "/favicon.ico", "/sw.js")
+
+
+def public_asset(path: str) -> bool:
+    """这几个静的文件，门开着也不用先报口令。"""
+    return path in PUBLIC_ASSETS or path.startswith("/icons/")
+
+
 def command_path(path: str) -> bool:
     """Endpoints that can install or launch local code never accept LAN callers."""
     return path in LOCAL_ONLY or (path.startswith("/api/packs/") and path.endswith("/setup"))

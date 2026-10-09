@@ -239,6 +239,22 @@ async def api_moment_comment(mid: int, req: Request):
     return JSONResponse({"ok": True})
 
 
+@router.post("/api/moments/{mid}/del")
+def api_moment_del(mid: int):
+    """删一条动态（连同它楼里的评论）。自己的空间，删就是删。"""
+    _store.db.execute("DELETE FROM moment_comments WHERE mid=?", (mid,))
+    cur = _store.db.execute("DELETE FROM moments WHERE id=?", (mid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "gone": cur.rowcount})
+
+
+@router.post("/api/moments/comment/{cid}/del")
+def api_moment_comment_del(cid: int):
+    cur = _store.db.execute("DELETE FROM moment_comments WHERE id=?", (cid,))
+    _store.db.commit()
+    return JSONResponse({"ok": True, "gone": cur.rowcount})
+
+
 # ── 时间线 ────────────────────────────────────────────────
 @router.get("/api/timeline")
 def api_timeline(limit: int = 80):

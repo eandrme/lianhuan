@@ -23,7 +23,11 @@ try{
 #tabs button{flex:1;padding:8px 0 10px;font-size:11.5px;color:var(--dim2);display:flex;flex-direction:column;align-items:center;gap:3px}
 #tabs button .ic{font-size:17px;line-height:1}
 #tabs button.on{color:var(--accent)}
-#pane{position:fixed;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column}
+/* ★ 面板不再盖住底部标签栏：留出它那一格（--nest-tabs-h 是量出来的高度）。
+   盖住的话，人在「记事」里想换去「设置」，只能先按 ✕ 回聊天再点一次 ——
+   手机上这一步特别别扭（而且那会儿标签栏看着像没了）。 */
+#pane{position:fixed;inset:0 0 var(--nest-tabs-h,0px) 0;z-index:40;background:var(--bg);
+  display:flex;flex-direction:column}
 #pane .ph{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
 #pane .ph .t{font-weight:600}
 #pane .ph .x{margin-left:auto}
@@ -74,7 +78,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
          if(window.NEST_PANES&&window.NEST_PANES[k]){try{window.NEST_PANES[k](pbody);}catch(e){console.error("pane:",e);}return;}
     const info={memory:["🧠 记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性（仅某助手 / 全部助手）"],
                 study:["📖 书房","书架 · 在读进度 · 边读边聊的小窗"],
-                notes:["📝 记事","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包（都要带编辑 / 删除）"],
+                notes:["📝 记事","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏"],
                 setting:["⚙️ 设置","美化 · MCP 工具包 · 消息推送 · 大模型 API · 助手设置"]}[k];
     if(info){
       const c=el("div","ph-card");
@@ -233,6 +237,24 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   const col=document.querySelector("#chatCol");
   if(col)col.append(nav); else document.body.append(nav);
   document.body.append(pane);
+  /* 量出标签栏真正占多高，交给 #pane 让位（含安全区 —— 所以补一次 + 转屏也补） */
+  const measure=()=>{
+    try{
+      const h=nav.getBoundingClientRect().height||0;
+      if(h>0)document.documentElement.style.setProperty("--nest-tabs-h",h+"px");
+    }catch(e){}
+  };
+  /* ★ 开局 #app 是 hidden（还没过口令那关）—— 这会儿量出来是 0，量了也白量。
+     所以：进站之后补量一次（#app 一显示就量），转屏 / 改窗口大小再量。 */
+  const appEl=document.querySelector("#app");
+  if(appEl){
+    new MutationObserver(()=>{ if(!appEl.hidden)measure(); })
+      .observe(appEl,{attributes:true,attributeFilter:["hidden"]});
+  }
+  measure();
+  setTimeout(measure,400);
+  window.addEventListener("resize",measure);
+  window.addEventListener("orientationchange",()=>setTimeout(measure,300));
   barBtn("＋","新对话",openThreads);
   barBtn("🔍","搜索历史",openSearch);
   barBtn("🔧","MCP 工具包",openMcp);
@@ -248,7 +270,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       //   loadHistory）现在自己会认窗口了，两个画手抢同一块 #stream 会把今天的
       //   消息重出一截、还会抹掉正在流的回复。初次进入只切到「聊天」格；
       //   切窗口时才走 renderThread。
-      setTimeout(()=>{ try{ go("chat"); }catch(e){} },500);
+      setTimeout(()=>{ try{ go("chat"); }catch(e){} measure(); },500);
     }
   }
   new MutationObserver(maybeInit).observe(document.body,{attributes:true,subtree:true,attributeFilter:["hidden"]});

@@ -2,7 +2,20 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no,interactive-widget=resizes-content">
+<!-- ── 加到主屏（跟 / 那份一份不差）──
+     ★ iOS 只认下面这几行，**不认 manifest**：图标必须是 PNG（不吃 SVG），
+       名字取自 apple-mobile-web-app-title。manifest 是安卓 / Chrome 那边的。
+     ★ 这四个文件在 gate 的 PUBLIC_ASSETS 里 —— 不带 cookie 也得给，
+       不然 iOS 抓不到图，主屏上就是一张网页截图。 -->
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="巢">
+<meta name="application-name" content="巢">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0f1115">
 <title>巢</title>
@@ -25,6 +38,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 [hidden]{display:none!important}
 
 #app{display:flex;height:100dvh}
+/* ★ 表单控件一律 16px：iOS 在 font-size < 16px 的输入框上会自动把**整页**放大，
+   而且不缩回去 —— 聊天框、搜索、每个弹层里的输入框都会触发。
+   16 是最低线，不是审美。!important 是为了压过各模块自己那条 `font:inherit`。 */
+input,textarea,select{font-size:16px!important}
+/* ★ 底部标签栏要给手势条让位（iPhone 那条小白条），不然「设置」两个字压在它底下。 */
+#tabs{padding-bottom:env(safe-area-inset-bottom)}
 #chatCol{flex:1;min-width:0;display:flex;flex-direction:column}
 #bar{display:flex;align-items:center;gap:10px;padding:10px var(--pad);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
@@ -266,6 +285,9 @@ function attachEl(fs){
 function addTurn(it){
   const w=el("div","turn "+(it.role==="user"?"me":"ai")+(it.superseded?" sup":""));
   if(it.id)w.dataset.id=it.id;
+  // ★ 收藏过的那句，翻历史时也得亮着星 —— 后端 `/api/nest/thread` 一直带着 starred，
+  //   不画的话「收藏」这件事在聊天里等于看不见（点过星的下次进来又是一颗没收藏的）。
+  if(it.starred)w.classList.add("starred");
   const m=el("div","meta");
   m.append(el("span","who",it.role==="user"?"我":"它"));
   m.append(el("span","time",it.t||""));
@@ -470,6 +492,8 @@ boot();
     font:12px/1.5 var(--mono);color:var(--dim)}
   #raw .rh{display:flex;gap:6px;align-items:center;margin-bottom:6px;color:var(--fg)}
   #raw .rh .sp{flex:1}
+  .turn.starred > .meta .starmark{color:var(--warn);margin-right:4px}
+  .meta .starmark{font-size:12px}
   .menu{position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);
     border-radius:var(--r-sm);padding:4px;min-width:168px;box-shadow:0 10px 30px #0009}
   .menu button{display:block;width:100%;text-align:left;padding:9px 11px;border-radius:7px;font-size:14px}
@@ -619,6 +643,30 @@ boot();
     try{await navigator.clipboard.writeText(turnText(w).split("|||").join("\n"));toast("已复制");}
     catch(e){toast("复制失败");}
   }
+  /* 收藏。★ 真存下来（POST /api/chat/{id}/star），不是只在界面上点个亮 ——
+     星亮着但库里没存，过几天回来看就没了。返回的是**按完之后**的状态，
+     照它画，别自己猜（猜错＝界面说收下了，其实没收）。 */
+  async function doStar(w){
+    if(!await ensureId(w)){toast("这条还没落库，等它说完再收");return;}
+    let on=null;
+    try{
+      const r=await fetch("/api/chat/"+w.dataset.id+"/star",{method:"POST",credentials:"same-origin"});
+      const d=await r.json().catch(()=>null);
+      if(!r.ok||!d||d.ok===false)throw new Error((d&&(d.error||d.err))||("HTTP "+r.status));
+      on=!!d.starred;
+    }catch(e){ toast("没收上："+((e&&e.message)||"网络断了？")); return; }
+    w.classList.toggle("starred",on);
+    markStar(w);
+    toast(on?"收下了，在「记事 › 收藏」里找得到":"取消了");
+  }
+  function markStar(w){
+    const meta=w.querySelector(":scope > .meta");
+    if(!meta)return;
+    let m=meta.querySelector(".starmark");
+    if(!w.classList.contains("starred")){ if(m)m.remove(); return; }
+    if(!m){ m=el("span","starmark","★"); meta.insertBefore(m,meta.firstChild); }
+  }
+
   async function doDel(w){
     if(!await ensureId(w)){toast("这条还没落库，等它说完再来");return;}
     if(!confirm("真的删掉这条？删了就没了"))return;
@@ -652,6 +700,7 @@ boot();
       m.append(b);
     };
     add("复制",()=>doCopy(w));
+    add(w.classList.contains("starred")?"取消收藏":"收藏这句",()=>doStar(w));
     if(w.classList.contains("me"))add("编辑后重发",()=>doEdit(w));
     else add("编辑它的回复",()=>toast("改写它的历史回复要后端接口，第三批给你"));
     add("重新生成",()=>doRegen(w));
@@ -670,9 +719,11 @@ boot();
     d.onclick=e=>{e.stopPropagation();openMenu(w,d);};
     meta.append(d);
   }
-  const mo=new MutationObserver(()=>document.querySelectorAll("#stream .turn").forEach(ensureDots));
+  const mo=new MutationObserver(()=>document.querySelectorAll("#stream .turn").forEach(w=>{
+    ensureDots(w); markStar(w);
+  }));
   mo.observe($("#stream"),{childList:true,subtree:true});
-  document.querySelectorAll("#stream .turn").forEach(ensureDots);
+  document.querySelectorAll("#stream .turn").forEach(w=>{ensureDots(w);markStar(w);});
 
   /* ★ 让别的模块也能问「这条气泡对应库里哪一行」。
      nest-threads 的「重新生成」要用它拿到那条旧回复的 id —— 后端靠这个 id
