@@ -226,7 +226,9 @@ try{
   }
 
   window.NEST_PANES=window.NEST_PANES||{};
-  window.NEST_PANES.together=async function(box){
+  /* ★ 第二个参数是「进来就落到哪一档」—— 首页那 7 个小入口是
+     go("together", 名字) 进来的，不接住的话它们全都只到「全部」。 */
+  window.NEST_PANES.together=async function(box,cat){
     box.innerHTML="";
     const wrap=el("div","tg-wrap");
     const head=window.nestPageHead
@@ -253,6 +255,8 @@ try{
     box.append(wrap);
 
     let ALL=[], FILTER="全部", GROUP="dim";
+    /* 进来时点名要看哪一档（首页那 7 个小入口），认不出来就当「全部」 */
+    if(cat&&CATS.some(c=>c[0]===cat))FILTER=cat;
 
     chips.append(...CATS.map(([label])=>{
       const b=el("button",(label===FILTER?"on":""),label);

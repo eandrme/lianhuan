@@ -59,7 +59,11 @@ try{
 
   /* ★ 底部导航条撤了：这几个「格子」图标现在长在**抽屉**那一列房间上 */
   const navIcon=k=>document.querySelector('#drawer .room[data-tab="'+k+'"] .ic');
-  const barByTitle=t=>[].slice.call(document.querySelectorAll("#bar .ibtn")).find(b=>(b.title||"")===t);
+  const ACT_ICON=k=>document.querySelector('#drawer .room[data-act="'+k+'"] .ic');
+  /* ★ 底栏撤掉之后，「新对话 / 搜索历史 / MCP」这三个动作住在**抽屉**里
+     （原来在 #bar 上找，一个都找不到 —— 那三个图标槽填了也白填）。 */
+  const barByTitle=t=>[].slice.call(document.querySelectorAll("#drawer .room"))
+    .find(b=>(b.title||"")===t);
 
   function run(){
     const F=Object.assign({},DEF,get());
@@ -68,14 +72,14 @@ try{
     paint(navIcon("study"),F.icStudy,18,DEF.icStudy);
     paint(navIcon("notes"),F.icNotes,18,DEF.icNotes);
     paint(navIcon("setting"),F.icSetting,18,DEF.icSetting);
-    paint(barByTitle("新对话"),F.icNew,16,DEF.icNew);
-    paint(barByTitle("搜索历史"),F.icSearch,16,DEF.icSearch);
-    paint(barByTitle("MCP 工具包"),F.icMcp,16,DEF.icMcp);
+    paint(ACT_ICON("NEW")||barByTitle("新对话"),F.icNew,18,DEF.icNew);
+    paint(ACT_ICON("SEARCH")||barByTitle("搜索聊天与记忆"),F.icSearch,18,DEF.icSearch);
+    paint(ACT_ICON("MCP")||barByTitle("MCP 工具包"),F.icMcp,18,DEF.icMcp);
   }
 
   function buildSection(){
     const wrap=el("div"); wrap.id="ui-icons";
-    wrap.append(Object.assign(el("div","sk-h"),{textContent:"主界面图标"}));
+    wrap.append(Object.assign(el("div","sk-h"),{textContent:"抽屉与主界面图标"}));
     FIELDS.forEach(f=>{
       const T=get();
       const i=el("input"); i.type="text";

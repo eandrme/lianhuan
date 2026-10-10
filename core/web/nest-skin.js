@@ -102,14 +102,26 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r))}
     set("--bg",T.bg);set("--panel",T.panel);set("--panel2",T.panel2);set("--line",T.line);
     set("--fg",T.fg);set("--dim",T.dim);set("--dim2",T.dim2);
     set("--accent",T.accent);set("--ok",T.ok);set("--err",T.err);set("--warn",T.warn);
-    set("--nest-ai-bubble",T.aiBubble);set("--nest-me-bubble",T.meBubble);
-    /* ★ 字色：用户填了就听用户的；没填就按底色推 ——
-       只有 #rrggbb / #rgb 推得出该配深字还是浅字，海沫玻璃那种 rgba(...) 推不出来，
-       退回正文色 --tx-1（写死白色会变成白字白底）。 */
+    /* ★ 气泡颜色：**等于出厂值就别写**。
+       以前这里无条件 set，把外壳 CSS 里那两条 `:root[data-moon="1"] …` 的
+       fallback 永远盖住了 —— 月亮版于是还挂着白天那层浅色气泡。
+       不写的话，外壳（含月光那一套）自己会取正确的默认值。 */
+    const setOrClear=(k,v,dflt)=>{
+      if(String(v==null?"":v)===String(dflt==null?"":dflt))document.documentElement.style.removeProperty(k);
+      else document.documentElement.style.setProperty(k,v);
+    };
+    /* ★ 字色：用户填了就听用户的；没填但底色改过 → 按底色推；
+       底色也是出厂值 → 别写，交给外壳（只有 #rrggbb / #rgb 推得出深浅，
+       海沫玻璃那种 rgba(...) 推不出来，退回正文色 --tx-1）。 */
     const autoFg=bg=>/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(bg||""))
         ?(lum(bg)>0.62?"#10131a":"#ffffff"):"var(--tx-1)";
-    set("--nest-ai-fg",String(T.aiBubbleFg||"").trim()||autoFg(T.aiBubble));
-    set("--nest-me-fg",String(T.meBubbleFg||"").trim()||autoFg(T.meBubble));
+    const customBg=(v,d)=>String(v||"")===String(d||"")?"":v;
+    setOrClear("--nest-ai-bubble",T.aiBubble,D.aiBubble);
+    setOrClear("--nest-me-bubble",T.meBubble,D.meBubble);
+    setOrClear("--nest-ai-fg",String(T.aiBubbleFg||"").trim()
+      ||(customBg(T.aiBubble,D.aiBubble)?autoFg(T.aiBubble):""),"");
+    setOrClear("--nest-me-fg",String(T.meBubbleFg||"").trim()
+      ||(customBg(T.meBubble,D.meBubble)?autoFg(T.meBubble):""),"");
     /* ★ --nest-r-bubble / --nest-tail 不再写了：气泡那两组不对称软边是设计定死的，
        面板里那两枚控件也一起撤了，留着这两个变量只会让人以为还能调。 */
     set("--nest-r-card",T.rCard+"px");

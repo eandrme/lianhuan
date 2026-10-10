@@ -448,14 +448,86 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertNotIn("border-bottom:8px solid", tl, "不该是一块实心深色三角")
         self.assertRegex(tl, r"\.tl-c\.s-d::before,\.tl-c\.s-d::after\{[^}]*background:rgba\(255,255,255,\.35\)")
 
+    def test_the_view_container_covers_the_chat(self):
+        """★ 视图是**盖在聊天上面的一层** —— 它要是透明的，底下的 #chatCol
+        （顶栏 / 消息流 / 输入框）会从每个子页底下透出来。
+
+        这条是走查时真抓到的：上一版把 #pane 的底色写成了 transparent，
+        而 29 条测试一条都拦不住（它们只查字符串在不在）。
+        """
+        rule = re.search(r"#pane\{[^}]*\}", self.tabs)
+        self.assertIsNotNone(rule, "找不到 #pane 那条样式")
+        css = rule.group(0)
+        self.assertNotIn("background:transparent", css, "#pane 不许是透明的")
+        self.assertRegex(css, r"background:color-mix\(in srgb,var\(--paper\)",
+                         "#pane 得有一层和纸色（还看得见纸纹和墨晕，但盖得住聊天）")
+        # 而且没有任何地方把 #chatCol 藏起来 —— 所以底色是唯一的依靠
+        self.assertNotIn("#chatCol{display:none", self.html)
+
+    def test_jumping_to_a_section_works_on_a_fresh_load(self):
+        """★ 全新一次会话里点「日历 / 空间」也要落到那一档。
+
+        走查时抓到的：window.nestNotesOpen 原来定义在 NEST_PANES.notes **里面**，
+        也就是「这一页至少开过一次之后」才存在。于是首页那两张卡、
+        一起页点开一条、十一档弹层 —— 全都只落到默认的「日记」。
+        """
+        notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")
+        i_open = notes.index("window.nestNotesOpen=")
+        i_pane = notes.index("window.NEST_PANES.notes=")
+        self.assertLess(i_open, i_pane,
+                        "nestNotesOpen 得写在模块作用域（NEST_PANES.notes 之前）")
+        # 它得真的把「想要哪一档」交给页面去按
+        self.assertIn("wantSec", notes)
+        self.assertIn("notesSel", notes)
+        # 首页那两张卡与一起页都要走这个口子，而不是弱回退到 go("notes")
+        home = (WEB / "nest-home.js").read_text(encoding="utf-8")
+        self.assertIn('nestNotesOpen("日历")', home)
+        self.assertIn('nestNotesOpen("空间")', home)
+        tg = (WEB / "nest-together.js").read_text(encoding="utf-8")
+        self.assertIn("nestNotesOpen(it.cat)", tg)
+
+    def test_home_shortcuts_land_on_the_right_category(self):
+        """★ 首页「一起」下面那 7 个小入口，点了要落到**它自己那一档**。
+
+        走查时抓到的：入口是 go("together", 名字) 进来的，但
+        NEST_PANES.together 没接第二个参数 —— 七个入口全都只到「全部」。
+        """
+        tg = (WEB / "nest-together.js").read_text(encoding="utf-8")
+        self.assertRegex(tg, r"NEST_PANES\.together=async function\(box,\s*cat\)",
+                         "得接住「进来就落到哪一档」这个参数")
+        self.assertIn("if(cat&&CATS.some", tg, "得真的用它去选中那一档")
+        home = (WEB / "nest-home.js").read_text(encoding="utf-8")
+        self.assertIn('go("together",label)', home, "首页那 7 个入口要把档位传过去")
+
+    def test_the_drawer_actions_can_still_be_re_iconed(self):
+        """★ 底栏撤了之后，「新对话 / 搜索 / MCP」搬进了抽屉 ——
+        「抽屉与主界面图标」那一节得跟着搬，不然那三个图标槽填了也白填。"""
+        self.assertIn("b.title=label", self.tabs, "抽屉动作按钮要带 title")
+        self.assertIn("b.dataset.act=", self.tabs)
+        ui = (WEB / "nest-ui.js").read_text(encoding="utf-8")
+        self.assertNotIn("#bar .ibtn", ui, "那三个动作已经不在顶栏上了")
+        self.assertIn("#drawer .room", ui, "得到抽屉里找")
+
+    def test_bubble_theme_defaults_do_not_shadow_the_sheets(self):
+        """★ 出厂的气泡颜色**不许写进 <html> 的行内样式**。
+
+        写进去就会盖住外壳 CSS 里那两条 `:root[data-moon="1"] …` 的 fallback ——
+        月亮版于是还挂着白天那层浅色气泡（走查时发现的）。
+        用户自己改过才写；改回出厂值就交还给外壳。
+        """
+        skin = (WEB / "nest-skin.js").read_text(encoding="utf-8")
+        self.assertIn("setOrClear", skin)
+        self.assertRegex(skin, r'setOrClear\("--nest-ai-bubble",T\.aiBubble,D\.aiBubble\)')
+        self.assertRegex(skin, r'setOrClear\("--nest-me-bubble",T\.meBubble,D\.meBubble\)')
+
     def test_bubble_colours_and_names_are_editable(self):
         """★ 用户定的：助手气泡和用户气泡的**底色和字色**都能改，名字也都能改。"""
         skin = (WEB / "nest-skin.js").read_text(encoding="utf-8")
         # 主题里两边的字色都有
         for key in ("aiBubbleFg", "meBubbleFg"):
             self.assertIn(key, skin, key)
-        self.assertIn('set("--nest-ai-fg"', skin)
-        self.assertIn('set("--nest-me-fg"', skin)
+        self.assertIn('"--nest-ai-fg"', skin)
+        self.assertIn('"--nest-me-fg"', skin)
         # 外壳真的读它们
         self.assertIn("var(--nest-ai-fg,var(--tx-1))", self.html)
         self.assertIn("var(--nest-me-fg,var(--tx-1))", self.html)

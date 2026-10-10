@@ -33,7 +33,10 @@ try{
    ★ 没有底部导航条了，所以铺满整屏（原来底下要让出一格 --nest-tabs-h）。
      内容自己带安全区留白，见 .pb 的 padding。 */
 #pane{position:fixed;inset:0;z-index:40;
-  background:transparent;
+  /* ★ 必须**有底**：视图只是盖在聊天上面的一层，底要是透明的，
+     底下那套 #chatCol（顶栏 / 消息流 / 输入框）会整个透出来。
+     用和纸色带一点透 —— 既盖得住聊天，又还看得见纸纹和墨晕。 */
+  background:color-mix(in srgb,var(--paper) 92%,transparent);
   display:flex;flex-direction:column;animation:pageIn 420ms cubic-bezier(.22,.8,.3,1)}
 /* 子页自己那条顶栏（返回 / 标题 / 拉丁小标 / 右侧动作） */
 #pane .ph{display:flex;align-items:center;gap:10px;
@@ -154,6 +157,9 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   const acts=el("div"); dpanel.append(acts);
   function drawerBtn(iconName,label,fn,en){
     const b=el("button","room");
+    /* ★ .title 不是装饰：「主界面图标」那一节靠它认按钮（原来在 #bar 上找，
+       底部导航条撤了之后这些动作搬进抽屉，找不到了 —— 那三个图标槽就死了）。 */
+    b.title=label; b.dataset.act=en||label;
     const ic=el("span","ic"); ic.append(nestIcon(iconName,18));
     b.append(ic,el("span",null,label),el("span","sp"));
     if(en)b.append(el("span","en",en));

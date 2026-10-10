@@ -182,10 +182,23 @@ try{
   };
 
   let SEC="diary", WHO="ai";
+  /* ★ 「跳到某一档」的口子必须在**模块作用域**上 ——
+     原来它定义在 NEST_PANES.notes 里面，也就是「这一页至少开过一次之后」才有。
+     结果全新一次会话里，首页的「日历 / 空间」、一起页点开一条、十一档弹层
+     全都只落到默认的「日记」档（弱回退 go("notes") 不带档位）。
+     现在：记下想要哪一档 → 渲染 → 渲染完立刻按上去。 */
+  let notesSel=null, wantSec=null;
+  window.nestNotesOpen=function(label){
+    wantSec=label;
+    if(window.nestGo)window.nestGo("notes");   /* 同步渲染，回来时 notesSel 已经装好 */
+    if(notesSel)notesSel(label);
+    else if(label)setTimeout(()=>{ if(notesSel)notesSel(label); },80);
+  };
 
   window.NEST_PANES.notes=function(box){
     box.innerHTML="";
     const chips=el("div","nt-chips");
+    const chipsEl=chips;
     const body=el("div");
     box.append(chips,body);
     const SECS=[
@@ -212,19 +225,18 @@ try{
       };
       chips.append(b);
     });
+    /* 装上「切到某一档」：别处（首页 / 一起页 / 表情包管理）都靠它落到对的档 */
+    notesSel=function(label){
+      if(!label)return;
+      const chips=[].slice.call(chipsEl.children);
+      const b=chips.filter(x=>x.textContent.replace(/\s+\d+$/,"")===label)[0]
+            ||chips[SECS.map(x=>x[1]).indexOf(label)];
+      if(b)b.click();
+    };
     const cur=SECS.filter(s=>s[0]===SEC)[0]||SECS[0];
     cur[2](body);
-    /* ★ 给别处用：主界面的「日历 / 空间」卡片直接落到这一档
-       （底部导航条撤了，不能再靠点标签栏那一格跳过来）。 */
-    window.nestNotesOpen=function(label){
-      const hit=SECS.filter(s=>s[1]===label)[0];
-      if(window.nestGo)window.nestGo("notes");
-      setTimeout(()=>{
-        const chips=document.querySelectorAll("#pane .nt-chips button");
-        for(const b of chips){ if(b.textContent.replace(/\s+\d+$/,"")===label){ b.click(); return; } }
-        if(hit){ const b=[...chips][SECS.indexOf(hit)]; if(b)b.click(); }
-      },60);
-    };
+    /* 进来之前就点了「日历」的话，这一下把它按上 */
+    if(wantSec){ const w=wantSec; wantSec=null; notesSel(w); }
   };
 
   const loading=list=>list.append(el("div","hint","读取中…"));
