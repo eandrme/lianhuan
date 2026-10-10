@@ -187,8 +187,15 @@ def exec_guard(allow, assistant_id=None, notes=None):
 
     async def _run(name: str, args: dict):
         if allow is not None and "__" in str(name):
-            server = str(name).split("__", 1)[0]
-            if server not in {str(x) for x in allow}:
+            # ★ 认服务器要**问 mcp_client**，不能拿 `split("__")[0]` 去切：
+            #   中文名的 server（「潮汐岛」）在工具名里被压成一串下划线，切出来是空串，
+            #   于是「助手开了这台」也照样被拒，报错还写着「「」这个 MCP…」——
+            #   模型一调就被拒，只能跟人说「没打开」，可界面上开关明明是开的。
+            from . import mcp_client as _mcp
+            server = _mcp.server_of(str(name))
+            if server is None:
+                server = str(name).split("__", 1)[0]      # 认不出来（没连上/凭空编的）退回老办法
+            if str(server) not in {str(x) for x in allow}:
                 return {"ok": False, "err": f"「{server}」这个 MCP 没给这位助手开 —— "
                                             f"要用就去 设置 › 助手管理 里手动勾"}
         if name == "send_sticker":
@@ -344,9 +351,13 @@ async def execute(name: str, args: dict) -> dict:
     if name == "list_my_tools":
         from . import mcp_client
         builtin = [t["function"]["name"] for t in TOOLS]
-        mcp = {s2["name"]: s2["tools"] for s2 in mcp_client.status()}
+        # ★ 必须报**真能调用的**那串名字（`_fn_name()` 压过的），不是 MCP 报的原始工具名。
+        #   中文名 server 会被压成带哈希的前缀，报原始名它就对不上 ——
+        #   被问「潮汐岛开着吗」时它看着手里的工具答不上来，只能说「没打开」。
+        mcp = mcp_client.tools_by_server()
         return {"builtin": builtin, "mcp": mcp,
-                "note": "想要还没有的工具：让对方在 设置›功能包 里登记 MCP，或写进装配单"}
+                "note": "mcp 里每一行是「服务器名: 它下面真能调用的工具名」。"
+                        "想要还没有的工具：让对方在 设置›功能包 里登记 MCP，或写进装配单"}
     if name == "list_packs":
         from . import packs as _p
         return {"packs": [_p._state(x) for x in _p.PACKS]}

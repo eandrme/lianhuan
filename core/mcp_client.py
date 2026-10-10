@@ -12,6 +12,7 @@ AI 只能用已登记的 server，不能自己添加。
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -520,9 +521,65 @@ async def probe(spec: dict, timeout: float = 75.0) -> dict:
         await s.close()
 
 
+def _slug(s: str) -> str:
+    """把一段名字压成 openai 肯收的 ASCII；**压过了就接一小段哈希**。
+
+    ★ 为什么非接哈希不可：中文 server 名（「潮汐岛」）被压出来是一串下划线 ——
+      两台中文名的 MCP 压出来**一模一样**，工具名就撞了。撞了以后 `execute()`
+      会命中先注册的那台：你调「潮汐岛」的动作，落到别人地头上。
+      接一段 sha1 前 6 位，既不撞、又跟原名一一对应（同一个名字永远同一串）。
+    """
+    s = str(s or "")
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", s)
+    if s and safe == s:
+        return safe                       # 本来就是 ASCII：一个字都不动（老用户的工具名不变）
+    h = hashlib.sha1(s.encode("utf-8")).hexdigest()[:6]
+    return (safe[:24] or "") + "_" + h
+
+
 def _fn_name(server: str, tool: str) -> str:
-    """openai 函数名只许 [A-Za-z0-9_-] 64 字内。"""
-    return re.sub(r"[^A-Za-z0-9_-]", "_", f"{server}__{tool}")[:64]
+    """openai 函数名只许 [A-Za-z0-9_-] 64 字内（超了整条请求会被 400 打回来）。"""
+    head, tail = _slug(server), _slug(tool)
+    name = f"{head}__{tail}"
+    if len(name) <= 64:
+        return name
+    # 太长要截：**头尾都截**，哈希挂在尾巴上 —— 否则两个长名字截成同一个，
+    # 又回到「调错服务器」那条老路上。（头不截的话，光一个长 server 名就超了。）
+    h = hashlib.sha1(name.encode("utf-8")).hexdigest()[:6]
+    # 64 里要扣掉：`__` 2 位 + 哈希前那个 `_` 1 位 + 哈希 6 位 = 9
+    budget = 64 - 9
+    hh = min(len(head), max(1, budget // 2))
+    tt = max(1, budget - hh)
+    return f"{head[:hh]}__{tail[:tt]}_{h}"
+
+
+def server_of(fn_name: str) -> str | None:
+    """这个函数名是哪台 MCP 的；认不出来回 None。
+
+    ★ 别拿 `name.split("__")[0]` 去猜服务器 —— 中文名的 server 压出来是一串下划线，
+      切出来是**空字符串**，于是权限那道门认不出是谁，把整台服务器的工具全拒了：
+      界面上开关是开的、工具也发给了模型，可模型一调就回
+      「「」这个 MCP 没给这位助手开」—— 它只能跟人说「没打开」。
+    """
+    for n, s in _servers.items():
+        for t in s.tools:
+            if _fn_name(n, t["name"]) == fn_name:
+                return n
+    return None
+
+
+def tools_by_server() -> dict:
+    """每台 MCP **真正能调用的**函数名，按 server 分组。
+
+    ★ 给模型看的必须是这一份：`status()` 里那些是**原始工具名**，
+      而它真正要写在 tool_call 里的是 `_fn_name()` 压过的那个。
+      报原始名它就对不上，一调就「没有这只手」。
+    """
+    out = {}
+    for n, s in _servers.items():
+        if s.tools:
+            out[n] = [_fn_name(n, t["name"]) for t in s.tools]
+    return out
 
 
 def openai_tools(only=None) -> list:
