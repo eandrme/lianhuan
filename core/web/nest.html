@@ -43,7 +43,7 @@
   /* 语义色只留「能认出来」这一点用处，色相全部压进冷调 ——
      原来的「进行中」是一块暖土金，跟这套皮冲突，换掉了。 */
   --ok:#6E9E86; --err:#B0757C; --warn:#9A8FA8;
-  --r:20px; --r-sm:12px; --gap:10px; --pad:16px;
+  --r:24px; --r-sm:12px; --gap:10px; --pad:16px;
   --fs:15px; --lh:1.8; --colw:720px; --sidew:300px;
   /* ★ 不引 Google Fonts：那台在手机上常常是**连不上**的，而 <link> 是阻塞渲染的 ——
      一整页会白等它超时。宋体用系统里的：iOS 有 Songti SC，安卓中文机多半有思源宋。
@@ -85,8 +85,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
    而且不缩回去 —— 聊天框、搜索、每个弹层里的输入框都会触发。
    16 是最低线，不是审美。!important 是为了压过各模块自己那条 `font:inherit`。 */
 input,textarea,select{font-size:16px!important}
-/* ★ 底部标签栏要给手势条让位（iPhone 那条小白条），不然「设置」两个字压在它底下。 */
-#tabs{padding-bottom:env(safe-area-inset-bottom)}
 #chatCol{flex:1;min-width:0;display:flex;flex-direction:column}
 #bar{display:flex;align-items:center;gap:10px;padding:10px var(--pad);
   border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;
@@ -225,10 +223,12 @@ details.think .sec{color:var(--dim2)}
    这样「消息进来了」这件事还看得见，但没有任何东西在动。 */
 @media (prefers-reduced-motion:reduce){
   .blob{animation:none!important}
-  .tide .avs .a,#newChatFab{animation:none!important}
+  .tide .avs .a,.hm-ava{animation:none!important}
   .stage .foam i,.stage .dots i,.dots i{animation:none!important;opacity:.6}
   *{animation-name:none!important;transition-property:opacity,color,background-color,border-color!important}
-  .turn,#pane,.sheet .box{animation:fadeIn 420ms ease forwards!important}
+  /* 页面切换 / 消息入场：退化成纯淡入（横向位移和模糊都去掉） */
+  .turn,#pane,.sheet .box,.hm-in{animation:fadeIn 420ms ease forwards!important}
+  #bg{animation:none!important}
   /* hover 上浮 / 按压缩放也一起去掉 */
   .nt-card:hover,.set-sec:hover,.ty-card:hover,.ph-card:hover,.mem-card:hover,
   .st-book:hover,.tide-row>*:hover,.cr-card:hover,.cr-note:hover,button:active{
@@ -295,7 +295,7 @@ details.think .sec{color:var(--dim2)}
   border-radius:22px 30px 26px 18px;
   background:var(--nest-ai-bubble,rgba(110,130,150,.10));
   border:0;
-  color:var(--tx-1);
+  color:var(--nest-ai-fg,var(--tx-1));
 }
 /* 我：海沫玻璃 —— 右下角一个 6px 的指向 */
 .turn.me .bubble{
@@ -314,8 +314,8 @@ details.think .sec{color:var(--dim2)}
 /* 打字中：上浮的海沫 */
 .stage .dots i,.dots i{animation:bubbleUp 1.6s ease-in-out infinite}
 /* ── 输入：悬浮玻璃条 ──
-   ★ 底下多留 34px：正中那颗凸起的心要探上来 26px，不留白就会压在输入框上。 */
-#composer{padding:8px var(--pad) calc(34px + env(safe-area-inset-bottom))}
+   ★ 底部导航条撤了，底下只要给手势条让位（原来还得再留 26px 给那枚凸起的心）。 */
+#composer{padding:8px var(--pad) calc(10px + env(safe-area-inset-bottom))}
 #composer .row{border-radius:24px;padding:8px 8px 8px 14px;gap:8px;
   background:var(--glass-bg);
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
@@ -324,23 +324,9 @@ details.think .sec{color:var(--dim2)}
 #btnSend{border-radius:18px;background:var(--glass-bg);border:1px solid var(--ink-1);
   color:var(--accent);font-weight:500;letter-spacing:.06em;padding:9px 16px}
 #btnSend.stop{border-color:var(--err);color:var(--err);background:var(--glass-bg)}
-/* ── 底部导航：玻璃条 + 正中凸起 26px 的心 ── */
-#tabs{position:relative;z-index:41;border-top:1px solid var(--glass-line);
-  background:var(--glass-bg);
-  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
-#tabs button{color:var(--tx-3)}
-#tabs button.on{color:var(--accent)}
-#tabs button .lb{font-family:var(--font);font-size:10.5px;letter-spacing:.14em}
-/* ★ 心＝底部导航正中间那枚，向上凸起 26px（半个身子在导航条里、半个探出来）。
-   放在 #tabs 里而不是 fixed 到屏幕上：它跟着导航条走，永远压不到输入框。 */
-#newChatFab{position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(100% - 26px);z-index:7;
-  width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  color:var(--accent);background:var(--foam-1);border:1px solid var(--glass-line);
-  box-shadow:var(--shadow);
-  animation:breathe 4s ease-in-out infinite}
-:root[data-moon="1"] #newChatFab{background:rgba(255,255,255,.14)}
-#newChatFab .ni,#newChatFab svg{width:24px;height:24px}
+/* ★ 底部导航条整条撤了（用户定的：主界面把入口全部平铺出来，点卡片进子页）。
+   原来那排六格 + 正中间凸起 26px 的心都在 nest-tabs.js 里，一并删掉了；
+   回主界面现在靠聊天顶栏最左边那颗 house、以及抽屉里第一条。 */
 /* ── 抽屉 ── */
 #drawer{position:fixed;inset:0;z-index:60;background:rgba(70,100,130,.18);
   backdrop-filter:blur(2px);opacity:0;pointer-events:none;transition:opacity .3s ease}
@@ -1197,8 +1183,11 @@ boot();
 </script>
   <script src="/nest-skin.js?v=1"></script>
   <script src="/nest-tabs.js?v=1"></script>
+  <script src="/nest-home.js?v=1"></script>
   <script src="/nest-ui.js?v=1"></script>
   <script src="/nest-memory.js?v=1"></script>
+  <script src="/nest-together.js?v=1"></script>
+  <script src="/nest-timeline.js?v=1"></script>
   <script src="/nest-study.js?v=1"></script>
   <script src="/nest-bookchat.js?v=1"></script>
   <script src="/nest-creation.js?v=1"></script>

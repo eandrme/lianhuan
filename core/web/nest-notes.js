@@ -42,7 +42,8 @@ try{
   const $=(s,r=document)=>r.querySelector(s);
   const pad2=n=>String(n).padStart(2,"0");
   const todayISO=()=>{const d=new Date();return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate());};
-  const goChat=()=>{const b=$('#tabs button[data-tab="chat"]'); if(b)b.click();};
+  /* ★ 底部导航条撤了：跳转一律走 window.nestGo（nest-tabs.js 暴露的路由） */
+  const goChat=()=>{ if(window.nestGo)window.nestGo("chat"); };
 
   const css=document.createElement("style");
   css.textContent=`
@@ -213,6 +214,17 @@ try{
     });
     const cur=SECS.filter(s=>s[0]===SEC)[0]||SECS[0];
     cur[2](body);
+    /* ★ 给别处用：主界面的「日历 / 空间」卡片直接落到这一档
+       （底部导航条撤了，不能再靠点标签栏那一格跳过来）。 */
+    window.nestNotesOpen=function(label){
+      const hit=SECS.filter(s=>s[1]===label)[0];
+      if(window.nestGo)window.nestGo("notes");
+      setTimeout(()=>{
+        const chips=document.querySelectorAll("#pane .nt-chips button");
+        for(const b of chips){ if(b.textContent.replace(/\s+\d+$/,"")===label){ b.click(); return; } }
+        if(hit){ const b=[...chips][SECS.indexOf(hit)]; if(b)b.click(); }
+      },60);
+    };
   };
 
   const loading=list=>list.append(el("div","hint","读取中…"));
@@ -1222,7 +1234,7 @@ try{
           if(r.ok){ say(r.starred?"收下了":"取消了"); load(); } else say("没成："+(r.err||"?"));
         };
         const bg=el("button",null,"去聊天");
-        bg.onclick=()=>{ const b=$('#tabs button[data-tab="chat"]'); if(b)b.click(); };
+        bg.onclick=()=>{ if(window.nestGo)window.nestGo("chat"); };
         ops.append(bg,bd); head.append(ops);
         c.append(head);
         if(x.ask){

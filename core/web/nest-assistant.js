@@ -455,18 +455,16 @@ try{
       +"\n点一下看他是谁 / 他名下的窗口";
   }
   window.nestOpenAsstManager=function(){
-    const t=document.querySelector('#tabs button[data-tab="setting"]');
-    if(t)t.click();
+    /* ★ 底部导航条撤了，改用路由 API */
+    if(window.nestGo)window.nestGo("setting");
     setTimeout(()=>{
       const s=document.getElementById("as-sec");
       if(s&&s.scrollIntoView)s.scrollIntoView({block:"start"});
     },400);
   };
   mountBadge();
-  document.addEventListener("click",e=>{
-    const b=e.target&&e.target.closest&&e.target.closest("#tabs button");
-    if(b&&(b.dataset.tab||"chat")!=="setting")loadBadge(true);
-  },true);
+  /* 从设置页走开就刷新一下那把「现在是哪位助手」的小牌子 */
+  if(window.nestOnView)window.nestOnView(k=>{ if(k!=="setting")loadBadge(true); });
   setInterval(()=>{ if(gSid()!==curSid)loadBadge(); },900);
   setInterval(()=>{
     if(document.visibilityState!=="visible")return;

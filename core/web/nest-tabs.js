@@ -1,7 +1,17 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 导航模块 v1：几个格子 + 多窗口 + 搜索 + MCP 按钮
+   巢 · 导航模块 v2：视图路由 + 多窗口 + 搜索 + MCP
+
    装法：nest.html 里，nest-icon.js 那行【下面】再加一行
         <script src="/nest-tabs.js?v=1"></script>
+
+   ★ v2 起**没有底部导航条了**（用户定的：主界面把入口全部平铺出来，
+     靠点卡片进子页）。原来那排六格 + 正中间凸起的心一并撤掉。
+     `TABS` 这张表留着 —— 它现在是**视图注册表**（id / 图标 / 中文名 / 拉丁名），
+     抽屉、「我的」里的跳转、以及图标设置都读它。
+
+   对外只暴露两样东西给别的模块用：
+     window.nestGo(k)   跳到一个视图（'chat' 就是回到聊天）
+     window.nestView()  现在是哪个视图
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -19,45 +29,62 @@ try{
 
   const css=document.createElement("style");
   css.textContent=`
-#tabs{display:flex;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
-#tabs button{flex:1;padding:9px 0 10px;display:flex;flex-direction:column;align-items:center;gap:4px;
-  color:var(--dim2);transition:color .25s ease,transform .2s ease}
-#tabs button .lb{font-size:10.5px;letter-spacing:.14em;font-family:var(--font)}
-#tabs button.on{color:var(--accent)}
-#tabs button:active{transform:scale(.96)}
-/* 正中间给那枚凸起的心留一格缺口：它住在这儿，谁也不挡 */
-#tabs .fab-slot{flex:0 0 60px;pointer-events:none}
-/* ★ 面板不盖住底部导航：留出它那一格（--nest-tabs-h 是量出来的高度） */
-#pane{position:fixed;inset:0 0 var(--nest-tabs-h,0px) 0;z-index:40;
+/* ── 视图容器 ──
+   ★ 没有底部导航条了，所以铺满整屏（原来底下要让出一格 --nest-tabs-h）。
+     内容自己带安全区留白，见 .pb 的 padding。 */
+#pane{position:fixed;inset:0;z-index:40;
+  background:transparent;
+  display:flex;flex-direction:column;animation:pageIn 420ms cubic-bezier(.22,.8,.3,1)}
+/* 子页自己那条顶栏（返回 / 标题 / 拉丁小标 / 右侧动作） */
+#pane .ph{display:flex;align-items:center;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
   background:var(--glass-bg);
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
-  display:flex;flex-direction:column;animation:pageIn 420ms cubic-bezier(.22,.8,.3,1)}
-#pane .ph{display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
-  border-bottom:1px solid var(--line)}
-#pane .ph .ic{color:var(--accent)}
-#pane .ph .t{font-weight:500;letter-spacing:.1em}
+  border-bottom:1px solid var(--glass-line)}
+#pane .ph .ic{color:var(--ink-1);display:flex}
+#pane .ph .t{font-family:var(--font);font-weight:500;font-size:20px;letter-spacing:.15em;color:var(--tx-1)}
 #pane .ph .en{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
   text-transform:uppercase}
 #pane .ph .x{margin-left:auto}
-#pane .pb{flex:1;overflow:auto;padding:16px 14px calc(18px + var(--nest-tabs-h,0px))}
+#pane .ph .back,#pane .ph .x{width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  color:var(--tx-2);margin-left:-10px}
+#pane .ph .back:active,#pane .ph .x:active{transform:scale(.94)}
+#pane .ph .x{margin-left:auto;margin-right:-10px}
+#pane .pb{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;
+  padding:18px 16px calc(28px + env(safe-area-inset-bottom))}
+/* 主界面自己管顶栏和留白，不要再套一层 */
+#pane .pb.bare{padding:0}
+/* ── 首页那张顶栏（☰ · HOME · ⚙）── */
+#pane .ph.home{padding:calc(10px + env(safe-area-inset-top)) 12px 10px;
+  border-bottom:1px solid transparent}
+#pane .ph.home .mid{flex:1;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px}
+#pane .ph.home .mid b{font-family:var(--latin);font-size:13px;letter-spacing:.32em;color:var(--tx-1);
+  font-weight:400}
+#pane .ph.home .mid span{font-family:var(--latin);font-size:9px;letter-spacing:.24em;color:var(--latin-c)}
+#pane .ph.home .ibtn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+  color:var(--tx-2);border-radius:50%}
+#pane .ph.home .ibtn:active{transform:scale(.94);background:var(--panel2)}
+/* ── 弹层（对话窗口 / 搜索 / MCP …）── */
 .sheet{position:fixed;inset:0;z-index:45;background:rgba(70,100,130,.22);
   backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center}
 .sheet .box{width:min(660px,100%);max-height:76vh;overflow:auto;
   background:var(--glass-bg);backdrop-filter:blur(18px) saturate(140%);
   -webkit-backdrop-filter:blur(18px) saturate(140%);
-  border:1px solid var(--glass-line);border-radius:26px 26px 0 0;padding:14px;
+  border:1px solid var(--glass-line);border-radius:24px 24px 0 0;padding:14px;
   padding-bottom:calc(14px + env(safe-area-inset-bottom));box-shadow:var(--shadow);
   animation:msgIn 320ms cubic-bezier(.22,.8,.3,1)}
 .sheet .bh{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .sheet .bh b{font-size:15px;font-weight:500;letter-spacing:.1em}
-.sheet .bh .x{margin-left:auto}
+.sheet .bh .x{margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center}
 .sheet input[type=text]{width:100%;padding:10px 12px;border-radius:14px;border:1px solid var(--glass-line);
   background:var(--glass-bg);color:var(--fg);font:inherit;outline:none;box-sizing:border-box;margin-bottom:8px}
-.thr,.res{display:flex;align-items:center;gap:9px;padding:11px 9px;border-bottom:1px solid var(--line);cursor:pointer}
+.thr,.res{display:flex;align-items:center;gap:9px;padding:11px 9px;border-bottom:1px solid var(--line);cursor:pointer;
+  min-height:44px}
 .thr:hover,.res:hover{background:var(--panel2)}
 .thr .tt,.res .tt{flex:1;min-width:0;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .thr .tn{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);flex:0 0 auto}
 .thr.on .tt{color:var(--accent)}
+.thr .tt,.res .tt{color:var(--tx-1)}
 .res{display:block}
 .res .k{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
   text-transform:uppercase;margin-bottom:2px}
@@ -65,13 +92,41 @@ try{
   padding:16px;color:var(--dim);box-shadow:var(--shadow)}
 .ph-card b{color:var(--fg);font-size:15px;font-weight:500;letter-spacing:.08em}
 pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre-wrap;word-break:break-all}
+/* ── 子页共用顶栏（‹ 返回 / 标题 / 拉丁小标 / 右侧动作）── */
+.pg-head{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;
+  padding:calc(8px + env(safe-area-inset-top)) 8px 8px;
+  background:var(--glass-bg);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  border-bottom:1px solid var(--glass-line)}
+.pg-back,.pg-act{width:44px;height:44px;min-width:44px;display:flex;align-items:center;
+  justify-content:center;color:var(--tx-2);background:none;border:0;cursor:pointer;
+  transition:transform .3s ease,color .3s ease}
+.pg-back:hover,.pg-act:hover{color:var(--tx-1)}
+.pg-back:active,.pg-act:active{transform:scale(.94)}
+.pg-act{width:auto;min-width:44px;padding:0 8px;gap:6px;font-size:13px;color:var(--accent)}
+.pg-mid{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px}
+.pg-mid b{font-family:var(--font);font-weight:500;font-size:20px;letter-spacing:.15em;
+  color:var(--tx-1);line-height:1.2}
+.pg-en{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
+  text-transform:uppercase}
+.pg-sub{font-size:12px;color:var(--tx-2);letter-spacing:.04em}
+.pg-right{display:flex;align-items:center;gap:2px;min-width:44px;justify-content:flex-end}
+
+/* ── 页面切换：内容横向淡入 420ms；背景那层慢一点，做出景深 ── */
+@keyframes bgShift{
+  0%{transform:scale(1.015) translateX(-7px);opacity:.86}
+  100%{transform:none;opacity:1}
+}
+/* 聊天顶栏那颗「回主界面」 */
+#bar .ibtn.home{color:var(--tx-2)}
 `;
 
   document.head.append(css);
 
-  /* ★ 顺序是定下的：聊天 · 记忆 · 巢 · 书房 · 一起 · 我的。
+  /* ★ 视图注册表。顺序是定下的：聊天 · 记忆 · 巢 · 书房 · 一起 · 我的。
      「一起」＝记事（日记/碎碎念/心情/日历/梗库/表情包/健康/空间/时间线/收藏）
-     ＋ **玩具箱**（他写的小网页）—— 玩具箱不再单独占一格。 */
+     ＋ **玩具箱**（他写的小网页）—— 玩具箱不再单独占一格。
+     ★ 主界面（home）不在这张表里：它不是「一格」，是这一页本身。 */
   const TABS=[["chat","chat","聊天","CHAT"],
               ["memory","tide","记忆","TIDE"],
               ["rooms","nest","巢","NEST"],
@@ -79,35 +134,17 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
               ["notes","together","一起","TOGETHER"],
               ["setting","mine","我的","MINE"]];
 
-  const nav=el("nav"); nav.id="tabs";
-  TABS.forEach(t=>{
-    const b=el("button"); b.dataset.tab=t[0];
-    const ic=el("span","ic"); ic.append(nestIcon(t[1],20));
-    b.append(ic,el("span","lb",t[2]));
-    b.title=t[2]+" · "+t[3];
-    b.onclick=()=>{ go(t[0]); };
-    nav.append(b);
-  });
-
-  /* ★ 六格的正中间挖一个 60px 的缺口（第 3、4 格之间）—— 那枚凸起的心住在这儿。
-     不留缺口的话它会正好压住「巢」和「书房」两个字，看得见但点不着。 */
-  const slot=el("span"); slot.className="fab-slot";
-  nav.insertBefore(slot, nav.children[Math.floor(TABS.length/2)]);
-
-  /* ── 中间那个凸起的圆：开一扇新窗 ──
-     从缺口里向上凸起 26px（半个身子在导航条里），心的形状是强调，不是装饰。 */
-  const fab=el("button"); fab.id="newChatFab"; fab.title="开一扇新窗";
-  fab.append(nestIcon("heart",24));
-  fab.onclick=()=>newThread();
-
   /* ── 抽屉：所有房间 + 所有动作，一个都不藏 ── */
   const drawer=el("div"); drawer.id="drawer";
   const dpanel=el("div","panel");
   const dclose=()=>drawer.classList.remove("open");
   drawer.onclick=e=>{ if(e.target===drawer)dclose(); };
+  /* 第一行永远是「主界面」—— 底部导航条撤了之后，它是唯一的回家路 */
+  const HOME_ROW=["home","home","主界面","HOME"];
   dpanel.append(el("div","h","ROOMS"));
-  TABS.forEach(t=>{
+  [HOME_ROW].concat(TABS).forEach(t=>{
     const b=el("button","room");
+    b.dataset.tab=t[0];
     const ic=el("span","ic"); ic.append(nestIcon(t[1],18));
     b.append(ic,el("span",null,t[2]),el("span","sp"),el("span","en",t[3]));
     b.onclick=()=>{ dclose(); go(t[0]); };
@@ -126,35 +163,106 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   }
   drawer.append(dpanel); document.body.append(drawer);
 
+  /* ── 视图容器 ── */
   const pane=el("div"); pane.id="pane"; pane.hidden=true;
   const ptitle=el("div","t");
   const pen=el("div","en");
   const picon=el("div","ic");
   const pclose=el("button","x ibtn"); pclose.append(nestIcon("close",19));
-  pclose.onclick=()=>go("chat");
+  pclose.title="回到主界面";
+  pclose.onclick=()=>go("home");
   const phead=el("div","ph"); phead.append(picon,ptitle,pen,pclose);
   const pbody=el("div","pb"); pane.append(phead,pbody);
 
-  function go(k){
-    [].slice.call(nav.children).forEach(b=>b.classList.toggle("on",b.dataset.tab===k));
-    if(k==="chat"){ pane.hidden=true; return; }
-    pane.hidden=false;
-    const T=TABS.find(x=>x[0]===k)||[];
-    ptitle.textContent=T[2]||"";
-    pen.textContent=T[3]||"";
-    picon.textContent=""; picon.append(nestIcon(T[1]||"dot",18));
-    pbody.innerHTML="";
-         if(window.NEST_PANES&&window.NEST_PANES[k]){try{window.NEST_PANES[k](pbody);}catch(e){console.error("pane:",e);}return;}
-    const info={memory:["记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性"],
-                study:["书房","书架 · 在读进度 · 边读边聊的小窗"],
-                notes:["一起","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏 · 玩具箱"],
-                setting:["我的","美化 · MCP 工具包 · 头像 · 消息推送 · 大模型 API · 助手管理"]}[k];
-    if(info){
-      const c=el("div","ph-card");
-      c.append(el("b",null,info[0]),el("div",null,info[1]));
-      pbody.append(c);
+  /* ★ 有几个视图自己画顶栏（首页那条 ☰·HOME·⚙、书房的 THE STUDY、
+     时间线的「‹ 时间线 TIMELINE 搜索」…）—— 它们不要默认那条。 */
+  const BARE={home:1,"memory-detail":1,together:1,study:1,timeline:1};
+
+  /* ★ 视图状态。别的模块要跳转一律走 window.nestGo，
+     不要再去找 `#tabs button[data-tab=…]` —— 那排按钮已经不存在了。 */
+  let CUR="home";
+  const LISTENERS=[];
+  function go(k,arg){
+    k=k||"home";
+    /* 聊天不是「一张面板」—— 它就是把面板收起来，露出底下的 #chatCol */
+    if(k==="chat"){ CUR="chat"; pane.hidden=true; }
+    else{
+      CUR=k;
+      pane.hidden=false;
+      /* 自己画顶栏的那几个视图，把默认那条藏起来 */
+      const bare=!!BARE[k];
+      phead.hidden=bare;
+      pbody.classList.toggle("bare",bare);
+      const T=TABS.find(x=>x[0]===k)||[];
+      ptitle.textContent=T[2]||"";
+      pen.textContent=T[3]||"";
+      picon.textContent=""; picon.append(nestIcon(T[1]||"dot",18));
+      pbody.innerHTML="";
+      const fn=(window.NEST_PANES&&window.NEST_PANES[k]);
+      if(typeof fn==="function"){
+        try{ fn(pbody,arg); }
+        catch(e){ console.error("pane:",e); pbody.append(el("div","errbox","这一页没画出来："+e.message)); }
+      }else{
+        const info={memory:["记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性"],
+                    study:["书房","书架 · 在读进度 · 边读边聊的小窗"],
+                    notes:["一起","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏 · 玩具箱"],
+                    setting:["我的","美化 · MCP 工具包 · 头像 · 消息推送 · 大模型 API · 助手管理"]}[k];
+        if(info){
+          const c=el("div","ph-card");
+          c.append(el("b",null,info[0]),el("div",null,info[1]));
+          pbody.append(c);
+        }
+      }
+      /* 新开的页面从顶上开始看 */
+      try{ pbody.scrollTop=0; }catch(e){}
+      /* ★ 切页时把「横向淡入」重跑一遍 —— 面板是同一个元素，
+         不重放的话从主界面切到子页是**硬切**，一点过渡都没有。 */
+      pane.style.animation="none";
+      void pane.offsetWidth;
+      pane.style.animation="pageIn 420ms cubic-bezier(.22,.8,.3,1)";
     }
+    /* ★ 背景比内容慢一拍（620ms vs 420ms）—— 这一点错位就是「景深」。
+       同一个动画要能重跑：先摘掉、强制一次重排、再挂回去。 */
+    const bg=document.getElementById("bg");
+    if(bg){
+      bg.style.animation="none";
+      void bg.offsetWidth;
+      bg.style.animation="bgShift 620ms cubic-bezier(.22,.8,.3,1)";
+    }
+    LISTENERS.forEach(f=>{ try{ f(CUR); }catch(e){} });
   }
+  window.nestGo=go;
+  window.nestView=()=>CUR;
+  window.nestOnView=fn=>{ if(typeof fn==="function")LISTENERS.push(fn); };
+
+  /* ── 子页那条顶栏：‹ 返回 · 标题 · 拉丁小标 · 右侧动作 ──
+     所有子页共用，省得每个模块各写一套（也保证返回永远回得到主界面）。 */
+  function pageHead(o){
+    o=o||{};
+    const h=el("div","pg-head");
+    const back=el("button","pg-back");
+    back.append(nestIcon("back",20));
+    back.title=o.backTitle||"回主界面";
+    back.onclick=()=>go(o.backTo||"home");
+    h.append(back);
+    const mid=el("div","pg-mid");
+    if(o.title)mid.append(el("b",null,o.title));
+    if(o.en)mid.append(el("span","pg-en",o.en));
+    if(o.sub)mid.append(el("span","pg-sub",o.sub));
+    h.append(mid);
+    const right=el("div","pg-right");
+    (o.right||[]).forEach(r=>{
+      const b=el("button","pg-act");
+      if(r.icon)b.append(nestIcon(r.icon,19));
+      if(r.text)b.append(el("span",null,r.text));
+      b.title=r.title||r.text||"";
+      b.onclick=r.onclick;
+      right.append(b);
+    });
+    h.append(right);
+    return h;
+  }
+  window.nestPageHead=pageHead;
 
   function sheet(title,build){
     const wrap=el("div","sheet"), box=el("div","box");
@@ -164,18 +272,15 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
     document.body.append(wrap); build(box,()=>wrap.remove()); return wrap;
   }
-  /* 顶栏不放一排按钮了（手机上挤）—— 这些动作统一进抽屉 */
-  function barBtn(iconName,title,fn,label,en){
-    return drawerBtn(iconName,label||title,()=>{ dclose(); fn(); },en);
-  }
+  window.nestSheet=sheet;
 
-  /* ── 多窗口：一份列表，两处用（抽屉里的速览 sheet ＋「巢」这一格）──
+  /* ── 多窗口：一份列表，两处用（对话窗口 sheet ＋「巢」这一格）──
      ★ 每扇窗的两枚开关（主动消息 / 离线模式）就在列表里拨，语义在后端 core/windows.py；
        读不到（老服务端）就画一个「问号」，别拿默认值冒充真值。 */
   async function threadsInto(container, close){
     const bt=el("button","pri");
     bt.style.cssText="display:inline-flex;align-items:center;gap:7px;padding:9px 14px;"
-      +"border:1px solid var(--accent);border-radius:14px;color:var(--accent);margin:2px 0 10px";
+      +"border:1px solid var(--accent);border-radius:12px;color:var(--accent);margin:2px 0 10px";
     bt.append(nestIcon("plus",17),document.createTextNode("新对话"));
     bt.onclick=async()=>{ if(close)close(); newThread(); };
     container.append(bt);
@@ -196,7 +301,8 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
           r.append(window.nestWinFlags.row(it.sid,
                    Object.assign({push:true,offline:true},WFLAGS[it.sid]||{}),WFLAGS_OK));
         }
-        r.onclick=async()=>{ setSid(it.sid); await renderThread();
+        /* ★ 选了窗就**进聊天**（原来只 renderThread，人还停在主界面上看着没动） */
+        r.onclick=async()=>{ setSid(it.sid); go("chat"); await renderThread();
           if(close)close(); say("切到这个窗口了"); };
         list.append(r);
       });
@@ -206,11 +312,12 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   async function openThreads(){
     sheet("对话窗口", async(box,close)=>{ await threadsInto(box, close); });
   }
+  window.nestOpenThreads=openThreads;
 
   /* ── 「巢」这一格：这扇窗现在是什么脾气 ──
      ★ 这一行个头小、要命：nest-tabs 是第一个跑的房间模块，别处的
        `window.NEST_PANES=window.NEST_PANES||{}` 都还没执行 —— 少了它，
-       往 undefined 上挂 rooms 会当场抛，**整个导航条（格子/凸起的心/抽屉）都建不起来**。 */
+       往 undefined 上挂 rooms 会当场抛，整个抽屉 / 首页都建不起来。 */
   window.NEST_PANES=window.NEST_PANES||{};
   window.NEST_PANES.rooms=async function(box){
     box.innerHTML="";
@@ -230,6 +337,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     if(S)S.innerHTML="";
     go("chat"); say("开了一个新窗口 —— 它还记得你们所有事，只是这窗是干净的");
   }
+  window.nestNewThread=newThread;
   async function renderThread(){
     const S=document.querySelector("#stream"); if(!S)return;
     const sid=getSid();
@@ -250,6 +358,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       try{toBottom(true);}catch(e){}
     }catch(e){ S.append(el("div","errbox","历史读不出来："+e.message)); }
   }
+  window.nestRenderThread=renderThread;
 
   /* ── 搜索 ── */
   function openSearch(){
@@ -315,7 +424,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       }
       /* 这一格只管拨开关；加/删/改在设置页那一节（那边才是总管理） */
       const bar=el("button",null,"＋ 加一个 / 管理");
-      bar.style.cssText="padding:8px 12px;border:1px solid var(--accent);border-radius:9px;"+
+      bar.style.cssText="padding:8px 12px;border:1px solid var(--accent);border-radius:10px;"+
                         "color:var(--accent);margin-top:8px";
       bar.onclick=()=>{
         const wrap=out.closest(".sheet"); if(wrap)wrap.remove();
@@ -327,34 +436,23 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   }
 
   /* ── 挂上去 ── */
-  const col=document.querySelector("#chatCol");
-  if(col)col.append(nav); else document.body.append(nav);
-  /* ★ 心挂进**导航条里**（nav 是 position:relative 的），不再 fixed 到屏幕上 ——
-     它跟着导航条走，永远压在输入框上的那个毛病从结构上就没了。 */
-  nav.append(fab);
   document.body.append(pane);
-  /* 量出标签栏真正占多高，交给 #pane 让位（含安全区 —— 所以补一次 + 转屏也补） */
-  const measure=()=>{
-    try{
-      const h=nav.getBoundingClientRect().height||0;
-      if(h>0)document.documentElement.style.setProperty("--nest-tabs-h",h+"px");
-    }catch(e){}
-  };
-  /* ★ 开局 #app 是 hidden（还没过口令那关）—— 这会儿量出来是 0，量了也白量。
-     所以：进站之后补量一次（#app 一显示就量），转屏 / 改窗口大小再量。 */
-  const appEl=document.querySelector("#app");
-  if(appEl){
-    new MutationObserver(()=>{ if(!appEl.hidden)measure(); })
-      .observe(appEl,{attributes:true,attributeFilter:["hidden"]});
+  /* 聊天顶栏最左边补一颗「回主界面」：底部导航条撤了之后，
+     从聊天回首页总得有个看得见的路（抽屉里那条当然也还在）。 */
+  const bar=document.querySelector("#bar");
+  if(bar){
+    const bHome=el("button","ibtn tap home"); bHome.id="btnHome";
+    bHome.title="回主界面"; bHome.append(nestIcon("home",19));
+    bHome.onclick=()=>go("home");
+    bar.insertBefore(bHome,bar.firstChild);
   }
-  measure();
-  setTimeout(measure,400);
-  window.addEventListener("resize",measure);
-  window.addEventListener("orientationchange",()=>setTimeout(measure,300));
   barBtn("plus","新对话",newThread,"新对话","NEW");
   barBtn("window","对话窗口",openThreads,"对话窗口","WINDOWS");
   barBtn("search","搜索历史",openSearch,"搜索聊天与记忆","SEARCH");
   barBtn("mcp","MCP 工具包",openMcp,"MCP 工具包","MCP");
+  function barBtn(iconName,title,fn,label,en){
+    return drawerBtn(iconName,label||title,()=>{ dclose(); fn(); },en);
+  }
   /* 和纸 / 月光 */
   drawerBtn("moon","换个月光版 / 回到和纸",()=>{
     const on=document.documentElement.getAttribute("data-moon")==="1";
@@ -368,8 +466,11 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   }catch(e){}
   const bDrawer=document.querySelector("#btnDrawer");
   if(bDrawer)bDrawer.onclick=()=>drawer.classList.add("open");
-  go("chat");
 
+  /* 开局先在主界面（口令那关过完 #app 才显示）。
+     ★ 必须等一拍：这一行跑的时候 nest-home.js 还没轮到 —— 立刻 go 的话
+       NEST_PANES.home 还不存在，会画出一张空的占位卡。 */
+  setTimeout(()=>{ try{ go("home"); }catch(e){ console.error("home:",e); } },0);
   let inited=false;
   function maybeInit(){
     if(inited)return;
@@ -378,9 +479,8 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       inited=true;
       // ★ 这里原来还会调 renderThread() 再画一遍历史。基础那份（nest.html 里的
       //   loadHistory）现在自己会认窗口了，两个画手抢同一块 #stream 会把今天的
-      //   消息重出一截、还会抹掉正在流的回复。初次进入只切到「聊天」格；
-      //   切窗口时才走 renderThread。
-      setTimeout(()=>{ try{ go("chat"); }catch(e){} measure(); },500);
+      //   消息重出一截、还会抹掉正在流的回复。初次进入只切到主界面。
+      setTimeout(()=>{ try{ go(CUR||"home"); }catch(e){} },500);
     }
   }
   new MutationObserver(maybeInit).observe(document.body,{attributes:true,subtree:true,attributeFilter:["hidden"]});

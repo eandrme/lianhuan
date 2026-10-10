@@ -19,6 +19,8 @@ try{
     fg:"#46505C",dim:"#7C8794",dim2:"#A7B0BB",
     accent:"#6E93B3",ok:"#6E9E86",err:"#B0757C",warn:"#9A8FA8",
     aiBubble:"rgba(110,130,150,.10)",meBubble:"rgba(220,234,243,.58)",
+    /* ★ 气泡的**字色**也能改：空着就按底色自动推（或退回正文色） */
+    aiBubbleFg:"",meBubbleFg:"",
     rCard:20,bubbleMax:76,fs:15,lh:1.8,colw:720,
     bgMode:"solid",grad1:"#1b2233",grad2:"#3a2a4d",bgImg:"",bgDim:45,
     icThink:"spark",icSide:"menu",icDbg:"chip",send:"发送",
@@ -101,10 +103,13 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r))}
     set("--fg",T.fg);set("--dim",T.dim);set("--dim2",T.dim2);
     set("--accent",T.accent);set("--ok",T.ok);set("--err",T.err);set("--warn",T.warn);
     set("--nest-ai-bubble",T.aiBubble);set("--nest-me-bubble",T.meBubble);
-    /* 只有 #rrggbb / #rgb 才推得出该配深字还是浅字；海沫玻璃那种 rgba(...) 推不出来，
+    /* ★ 字色：用户填了就听用户的；没填就按底色推 ——
+       只有 #rrggbb / #rgb 推得出该配深字还是浅字，海沫玻璃那种 rgba(...) 推不出来，
        退回正文色 --tx-1（写死白色会变成白字白底）。 */
-    set("--nest-me-fg",/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(T.meBubble||""))
-        ?(lum(T.meBubble)>0.62?"#10131a":"#ffffff"):"var(--tx-1)");
+    const autoFg=bg=>/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(bg||""))
+        ?(lum(bg)>0.62?"#10131a":"#ffffff"):"var(--tx-1)";
+    set("--nest-ai-fg",String(T.aiBubbleFg||"").trim()||autoFg(T.aiBubble));
+    set("--nest-me-fg",String(T.meBubbleFg||"").trim()||autoFg(T.meBubble));
     /* ★ --nest-r-bubble / --nest-tail 不再写了：气泡那两组不对称软边是设计定死的，
        面板里那两枚控件也一起撤了，留着这两个变量只会让人以为还能调。 */
     set("--nest-r-card",T.rCard+"px");
@@ -280,6 +285,7 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r))}
     cRow(box,"accent","主色"); cRow(box,"fg","字色");
     cRow(box,"dim","次要字"); cRow(box,"warn","进行中");
     cRow(box,"aiBubble","它的气泡"); cRow(box,"meBubble","我的气泡");
+    cRow(box,"aiBubbleFg","它的字"); cRow(box,"meBubbleFg","我的字");
 
     box.append(H("形状 · 字号"));
     /* ★ 「气泡圆角 / 小尾巴」两枚控件撤了：那两组不对称软边（22/30/26/18 与
@@ -352,6 +358,20 @@ details.think,.tool{border-radius:var(--nest-r-card,var(--r))}
 
     side.append(box);
   }
+
+  /* ── 主题对外的口子 ──
+     「我的 › 外观」那一节（nest-setting.js）通过它读写同一份主题，
+     不另存一套 —— 两处改的是同一个 localStorage 键。 */
+  const WATCHERS=[];
+  function changed(){ apply(); WATCHERS.forEach(f=>{ try{ f(Object.assign({},T)); }catch(e){} }); }
+  window.nestTheme={
+    all:()=>Object.assign({},T),
+    defaults:()=>Object.assign({},D),
+    presets:()=>PRESETS.map(p=>[p[0],Object.assign({},p[1])]),
+    set(patch){ Object.assign(T,patch||{}); save(); changed(); },
+    reset(){ T=Object.assign({},D); save(); changed(); },
+    on(fn){ if(typeof fn==="function")WATCHERS.push(fn); },
+  };
 
   /* ── 启动 ── */
   function boot(){

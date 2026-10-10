@@ -118,8 +118,9 @@ try{
 .ni svg{width:1em;height:1em;display:block}
 .ni.acc{color:var(--accent)}
 .ni.big{width:1.35em;height:1.35em}
-#tabs .ni{width:20px;height:20px}
-#tabs .ni svg{width:20px;height:20px}
+/* 抽屉里那一列房间图标（底部导航条撤了，这一套现在只服务抽屉） */
+#drawer .room .ni{width:18px;height:18px}
+#drawer .room .ni svg{width:18px;height:18px}
 #bar .ibtn .ni,#composer .row .ibtn .ni{width:19px;height:19px}
 #bar .ibtn .ni svg,#composer .row .ibtn .ni svg{width:19px;height:19px}
 #bar .ibtn img,#btnSide img{display:block;border-radius:4px}

@@ -43,6 +43,26 @@ try{
   padding:12px;margin-bottom:11px}
 .set-sec h4{margin:0 0 4px;font-size:14.5px}
 .set-sec .sub{font-size:11.5px;color:var(--dim2);line-height:1.6;margin-bottom:9px}
+/* 外观那一节 */
+.set-presets{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
+.set-preset{width:36px;height:28px;border-radius:8px;border:1px solid var(--ink-1);
+  cursor:pointer;padding:0}
+.set-preset:active{transform:scale(.96)}
+.set-lb{font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c);
+  text-transform:uppercase;margin:6px 0 8px}
+.set-bubbles{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.set-bchip{min-width:0}
+.set-bprev{padding:10px 12px;border-radius:18px;border:1px solid var(--glass-line);
+  font-family:var(--font);font-size:14px;line-height:1.7;min-height:44px;
+  display:flex;align-items:center;transition:background-color .3s ease,color .3s ease}
+.set-btag{font-size:11px;color:var(--tx-2);margin:6px 0 8px;letter-spacing:.02em}
+.set-crow{display:flex;align-items:center;gap:8px;margin:6px 0}
+.set-clb{flex:1;min-width:0;font-size:12px;color:var(--tx-2)}
+.set-crow input[type=color]{width:38px;height:28px;padding:0;border:1px solid var(--ink-1);
+  border-radius:8px;background:none;flex:0 0 38px}
+.set-auto{min-height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--ink-1);
+  background:transparent;color:var(--tx-3);font-size:11px;cursor:pointer}
+.set-auto:hover{color:var(--accent);border-color:var(--accent)}
 .set-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .set-row .sp{flex:1}
 .set-chips{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
@@ -103,6 +123,8 @@ try{
 
   window.NEST_PANES.setting=function(box){
     box.innerHTML="";
+    /* ★ 用户定的：主题 / 气泡颜色都收到「我的」这儿（原来只在侧栏那个面板里） */
+    secAppearance(box);
     secEngine(box);
     secThink(box);
     secMcp(box);
@@ -115,6 +137,121 @@ try{
     secOffline(box);
     secPush(box);
   };
+
+  /* ═══ 外观 · 主题 · 气泡 ═══
+     和侧栏那个面板读写的**是同一份主题**（window.nestTheme → localStorage
+     nest_theme），不另存一套。气泡的底色和**字色**两边都能改。 */
+  const PREVIEW=[
+    ["它的气泡","aiBubble","aiBubbleFg","它的字"],
+    ["我的气泡","meBubble","meBubbleFg","我的字"],
+  ];
+  function secAppearance(box){
+    const sec=el("div","set-sec"); sec.id="look-sec";
+    sec.append(el("h4",null,"外观 · 主题"));
+    sec.append(el("div","sub","底色、气泡和字色都在这儿改。改完立刻生效，"
+      +"选的那套记在本机（换设备不跟着走）。"));
+
+    if(!window.nestTheme){
+      sec.append(el("div","set-msg","主题模块还没就绪（刷新一下试试）。"));
+      box.append(sec); return;
+    }
+    const T0=window.nestTheme.all();
+
+    /* 预设 */
+    const pr=el("div","set-presets");
+    window.nestTheme.presets().forEach(([name,patch])=>{
+      const i=el("button","set-preset");
+      i.title=name;
+      i.style.background=(patch&&(patch.meBubble||patch.accent))||"";
+      i.onclick=()=>{ window.nestTheme.set(patch); say("换了「"+name+"」"); draw(); };
+      pr.append(i);
+    });
+    sec.append(pr);
+
+    /* 气泡：底色 + 字色（两边都能改） */
+    sec.append(el("div","set-lb","气泡"));
+    const bgRow=el("div","set-bubbles");
+    const wrap=el("div","set-bubblewrap");
+    function bubbleChip(which){
+      const w=el("div","set-bchip");
+      const prev=el("div","set-bprev");
+      const txt=el("span",null,which==="ai"?"它说的话":"我说的话");
+      prev.append(txt);
+      prev.id="bprev-"+which;
+      w.append(prev);
+      w.append(el("div","set-btag",which==="ai"?"它的气泡 / 它的字":"我的气泡 / 我的字"));
+      return {w,prev};
+    }
+    const ai=bubbleChip("ai"), me=bubbleChip("me");
+
+    function colorRow(label,key,which){
+      const r=el("div","set-crow");
+      const i=el("input"); i.type="color";
+      const cur=String(T0[key]||"");
+      /* rgba(...) 这种值颜色控件吃不下 —— 就留一个「自动」，别硬塞一个错的色进去 */
+      if(/^#[0-9a-f]{6}$/i.test(cur))i.value=cur;
+      i.dataset.key=key;
+      i.oninput=()=>{
+        const p={}; p[key]=i.value;
+        /* 只填底色时，把之前自动推出来的字色固定下来，别让它又变回去 */
+        if(key==="aiBubble"&&!window.nestTheme.all().aiBubbleFg){ }
+        window.nestTheme.set(p);
+        draw();
+      };
+      const t=el("span","set-clb",label);
+      r.append(t,i);
+      return r;
+    }
+    function textColorRow(label,key,bgKey){
+      const r=el("div","set-crow");
+      const i=el("input"); i.type="color";
+      const cur=String(T0[key]||"");
+      if(/^#[0-9a-f]{6}$/i.test(cur))i.value=cur;
+      i.oninput=()=>{ const p={}; p[key]=i.value; window.nestTheme.set(p); draw(); };
+      const auto=el("button","set-auto","自动");
+      auto.title="跟着底色自动定深浅";
+      auto.onclick=()=>{ const p={}; p[key]=""; window.nestTheme.set(p); draw(); };
+      r.append(el("span","set-clb",label),i,auto);
+      return r;
+    }
+    ai.w.append(colorRow("底色","aiBubble","ai"),textColorRow("字色","aiBubbleFg","aiBubble"));
+    me.w.append(colorRow("底色","meBubble","me"),textColorRow("字色","meBubbleFg","meBubble"));
+    bgRow.append(ai.w,me.w);
+    sec.append(bgRow);
+
+    /* 和纸 / 月光 */
+    const moonRow=el("div","set-btns");
+    const bMoon=el("button",null,"");
+    const on=document.documentElement.getAttribute("data-moon")==="1";
+    bMoon.append(nestIcon("moon",15),document.createTextNode(on?" 回到和纸":" 换个月光版"));
+    bMoon.onclick=()=>{
+      const now=document.documentElement.getAttribute("data-moon")==="1";
+      document.documentElement.setAttribute("data-moon",now?"0":"1");
+      try{localStorage.setItem("nest_moon",now?"0":"1");}catch(e){}
+      say(now?"回到和纸":"换上月光");
+      box.innerHTML=""; window.NEST_PANES.setting(box);
+    };
+    const bReset=el("button",null,"恢复默认外观");
+    bReset.onclick=()=>{
+      if(!confirm("恢复默认外观（底色和气泡都回和纸那一套）？"))return;
+      window.nestTheme.reset(); say("回到出厂那套"); draw();
+    };
+    moonRow.append(bMoon,bReset);
+    sec.append(moonRow);
+    box.append(sec);
+
+    /* 两枚小预览块跟着主题走 */
+    function draw(){
+      const th=window.nestTheme.all();
+      [[ai,"ai"],[me,"me"]].forEach(([node,which])=>{
+        const bg=th[which+"Bubble"]||"";
+        const fg=th[which+"BubbleFg"]||"";
+        node.prev.style.background=bg||"transparent";
+        node.prev.style.color=fg||"var(--tx-1)";
+      });
+    }
+    draw();
+  }
 
   /* ═══ MCP 工具包（总管理）═══
      三种连接方式（后端 core/mcp_client.py 都实现了，一个字没新增）：
@@ -371,8 +508,7 @@ try{
 
   /* 从别处（顶栏那把扳手）跳过来：打开设置页并滚到 MCP 那一节 */
   window.nestOpenMcpManager=function(){
-    const t=document.querySelector('#tabs button[data-tab="setting"]');
-    if(t)t.click();
+    if(window.nestGo)window.nestGo("setting");
     setTimeout(()=>{
       const s=document.getElementById("mcp-sec");
       if(s&&s.scrollIntoView)s.scrollIntoView({block:"start"});

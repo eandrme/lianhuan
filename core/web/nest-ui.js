@@ -57,7 +57,8 @@ try{
     }
   }
 
-  const navIcon=k=>document.querySelector('#tabs button[data-tab="'+k+'"] .ic');
+  /* ★ 底部导航条撤了：这几个「格子」图标现在长在**抽屉**那一列房间上 */
+  const navIcon=k=>document.querySelector('#drawer .room[data-tab="'+k+'"] .ic');
   const barByTitle=t=>[].slice.call(document.querySelectorAll("#bar .ibtn")).find(b=>(b.title||"")===t);
 
   function run(){
@@ -87,8 +88,8 @@ try{
       wrap.append(r);
     });
     const b=el("button",null,"复原这八个图标");
-    b.style.cssText="padding:7px 11px;border-radius:8px;border:1px solid var(--line);"+
-                    "background:var(--panel2);font-size:13px;margin-top:6px";
+    b.style.cssText="padding:7px 11px;border-radius:10px;border:1px solid var(--ink-1);"+
+                    "background:transparent;font-size:13px;margin-top:6px";
     b.onclick=()=>{
       FIELDS.forEach(f=>set(f[0],DEF[f[0]]));
       const s=document.querySelector("#ui-icons"); if(s)s.remove();

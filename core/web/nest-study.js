@@ -20,6 +20,54 @@ try{
 
   const css=document.createElement("style");
   css.textContent=`
+/* ══════ ① 页头：THE STUDY / 书房 / 一起做事的房间。 + 右上角那枚手绘星星 ══════ */
+.st-page{max-width:720px;margin:0 auto}
+.st-head{display:flex;align-items:flex-start;gap:12px;margin:0 0 26px}
+.st-headl{flex:1;min-width:0}
+.st-en{font-family:var(--latin);font-size:10px;letter-spacing:.3em;color:var(--tx-3);
+  text-transform:uppercase}
+.st-h1{font-family:var(--font);font-size:32px;font-weight:500;letter-spacing:.15em;
+  color:var(--tx-1);margin:10px 0 8px;line-height:1.15}
+.st-sub{font-family:var(--font);font-size:14px;color:var(--tx-2);letter-spacing:.04em}
+.st-star{color:var(--tx-3);margin-top:2px;transform:rotate(15deg);flex:0 0 auto}
+.st-star svg{stroke-width:1}
+/* ══════ ③④ 书架：一排竖立的书脊 + 底下一条隔板 ══════ */
+.st-shelfwrap{margin:0 0 30px}
+.st-spines{display:flex;align-items:flex-end;gap:10px;overflow-x:auto;padding:0 4px 0;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.st-spines::-webkit-scrollbar{display:none}
+.st-spine{position:relative;width:56px;flex:0 0 56px;border-radius:4px;
+  border:1px solid rgba(110,130,150,.18);background:rgba(255,252,246,.55);
+  backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
+  display:flex;justify-content:center;padding:8px 0 10px;cursor:pointer;overflow:hidden;
+  transition:transform .3s ease,box-shadow .3s ease}
+.st-spine::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;
+  background:rgba(255,255,255,.6);border-bottom:1px solid rgba(110,130,150,.10)}
+@media (hover:hover){.st-spine:hover{transform:translateY(-2px);
+  box-shadow:0 10px 24px rgba(70,100,130,.10)}}
+.st-spine:active{transform:scale(.98)}
+.st-spine .st-vlabel{writing-mode:vertical-rl;text-orientation:upright;
+  font-family:var(--font);font-size:14px;letter-spacing:.18em;color:var(--tx-1);
+  margin-top:6px;max-height:calc(100% - 6px);overflow:hidden}
+/* 三条底纹（都是 #DCEAF3 的细线，不是色块） */
+.st-spine.p-lines{background-image:repeating-linear-gradient(180deg,
+  #DCEAF3 0 1px,transparent 1px 8px);background-position:0 8px}
+.st-spine.p-dots{background-image:radial-gradient(#DCEAF3 1.5px,transparent 1.5px);
+  background-size:8px 8px;background-position:0 8px}
+.st-spine.p-diag{background-image:repeating-linear-gradient(45deg,
+  #DCEAF3 0 1px,transparent 1px 8px);background-position:0 8px}
+/* 那根 3px 宽 24px 长的 accent 丝带书签，从书脊顶上垂下来 */
+.st-ribbon{position:absolute;left:50%;top:0;width:3px;height:24px;margin-left:-1.5px;
+  background:var(--accent);border-radius:0 0 2px 2px}
+/* 隔板：通宽 10px 的浅灰横条，两端圆角 */
+.st-plank{height:10px;margin-top:-1px;border-radius:5px;
+  background:rgba(201,207,214,.6)}
+/* ══════ 真正的书：书架列表（放书 / 改名 / 删 / 进度都还在这儿）══════ */
+.st-listhead{display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.st-listhead .ln{width:48px;height:1px;background:rgba(110,130,150,.30);flex:0 0 48px}
+.st-listhead .en{font-family:var(--latin);font-size:10px;letter-spacing:.26em;
+  color:var(--latin-c);text-transform:uppercase}
+.st-listhead .sp{flex:1}
 .st-top{display:flex;gap:8px;align-items:center;margin-bottom:10px}
 .st-top button{padding:7px 11px;border-radius:10px;border:1px solid var(--ink-1);background:transparent;font-size:13px;color:var(--dim)}
 .st-tabs{display:flex;gap:6px;flex:1}
@@ -87,23 +135,72 @@ try{
     box.innerHTML="";
     const view=el("div"); box.append(view);
 
-    /* ═══ 书架 ═══ */
+    /* ═══ 书架 ═══
+       一排竖立的长方形书脊（底部对齐、高度不等、底纹各不相同），
+       底下一条通宽隔板；再往下才是「真正的书」那一列。 */
+    function spine(o){
+      const b=el("button","st-spine"+(o.pattern?(" p-"+o.pattern):""));
+      b.style.height=(o.h||150)+"px";
+      b.title=o.tip||o.label;
+      if(o.ribbon){ const r=el("i","st-ribbon"); b.append(r); }
+      b.append(el("span","st-vlabel",o.label));
+      b.onclick=o.onclick;
+      return b;
+    }
+    function shelfHead(){
+      const head=el("div","st-head");
+      const l=el("div","st-headl");
+      l.append(el("div","st-en","THE STUDY"),
+               el("h1","st-h1","书房"),
+               el("div","st-sub","一起做事的房间。"));
+      const star=el("div","st-star"); star.append(nestIcon("star",12));
+      head.append(l,star);
+      return head;
+    }
+    function openCreation(){
+      if(window.NEST_CREATION)window.NEST_CREATION(view);
+      else say("「创造」还没接上");
+    }
+    function openBookchat(){
+      const f=document.querySelector(".bc-fab");
+      if(f){ f.click(); return; }
+      say("读书小窗还没接上");
+    }
+
     async function shelf(){
       view.innerHTML="";
-      const top=el("div","st-top");
-      const tabs=el("div","st-tabs");
-            const b1=el("button","on","书架");
-      b1.onclick=()=>shelf();
-      const b2=el("button",null,"创造");
-      b2.onclick=()=>{ b1.classList.remove("on"); b2.classList.add("on");
-        if(window.NEST_CREATION)window.NEST_CREATION(view); else say("「创造」还没接上"); };
-      tabs.append(b1,b2);
+      const page=el("div","st-page");
+      page.append(shelfHead());
+
+      const wrap=el("div","st-shelfwrap");
+      const spines=el("div","st-spines");
+      spines.append(
+        /* 书1：米白底 + accent 丝带 —— 「在读」 */
+        spine({label:"在读",h:200,ribbon:true,tip:"接着上次那页读下去",
+               onclick:()=>openCurrent()}),
+        /* 书2：横线底纹 */
+        spine({label:"共读小窗",h:150,pattern:"lines",tip:"边读边聊的那个小窗",
+               onclick:openBookchat}),
+        /* 书3：圆点底纹 */
+        spine({label:"创造",h:120,pattern:"dots",tip:"写故事、捏人物、搭世界",
+               onclick:openCreation}),
+        /* 书4：斜线底纹 */
+        spine({label:"创作的小窗",h:180,pattern:"diag",tip:"一起写的那扇小窗",
+               onclick:openCreation})
+      );
+      wrap.append(spines,el("div","st-plank"));
+      page.append(wrap);
+
+      const lh=el("div","st-listhead");
+      lh.append(el("i","ln"),el("span","en","BOOKS"),el("span","sp"));
       const up=el("button","st-up");
       up.append(nestIcon("plus"),document.createTextNode(" 放书"));
       up.onclick=pickFile;
-      top.append(tabs,up);
+      lh.append(up);
       const grid=el("div","st-grid");
-      view.append(top,grid);
+      page.append(lh,grid);
+      view.append(page);
+
       grid.append(el("div","hint","读取中…"));
       try{
         const j=await jget("/api/books");
@@ -115,6 +212,19 @@ try{
         }
         its.forEach(b=>grid.append(bookCard(b)));
       }catch(e){ grid.innerHTML=""; grid.append(el("div","errbox","书架读不出来："+e.message)); }
+    }
+
+    /* 「在读」：有书就直接接着读，没有就老实说一句 */
+    let BOOKS=[];
+    async function openCurrent(){
+      try{
+        const j=await jget("/api/books");
+        BOOKS=j.items||[];
+      }catch(e){ BOOKS=[]; }
+      const cur=BOOKS.filter(b=>b.current)[0]||BOOKS[0];
+      if(!cur){ say("书架还空着 —— 先往下滑，点「放书」选一个 .txt"); return; }
+      await jpost("/api/books/"+cur.id+"/current");
+      open(cur,Math.max(0,cur.my_idx||0));
     }
 
     function bar(lb,pct,cls){

@@ -96,10 +96,12 @@ try{
     });
   }
 
-  /* 去「记事 › 表情包」那一节管表（传图 / 改名字和标签 / 删） */
+  /* 去「一起 › 表情包」那一节管表（传图 / 改名字和标签 / 删） */
   function openLibrary(){
-    const t=$('#tabs button[data-tab="notes"]');
-    if(t)t.click();
+    /* ★ 底部导航条撤了：走路由，并且**直接落到表情包那一档**
+       （原来靠 450ms 后自己去找那个 chip，现在 nest-notes 有个正经口子）。 */
+    if(window.nestNotesOpen){ window.nestNotesOpen("表情包"); return; }
+    if(window.nestGo)window.nestGo("notes");
     setTimeout(()=>{
       const pane=$("#pane .pb"); if(!pane)return;
       const b=[...pane.querySelectorAll(".nt-chips button")]

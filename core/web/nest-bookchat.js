@@ -169,8 +169,8 @@ try{
   /* 只在书房里露头 */
   setInterval(()=>{
     const pane=document.querySelector("#pane");
-    const on=document.querySelector("#tabs button.on");
-    const inStudy=pane&&!pane.hidden&&on&&on.dataset.tab==="study";
+    /* ★ 底部导航条撤了：问路由「现在是不是书房」 */
+    const inStudy=pane&&!pane.hidden&&(window.nestView?window.nestView():"chat")==="study";
     fab.hidden=!inStudy;
     if(!inStudy&&box)box.hidden=true;
   },700);

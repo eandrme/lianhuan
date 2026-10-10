@@ -160,19 +160,45 @@ class TestThePhoneShell(unittest.TestCase):
             self.assertTrue(gate.public_asset(p), p + " 得能不带 cookie 拿到")
         self.assertFalse(gate.public_asset("/api/memories"), "别把 API 也放出去了")
 
-    def test_the_bottom_bar_stays_reachable_and_above_the_gesture_bar(self):
-        # ① 面板不许盖住标签栏（盖住了就只能先按 ✕ 回聊天才能换格子）
-        self.assertRegex(self.tabs, r"#pane\{position:fixed;inset:0 0 var\(--nest-tabs-h")
-        self.assertIn("--nest-tabs-h", self.tabs, "得有人把标签栏的高度量出来")
-        self.assertIn("measure()", self.tabs)
-        # ★ 开局 #app 是 hidden（口令那关），那会儿量出来是 0 —— 必须进站后再量一次。
-        #   jsdom 不做排版，所以这条只能盯那个「再量一次」的钩子在不在。
-        self.assertIn('attributeFilter:["hidden"]', self.tabs,
-                      "得在 #app 显示出来之后再量一次，不然 --nest-tabs-h 永远是 0")
-        # ② 手势条让位
+    def test_there_is_no_bottom_bar_and_the_gesture_bar_is_still_cleared(self):
+        """★ 用户定的：**底部导航条整条撤掉**，入口全部平铺到主界面上。
+
+        撤掉之后有三件事必须仍然成立，不然手机上会变成一座迷宫：
+          · 面板铺满整屏（原来底下要给标签栏让一格 --nest-tabs-h）
+          · 手势条还得让位，不然输入框压在那条小白条底下
+          · 从聊天回得去主界面（底栏没了，原来那条路也断了）
+        """
+        # ① 不许再建那排六格，也不许再有那颗凸起的心
+        for bad in ("nav.id=\"tabs\"", "id=\"tabs\"", "newChatFab", "fab-slot"):
+            self.assertNotIn(bad, self.tabs, "底部导航条该撤干净了：" + bad)
+        self.assertNotIn("#tabs", self.html)
+        # ② 面板铺满整屏
+        self.assertRegex(self.tabs, r"#pane\{position:fixed;inset:0;")
+        # ③ 手势条让位
         self.assertIn("env(safe-area-inset-bottom)", self.html)
         self.assertIn("env(safe-area-inset-bottom)", self.html.split("#composer")[1][:400],
                       "输入框那一条也要让")
+        # ④ 回主界面的路：聊天顶栏那颗 house + 抽屉第一条
+        self.assertIn("btnHome", self.tabs)
+        self.assertIn('go("home")', self.tabs)
+        self.assertIn('["home","home","主界面","HOME"]', self.tabs, "抽屉第一条得是主界面")
+
+    def test_every_view_is_reachable_through_the_router(self):
+        """底栏撤了之后，跳转只有一条路：window.nestGo。谁都不许再去找那排按钮。"""
+        self.assertIn("window.nestGo=go", self.tabs)
+        self.assertIn("window.nestView=", self.tabs)
+        # ★ 注释里提到那个老写法是可以的（那是在讲「别再这么干」），
+        #   所以先把注释去掉再查 —— 跟 emoji 那两条同一个规矩。
+        strip = TestNoEmojiAndSelfDrawnIcons._code_without_comments
+        for dead in ('#tabs button[data-tab=', "querySelector('#tabs"):
+            for f in NEST_FILES:
+                self.assertNotIn(dead, strip((WEB / f).read_text(encoding="utf-8")),
+                                 f + " 还在按已经不存在的那排按钮导航")
+        # 五个可切换视图（主界面 + 记忆详情 + 一起 + 书房 + 时间线）都得有人实现
+        alljs = _nest_text()
+        for k in ("home", "memory-detail", "together", "study", "timeline"):
+            self.assertIn('NEST_PANES["%s"]' % k if k == "memory-detail" else "NEST_PANES.%s" % k,
+                          alljs, "「%s」这一页没人画" % k)
 
     def test_form_controls_are_sixteen_pixels(self):
         """小于 16px 的输入框会让 iOS 把整页放大，而且不缩回去。"""
@@ -246,31 +272,54 @@ class TestThePhoneShell(unittest.TestCase):
             self.assertTrue(1 <= float(c) <= 2, f"墨点半径 {c} 不在 1~2px")
         self.assertNotIn("animation", g.group(0), "墨点不许闪")
 
-    def test_the_heart_is_a_notch_in_the_bottom_nav(self):
-        """★ 聊天页那枚心：底部导航**正中间向上凸起 26px**，不许再压在输入框上。
+    def test_the_home_page_is_the_front_door(self):
+        """★ 主界面：顶部身份栏 + 天数区 + 一路铺下来的卡片，卡片之间用细线串着。
 
-        以前它是 `position:fixed` 到屏幕上、离底 54px —— 正好骑在输入框那一行上。
-        现在它住在导航条里（#tabs 是 relative），靠 bottom:calc(100% - 26px) 探出半个身子。
+        ☰ 拉抽屉 · 中间那颗 HOME（点了去挑对话窗口）· ⚙ 进设置。
         """
-        self.assertIn("bottom:calc(100% - 26px)", self.html)
-        fab = self.html[self.html.index("#newChatFab"):]
-        self.assertNotIn("position:fixed", fab[:fab.index("}")], "心不许再 fixed 到屏幕上")
-        self.assertIn("nav.append(fab)", self.tabs, "心得挂进导航条里")
-        self.assertIn(".fab-slot", self.tabs, "正中间得给它留一格缺口，不然压住两格的字")
-        # 输入框底下要留出那 26px，否则「不压在输入框上」只是句空话
-        self.assertIn("calc(34px + env(safe-area-inset-bottom))", self.html)
+        home = (WEB / "nest-home.js").read_text(encoding="utf-8")
+        for bit in ('el("div","hm-top")', "nestIcon(\"menu\"", "nestIcon(\"setting\"",
+                    "nestOpenThreads", "hm-days", "hm-thread", "hm-wrap"):
+            self.assertIn(bit, home, bit)
+        # ① 天数区：SINCE · yy/mm/dd、大数字、一行说明
+        self.assertIn('"SINCE · "', home)
+        self.assertIn("sinceShort", home)
+        self.assertIn("我们一起走过的日子", home)
+        # 大数字 88px / 字重 500（定稿的尺寸）
+        self.assertRegex(home, r"\.hm-days \.num\{[^}]*font-size:88px")
+        self.assertRegex(home, r"\.hm-days \.num\{[^}]*font-weight:500")
+        # 数字右上角那枚 12px 的淡墨点必须是**画出来的**（界面里不许有 ✦ 字形）
+        self.assertIn("sparkle(12", home)
+        self.assertIn('p.setAttribute("d","M12 2.6', home)
+        # ② 卡片之间的细线：0.5px、rgba(110,130,150,.25)
+        self.assertRegex(home, r"\.hm-thread \.ln\{width:\.5px")
+        self.assertIn("rgba(110,130,150,.25)", home)
+        # ③ 一段一段铺下来：记忆 / 一起 / 日历·书房 / 时间线 / 空间
+        for bit in ("memBlock", "togetherBlock", "twoCol", "timelineBlock", "spaceBlock"):
+            self.assertIn(bit, home, "主界面上少了这一块：" + bit)
 
-    def test_the_memory_screen_has_a_hanging_line_index(self):
-        """记忆页追加的「垂线索引」：细线垂下 → 末端小圆圈 → 旁边竖排标题 + 竖排日期。"""
-        skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
-        for bit in (".tvi-line", ".tvi-node", ".tvi-title", ".tvi-date", "tideIndex"):
-            self.assertIn(bit, skin, bit)
-        self.assertIn("writing-mode:vertical-rl", skin, "标题 / 日期都得是竖排")
-        self.assertIn('head.append(idx)', skin, "索引得真插进记忆页里")
-        # 多条线长短不一 = 横向错落
-        m = re.search(r"LINE_LEN=\[([\d,]+)\]", skin)
+    def test_the_memory_index_is_a_horizontal_snap_strip(self):
+        """主界面上的 MEMORY INDEX：横向 scroll-snap，每张卡里一条垂线 + 节点 +
+        竖排标题 + 竖排元信息；线长各不相同，所以一排看过去是错落的。"""
+        home = (WEB / "nest-home.js").read_text(encoding="utf-8")
+        for bit in (".hm-mcard", ".hm-mline", ".hm-mnode", ".hm-mtitle", ".hm-mmeta",
+                    "scroll-snap-type:x mandatory", "/api/memory/all"):
+            self.assertIn(bit, home, bit)
+        # 卡宽 150 / 高 210 / 间距 14，滑到边缘露出下一张的一半
+        self.assertRegex(home, r"\.hm-mcard\{flex:0 0 150px;width:150px;height:210px")
+        self.assertRegex(home, r"\.hm-scroll\{display:flex;gap:14px")
+        # 竖排（标题 + 元信息都竖着写）
+        self.assertRegex(home, r"\.hm-mtitle\{writing-mode:vertical-rl")
+        self.assertRegex(home, r"\.hm-mmeta\{writing-mode:vertical-rl")
+        # 线长循环 60/100/140/80 —— 多条线长短不一才叫错落
+        m = re.search(r"LINE_LEN=\[([\d,]+)\]", home)
         self.assertIsNotNone(m, "得有一组长短不同的线")
-        self.assertGreater(len(set(m.group(1).split(","))), 1, "线一样长就不叫错落了")
+        self.assertEqual(["60", "100", "140", "80"], m.group(1).split(","))
+        # 点一张卡 → 记忆详情
+        self.assertIn('go("memory-detail",it.id)', home)
+        # 节点：7px 圆 + 1px 描边 + 中心 0.8px 实心点
+        self.assertRegex(home, r"\.hm-mnode\{[^}]*width:7px;height:7px")
+        self.assertRegex(home, r"\.hm-mnode::after\{[^}]*width:\.8px;height:\.8px")
 
     def test_the_study_cover_is_a_seal_not_a_color_block(self):
         """书房封面：去掉大色块，改成一枚印章式的细线方框。"""
@@ -290,11 +339,136 @@ class TestThePhoneShell(unittest.TestCase):
         skin2 = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
         self.assertNotIn("border-radius:999px!important", skin2, "别再有胶囊墙")
 
-    def test_the_memory_screen_has_the_tide_card(self):
-        skin = (WEB / "nest-skin2.js").read_text(encoding="utf-8")
-        self.assertIn("OUR TIDE", skin)
-        self.assertIn("DAYS TOGETHER", skin)
-        self.assertIn("/api/chat/heat", skin, "天数从真聊天记录算，不编")
+    def test_the_tide_card_lives_on_the_home_page(self):
+        """OUR TIDE 现在是主界面上那张卡：两个头像交叠、陪伴天数、名字、一句诗、since。"""
+        home = (WEB / "nest-home.js").read_text(encoding="utf-8")
+        self.assertIn("OUR TIDE", home)
+        self.assertIn("days of tides together", home)
+        self.assertIn("/api/chat/heat", home, "天数从真聊天记录算，不编")
+        self.assertIn("Love Like Foam Upon the Sea", home)
+        # 两个 64px 圆头像，左白玻璃描边、右冰蓝底，交叠一点点
+        self.assertRegex(home, r"\.hm-ava\{[^}]*width:64px;height:64px")
+        self.assertRegex(home, r"\.hm-ava\.me\{[^}]*margin-left:-16px")
+        self.assertIn("var(--foam-2", home)
+        # 中间那条 56px 细横线
+        self.assertRegex(home, r"\.hm-tide \.rule\{width:56px;height:1px")
+
+    def test_the_together_page_is_a_three_column_feed(self):
+        """一起页：引用块 + 下拉 + 标签行 + 日报 + 日期/总数 + 三列信息流。
+
+        ★「不改功能」：原来那十一档的完整界面一个都没删，顶栏「分区」按一下就进去。
+        """
+        tg = (WEB / "nest-together.js").read_text(encoding="utf-8")
+        # ① 引用块：左侧一条 2px accent 竖线 + 斜体正文
+        self.assertRegex(tg, r"\.tg-quote::before\{[^}]*width:2px")
+        self.assertRegex(tg, r"\.tg-quote\{[^}]*font-style:italic")
+        self.assertIn("var(--accent)", tg)
+        # ③ 一个下拉 + ④ 标签行（横向可滑，选中态才 accent）
+        self.assertIn("el(\"select\")", tg)
+        for c in ("全部", "梗库", "表情包", "健康", "收藏", "玩具", "日记", "碎碎念"):
+            self.assertIn('"%s"' % c, tg, c)
+        self.assertRegex(tg, r"\.tg-chips\{[^}]*overflow-x:auto")
+        self.assertRegex(tg, r"\.tg-chips button\.on\{[^}]*color:var\(--accent\)")
+        # ⑤ 居中一枚日报
+        self.assertIn("日报", tg)
+        self.assertRegex(tg, r"\.tg-daily\{[^}]*justify-content:center")
+        # ⑥ 一行：左中文日期 · 右 No. n
+        self.assertIn("zhDay", tg)
+        self.assertIn('"NO. "+rows.length', tg)
+        # ⑦ 三列：品类 68px / 内容 / 时间右对齐
+        self.assertRegex(tg, r"\.tg-row \.cat\{[^}]*flex:0 0 68px")
+        self.assertRegex(tg, r"\.tg-row \.tx\{[^}]*font-size:15px")
+        self.assertRegex(tg, r"\.tg-row \.tm\{[^}]*text-align:right")
+        self.assertRegex(tg, r"\.tg-row\{[^}]*border-bottom:1px solid rgba\(110,130,150,\.22\)")
+        # 十一档一个都没少
+        self.assertIn("nestNotesOpen", tg)
+        self.assertIn("十一档", tg)
+
+    def test_the_study_page_is_a_shelf_of_book_spines(self):
+        """书房页：一排竖立的书脊（高低不一、底纹各异）+ 底下一条隔板。"""
+        st = (WEB / "nest-study.js").read_text(encoding="utf-8")
+        # ① 页头
+        for bit in ("THE STUDY", '"书房"', "一起做事的房间。"):
+            self.assertIn(bit, st, bit)
+        self.assertRegex(st, r"\.st-h1\{[^}]*font-size:32px")
+        # ② 右上角那枚手绘感空心星星：1px 描边、12px、转 15°
+        self.assertIn("nestIcon(\"star\",12)", st)
+        self.assertRegex(st, r"\.st-star\{[^}]*transform:rotate\(15deg\)")
+        self.assertRegex(st, r"\.st-star svg\{stroke-width:1\}")
+        # ③ 书脊：56 宽、圆角 4、1px 描边、四种高度、顶部 8px 书头
+        self.assertRegex(st, r"\.st-spine\{[^}]*width:56px;flex:0 0 56px;border-radius:4px")
+        self.assertIn("rgba(110,130,150,.18)", st)
+        self.assertRegex(st, r"\.st-spine::before\{[^}]*height:8px")
+        for h in ("200", "150", "120", "180"):
+            self.assertIn("h:" + h, st, "少了 " + h + "px 那本书")
+        for name in ("在读", "共读小窗", "创造", "创作的小窗"):
+            self.assertIn('label:"%s"' % name, st, name)
+        # 三根丝带 / 三种底纹都要有
+        self.assertRegex(st, r"\.st-ribbon\{[^}]*width:3px;height:24px[^}]*var\(--accent\)")
+        self.assertIn("#DCEAF3", st)
+        for p in ("p-lines", "p-dots", "p-diag"):
+            self.assertIn(p, st, p)
+        # ④ 隔板：通宽 10px、浅灰 60%、两端圆角
+        self.assertRegex(st, r"\.st-plank\{[^}]*height:10px[^}]*rgba\(201,207,214,\.6\)")
+        # 四条书脊各自去得了地方（功能一个没丢）
+        for fn in ("openCurrent", "openBookchat", "openCreation"):
+            self.assertIn(fn, st, fn)
+        self.assertIn("/api/books", st, "真正的书还在这一页上")
+        self.assertIn("pickFile", st, "放书也还在")
+
+    def test_the_timeline_page_has_alternating_odd_shaped_cards(self):
+        """时间线页：编号 + 竖线 + 标题，卡片形状四种轮着来。"""
+        tl = (WEB / "nest-timeline.js").read_text(encoding="utf-8")
+        # ① 顶栏：‹ 返回 · 时间线 TIMELINE · 搜索
+        self.assertIn("nestPageHead", tl)
+        self.assertIn('title:"时间线"', tl)
+        self.assertIn('en:"TIMELINE"', tl)
+        self.assertIn('icon:"search"', tl)
+        # 编号：Jost 26px / #A7B0BB
+        self.assertRegex(tl, r"\.tl-c \.no\{[^}]*font-size:26px")
+        # 编号与正文之间那条 1px 竖线，高 40px
+        self.assertRegex(tl, r"\.tl-c \.vr\{width:1px;height:40px")
+        # 主标题 15px
+        self.assertRegex(tl, r"\.tl-c \.tt\{[^}]*font-size:15px")
+        # 卡片：76~100 高、1px 描边、浅底、卡间 12px
+        self.assertRegex(tl, r"\.tl-c\{[^}]*min-height:84px")
+        self.assertIn("rgba(110,130,150,.30)", tl)
+        self.assertIn("rgba(255,255,255,.35)", tl)
+        self.assertRegex(tl, r"\.tl-list\{display:flex;flex-direction:column;gap:12px\}")
+        # 四种形状轮着来
+        self.assertIn('SHAPES=["s-a","s-b","s-c","s-d"]', tl)
+        for shape in (".tl-c.s-a", ".tl-c.s-b", ".tl-c.s-c", ".tl-c.s-d"):
+            self.assertIn(shape, tl, shape)
+        self.assertIn("rotate(45deg)", tl, "书签那个 45° 尖角")
+        # 那个弧口是**真的挖掉**一块（mask），不是拿个纸色圆盖上去 ——
+        # 盖上去的话那一小块墨晕就透不过来了。
+        self.assertIn("-webkit-mask:radial-gradient(circle 7px at 0 50%", tl)
+        self.assertIn("mask:radial-gradient(circle 7px at 0 50%", tl)
+        # 邮票齿是探出边缘的一小块卡片（转 45° 的方块），填色跟卡片一致
+        self.assertNotIn("border-bottom:8px solid", tl, "不该是一块实心深色三角")
+        self.assertRegex(tl, r"\.tl-c\.s-d::before,\.tl-c\.s-d::after\{[^}]*background:rgba\(255,255,255,\.35\)")
+
+    def test_bubble_colours_and_names_are_editable(self):
+        """★ 用户定的：助手气泡和用户气泡的**底色和字色**都能改，名字也都能改。"""
+        skin = (WEB / "nest-skin.js").read_text(encoding="utf-8")
+        # 主题里两边的字色都有
+        for key in ("aiBubbleFg", "meBubbleFg"):
+            self.assertIn(key, skin, key)
+        self.assertIn('set("--nest-ai-fg"', skin)
+        self.assertIn('set("--nest-me-fg"', skin)
+        # 外壳真的读它们
+        self.assertIn("var(--nest-ai-fg,var(--tx-1))", self.html)
+        self.assertIn("var(--nest-me-fg,var(--tx-1))", self.html)
+        # 「我的 › 外观」那一节：4 个颜色控件（两边各底色 + 字色）
+        setting = (WEB / "nest-setting.js").read_text(encoding="utf-8")
+        self.assertIn("secAppearance", setting)
+        self.assertIn("window.nestTheme", setting)
+        for key in ('"aiBubble"', '"aiBubbleFg"', '"meBubble"', '"meBubbleFg"'):
+            self.assertIn(key, setting, key)
+        self.assertIn('i.type="color"', setting)
+        # 名字：他和我的都能改
+        self.assertIn('["ai","他叫什么"', (WEB / "nest-skin2.js").read_text(encoding="utf-8"))
+        self.assertIn('["me","我叫什么"', (WEB / "nest-skin2.js").read_text(encoding="utf-8"))
 
     def test_the_three_new_sections_are_reachable(self):
         notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")
