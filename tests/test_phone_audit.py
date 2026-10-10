@@ -499,7 +499,27 @@ class TestThePhoneShell(unittest.TestCase):
         home = (WEB / "nest-home.js").read_text(encoding="utf-8")
         self.assertIn('go("together",label)', home, "首页那 7 个入口要把档位传过去")
 
-    def test_the_drawer_actions_can_still_be_re_iconed(self):
+    def test_every_sub_page_has_a_way_back(self):
+        """★ 每个子页都得有一条**看得见的**回主界面的路。
+
+        走查时抓到的：书房那一页是自己画顶栏的（不是默认那条 .pg-head），
+        加了大标题和那颗手绘星星，却忘了返回键 —— 进去之后只剩抽屉那条路。
+        另外记忆 / 巢 / 我的用的是默认顶栏，原来只有一个 ✕，没有返回箭头。
+        """
+        study = (WEB / "nest-study.js").read_text(encoding="utf-8")
+        self.assertIn('el("button","st-back")', study, "书房要有返回键")
+        self.assertIn('nestGo("home")', study, "而且它得真回主界面")
+        # 默认顶栏也要有返回箭头，不能只有一个 ✕
+        self.assertIn('el("button","back ibtn")', self.tabs)
+        self.assertRegex(self.tabs, r'phead\.append\(pback,')
+        # 自己画顶栏的那几页，返回一律走 nestPageHead（它自带 back）
+        for f, key in (("nest-together.js", 'title:"一起"'),
+                       ("nest-timeline.js", 'title:"时间线"')):
+            src = (WEB / f).read_text(encoding="utf-8")
+            self.assertIn("nestPageHead", src, f)
+            self.assertIn(key, src, f)
+
+
         """★ 底栏撤了之后，「新对话 / 搜索 / MCP」搬进了抽屉 ——
         「抽屉与主界面图标」那一节得跟着搬，不然那三个图标槽填了也白填。"""
         self.assertIn("b.title=label", self.tabs, "抽屉动作按钮要带 title")

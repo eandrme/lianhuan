@@ -177,7 +177,13 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   const pclose=el("button","x ibtn"); pclose.append(nestIcon("close",19));
   pclose.title="回到主界面";
   pclose.onclick=()=>go("home");
-  const phead=el("div","ph"); phead.append(picon,ptitle,pen,pclose);
+  /* ★ 默认顶栏也要有一条**返回箭头**（不只是一个 ✕）——
+     记忆 / 巢 / 我的这几页用的就是这条顶栏，只有 ✕ 的话
+     「回主界面」这件事在手机上看不出来。 */
+  const pback=el("button","back ibtn"); pback.append(nestIcon("back",20));
+  pback.title="回主界面";
+  pback.onclick=()=>go("home");
+  const phead=el("div","ph"); phead.append(pback,picon,ptitle,pen,pclose);
   const pbody=el("div","pb"); pane.append(phead,pbody);
 
   /* ★ 有几个视图自己画顶栏（首页那条 ☰·HOME·⚙、书房的 THE STUDY、

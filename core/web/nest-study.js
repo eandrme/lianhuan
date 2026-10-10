@@ -22,7 +22,17 @@ try{
   css.textContent=`
 /* ══════ ① 页头：THE STUDY / 书房 / 一起做事的房间。 + 右上角那枚手绘星星 ══════ */
 .st-page{max-width:720px;margin:0 auto}
-.st-head{display:flex;align-items:flex-start;gap:12px;margin:0 0 26px}
+/* ★ 书房这一页是自己画顶栏的（不是默认那条 .pg-head），所以「回主界面」
+   得自己摆一个 —— 少了它，进了书房就只剩抽屉那一条路回去了。 */
+.st-head{display:flex;flex-direction:column;margin:0 0 26px}
+.st-headbar{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.st-headbar .sp{flex:1}
+.st-back{width:44px;height:44px;min-width:44px;margin-left:-10px;
+  display:flex;align-items:center;justify-content:center;
+  background:none;border:0;color:var(--tx-2);cursor:pointer;
+  transition:transform .3s ease,color .3s ease}
+.st-back:hover{color:var(--tx-1)}
+.st-back:active{transform:scale(.94)}
 .st-headl{flex:1;min-width:0}
 .st-en{font-family:var(--latin);font-size:10px;letter-spacing:.3em;color:var(--tx-3);
   text-transform:uppercase}
@@ -149,12 +159,19 @@ try{
     }
     function shelfHead(){
       const head=el("div","st-head");
+      /* 顶上一行：左边回主界面，右边那枚转 15° 的手绘空心星星 */
+      const bar=el("div","st-headbar");
+      const back=el("button","st-back");
+      back.append(nestIcon("back",20));
+      back.title="回主界面";
+      back.onclick=()=>{ if(window.nestGo)window.nestGo("home"); };
+      const star=el("div","st-star"); star.append(nestIcon("star",12));
+      bar.append(back,el("span","sp"),star);
       const l=el("div","st-headl");
       l.append(el("div","st-en","THE STUDY"),
                el("h1","st-h1","书房"),
                el("div","st-sub","一起做事的房间。"));
-      const star=el("div","st-star"); star.append(nestIcon("star",12));
-      head.append(l,star);
+      head.append(bar,l);
       return head;
     }
     function openCreation(){
