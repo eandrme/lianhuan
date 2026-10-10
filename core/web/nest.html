@@ -223,7 +223,7 @@ details.think .sec{color:var(--dim2)}
    这样「消息进来了」这件事还看得见，但没有任何东西在动。 */
 @media (prefers-reduced-motion:reduce){
   .blob{animation:none!important}
-  .tide .avs .a,.hm-ava{animation:none!important}
+  .hm-ava,.ava-pick,#bar .me{animation:none!important}
   .stage .foam i,.stage .dots i,.dots i{animation:none!important;opacity:.6}
   *{animation-name:none!important;transition-property:opacity,color,background-color,border-color!important}
   /* 页面切换 / 消息入场：退化成纯淡入（横向位移和模糊都去掉） */
@@ -231,7 +231,7 @@ details.think .sec{color:var(--dim2)}
   #bg{animation:none!important}
   /* hover 上浮 / 按压缩放也一起去掉 */
   .nt-card:hover,.set-sec:hover,.ty-card:hover,.ph-card:hover,.mem-card:hover,
-  .st-book:hover,.tide-row>*:hover,.cr-card:hover,.cr-note:hover,button:active{
+  .st-book:hover,.cr-card:hover,.cr-note:hover,button:active{
     transform:none!important}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 }
