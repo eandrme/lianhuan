@@ -224,19 +224,32 @@ class AnthropicEngine(Engine):
                             yield sse(SAY, text=s)
                     elif blk.get("type") == "tool_use":
                         name = blk.get("name", "")
+                        args = blk.get("input") or {}
                         yield sse("tool_live", name=name)     # 先报「他动手了」，别让人干等
-                        ok, err = True, ""
+                        # ★ 参数也报出去：不报的话工具卡永远停在「（跑着呢…）」，
+                        #   人看不出它到底拿什么去调的（OpenAI 那条早就报了）。
+                        yield sse("tool", name=name,
+                                  args=json.dumps(args, ensure_ascii=False)[:400])
                         try:
-                            out = await self.exec_tool(name, blk.get("input") or {})
+                            out = await self.exec_tool(name, args)
                         except Exception as e:                # noqa: BLE001 —— 要把真话说给人听
-                            ok, err, out = False, f"{type(e).__name__}: {e}"[:200], err
+                            out = {"ok": False, "err": f"{type(e).__name__}: {e}"[:200]}
+                        # ★ 成没成必须带出去（照 OpenAI 那条）：原来这里 ok 恒为 True，
+                        #   工具失败了前端照样显示一个 ✓。
+                        ok = not (isinstance(out, dict) and out.get("ok") is False)
+                        err = ""
+                        if not ok:
+                            err = str(out.get("err") or out.get("error") or "没成")[:120]
                         results.append({
                             "type": "tool_result",
                             "tool_use_id": blk.get("id", ""),
-                            "content": str(out)[:4000],
+                            "content": json.dumps(out, ensure_ascii=False)[:4000]
+                                       if not isinstance(out, str) else out[:4000],
                             **({"is_error": True} if not ok else {}),
                         })
-                        yield sse("tool_done", name=name, ok=ok, err=err)
+                        # ★ 表情包：这张图得**随事件带出去**，前端才当场贴得出来
+                        _st = out.get("sticker") if isinstance(out, dict) else None
+                        yield sse("tool_done", name=name, ok=ok, err=err, sticker=_st)
                 # ★ 一条 user 消息里装齐所有 tool_result —— 拆成几条会让它以后不敢并行动手
                 msgs.append({"role": "user", "content": results})
             else:

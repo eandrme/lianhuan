@@ -48,6 +48,11 @@ class Engine:
     #: ready 和 stub 是两件事：ready 说「点了有反应吗」，stub 说「那个反应是真的吗」。
     #: 界面上这两种都要标出来，只是话不一样。
     stub = False
+    #: True = 这家的接口真能把 `Turn.images` 送进模型的眼睛。
+    #: ★ 认不出来的引擎会**照旧忽略** images（这是设计，见 Turn.images 那段），
+    #:   但那样一来 server 拼的旁白就不能再说「你直接能看见」—— 那是在教模型撒谎。
+    #:   所以每家自己声明一下，`_attach_note` 按这个说实话。
+    sees_images = False
 
     async def stream(self, turn: Turn) -> AsyncIterator[str]:
         """产出 SSE 字符串（用 protocol.sse() 打包）。

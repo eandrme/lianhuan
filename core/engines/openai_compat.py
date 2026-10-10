@@ -61,6 +61,8 @@ def _browser_transport():
 class OpenAICompatEngine(Engine):
     name = "openai"
     label = "API"
+    #: 这条是真的把图拼进 content 数组发出去的（见下面 stream 里那段 image_url）
+    sees_images = True
 
     @staticmethod
     def _secrets() -> dict:

@@ -432,7 +432,8 @@ async def chat(req: Request):
     #   自己写的那句话。不然刷新之后你自己的气泡里会多出一段机器写的〔〕旁白。
     msg_for_engine = msg
     if files_meta:
-        msg_for_engine = (_attach_note(files_meta, len(images), inlined, bool(msg))
+        msg_for_engine = (_attach_note(files_meta, len(images), inlined, bool(msg),
+                                       bool(getattr(pick_engine(), "sees_images", False)))
                           + _attach_text_block(inlined)
                           + ("\n" if msg else "") + msg)
     if msg.startswith("▎引用"):
@@ -1105,15 +1106,35 @@ def _attach_payload(files_meta: list[dict]) -> tuple[list[str], list[tuple[str, 
                 txt = p.read_text(encoding="utf-8", errors="replace")
             except OSError:
                 continue
-            t_bytes += len(txt)
+            # ★ 预算按**字节**算：原来这里数的是字符数，一个 180KB 的中文文件
+            #   只有 6 万字，三个就能塞进 540KB —— 「400KB 上限」形同虚设。
+            t_bytes += len(txt.encode("utf-8"))
             texts.append((f["name"], txt))
     return images, texts
 
 
+def _file_kind_of(f: dict) -> str:
+    """这个附件为什么不给模型 —— 只用来**说实话**，不参与任何拦截。"""
+    p = Path(f["path"])
+    if f["kind"] == "img":
+        if not _MIME.get(p.suffix.lower()):
+            return "unsupported"          # 后缀不是 jpeg/png/webp/gif
+        return "too_big"                  # 超了单张 8MB 或一轮 24MB
+    if p.suffix.lower() not in _TEXT_EXT:
+        return "unsupported"              # pdf/word/zip/epub 这类，这一版真读不了
+    return "too_big"                      # 单文件 200KB 或一轮 400KB 超了
+
+
 def _attach_note(files_meta: list[dict], n_img: int, texts: list[tuple[str, str]],
-                 has_text: bool) -> str:
+                 has_text: bool, sees_images: bool = True) -> str:
     """拼给模型看的那段旁白。★ 它进的是**这一轮**的 message，不进库 ——
-    库里的 content 永远是你自己写的那句话（见下面 add_turn 那行）。"""
+    库里的 content 永远是你自己写的那句话（见下面 add_turn 那行）。
+
+    ★ 两处**必须说实话**，不然就是在教模型撒谎：
+      · 这家引擎看不见图（Turn.images 被引擎忽略）时，不许再说「你直接能看见」；
+      · 被大小 / 预算挤掉的，不许栽赃成「PDF/Word 这类读不了」——
+        那会让它跟人解释错原因（原来是 n_file - len(texts) 一把算，全都算成 PDF）。
+    """
     if not files_meta:
         return ""
     n_file = len(files_meta) - n_img
@@ -1121,13 +1142,32 @@ def _attach_note(files_meta: list[dict], n_img: int, texts: list[tuple[str, str]
                                  f"{n_file} 个文件" if n_file else "") if x)
     lines = [f"〔对方这一轮发来了{what}" + ("，还写了一句（在下面）。" if has_text else "。")]
     if n_img:
-        lines.append("图片就在这条消息里、你直接能看见 —— 像看见对方发的照片那样自然回应，"
-                     "别只说「看到了」，也别说你看不见。")
+        if sees_images:
+            lines.append("图片就在这条消息里、你直接能看见 —— 像看见对方发的照片那样自然回应，"
+                         "别只说「看到了」，也别说你看不见。")
+        else:
+            lines.append("★ 不过你现在接的这家**看不见图片** —— 图没送进来。"
+                         "对方问起就老实说你打不开这张图，别猜图里有什么、别编。")
     for name, _ in texts:
         lines.append(f"· 文件「{name}」的内容附在下面。")
-    if n_file > len(texts):
-        lines.append(f"· 另外 {n_file - len(texts)} 个文件是 PDF/Word/压缩包这类，"
-                     "这一版还读不了 —— 对方问起就老实说读不了，别编内容。")
+    left = len(files_meta) - n_img - len(texts)
+    if left > 0:
+        given = {n for n, _ in texts}
+        kinds = {}
+        for f in files_meta:
+            if f["kind"] == "img" and n_img:
+                continue                      # 图已经算在 n_img 里了
+            if f["name"] in given:
+                continue
+            kinds[_file_kind_of(f)] = kinds.get(_file_kind_of(f), 0) + 1
+        n_uns = kinds.get("unsupported", 0)
+        n_big = kinds.get("too_big", 0)
+        if n_uns:
+            lines.append(f"· 另外 {n_uns} 个文件是 PDF/Word/压缩包这类，这一版还读不了 —— "
+                         "对方问起就老实说读不了，别编内容。")
+        if n_big:
+            lines.append(f"· 另外 {n_big} 个太大（图超过 8MB、文字文件超过 200KB），"
+                         "这一轮没能送进来 —— 就说太大了没读到，别编里面的内容。")
     return "\n".join(lines) + "〕"
 
 

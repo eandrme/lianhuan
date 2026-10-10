@@ -329,8 +329,24 @@ def _allowed_tools() -> list:
             or t["function"]["name"] not in builtin]
 
 
+#: 这几只手的结果要落到**这一轮的回复**上（表情包）或某个具体助手名下（信），
+#: 而离线这场没有回复可挂、也没有助手身份 —— 跑了只会回一句「贴上了」而屏幕上
+#: 什么都不出现，正是 exec_guard 存在的理由（见 hands.exec_guard 那段注释）。
+_OFFLINE_NO_HOME = {
+    "send_sticker": "这个窗口发不了表情包（自己的时间里没有能贴的地方）",
+    "write_letter": "自己的时间里写不了信（这封不知道该算谁写的）",
+}
+
+
 async def _exec_audited(name: str, args: dict):
     from . import hands
+    if name in _OFFLINE_NO_HOME:
+        # ★ 离线这条路原来直接调 hands.execute，**绕过了 exec_guard** ——
+        #   于是 OFFLINE_TOOLS=all 时它照发不误，回一个 ok:true 而什么都没发生。
+        err = _OFFLINE_NO_HOME[name]
+        audit(name, True, err)
+        _STAT["tools"].append((name, False))
+        return {"ok": False, "err": err}
     try:
         r = await hands.execute(name, args)
         ok = bool((r or {}).get("ok", True))
@@ -349,6 +365,13 @@ def _db_user_ts() -> float:
     """主库里「用户最后一次说话」的时间戳（毫秒自动换算成秒）。"""
     import sqlite3
     for sql in (
+        # ★ 只认**人真的说过话**的那些轮。原来看所有 role='user' 的行 ——
+        #   里面还混着机器拼的场景指令（spoken=0/hidden=1）和通话记录，
+        #   于是切个空间、重新生成一次、接个电话，都会被当成「你回来了」：
+        #   该开的离线时段不开，正跑着的那场还会被当场掐断。
+        #   windows.active_sid 早就这么排除了，这儿是漏的。
+        "SELECT MAX(ts) FROM turns WHERE role='user' AND COALESCE(spoken,1)=1",
+        # 老库万一没有 spoken 这一列，退回原来那句（宁可宽一点，也别整个读不出来）
         "SELECT MAX(ts) FROM turns WHERE role='user'",
         "SELECT MAX(created_at) FROM turns WHERE role='user'",
         "SELECT MAX(ts) FROM messages WHERE role='user'",
@@ -536,6 +559,15 @@ async def tick(force: bool = False, dry: bool = False) -> None:
     _log(f"tick｜离开约 {gap} 分｜seen={seen:.0f}｜idle={idle_min():.0f}分"
          f"｜next_due={float(st.get('next_due') or 0):.0f}")
 
+    # ★ engine_ok 这一条**force 也不能跳**（原来整段都在 if not force 里）：
+    #   手动「真跑一场」用 force=True，于是回声引擎的诊断原文被写进私密库，
+    #   接着 residue_text() 又把它渗回**正常聊天**的提示词里。
+    #   闸门是「别让桩把机器废话写进你自己的时间」，跟你是不是手动触发没关系。
+    if not engine_ok():
+        _log("现在的引擎是桩（回声那种），这一拍不跑 —— 跑了只会把机器诊断写进私密库")
+        _persist(st, dry, save=False)
+        return
+
     if not force:
         if seen <= 0:
             _log("读不到你最后说话的时间，这一拍跳过")
@@ -556,10 +588,6 @@ async def tick(force: bool = False, dry: bool = False) -> None:
         if not window_ok():
             _persist(st, dry, save=False)
             return                                        # 你最近那个窗口关着离线模式
-        if not engine_ok():
-            _log("现在的引擎是桩（回声那种），这一拍不跑 —— 跑了只会把机器诊断写进私密库")
-            _persist(st, dry, save=False)
-            return                                        # 引擎还是桩，跑了只会写一堆废话进私密库
 
     _STAT["tools"] = []
     st = dict(st)
@@ -647,7 +675,9 @@ def install() -> None:
             def _wrapped(*a, **kw):
                 base = _bi(*a, **kw)
                 try:
-                    extra = residue_text()
+                    # ★ 得看总开关：原来只要 PERMEATE 不是 0 就一直渗 ——
+                    #   把 OFFLINE_ENABLED 关掉之后，以前那些私密话照样在改正常聊天的口气。
+                    extra = residue_text() if enabled() else ""
                     if extra:
                         base = (base or "") + "\n\n" + extra
                 except Exception:

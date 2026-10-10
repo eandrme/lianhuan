@@ -88,6 +88,13 @@ def _run(engine, turn, script):
     return out, fake
 
 
+def _ok(v):
+    """同步返回一个值，但能被 await —— exec_tool 是 async 接口。"""
+    async def _r(*a, **kw):
+        return v
+    return _r()
+
+
 class TestWireShape(unittest.TestCase):
     """发出去的请求得长成 Anthropic 认的样子 —— 这四处任何一处错都通不了。"""
 
@@ -195,6 +202,80 @@ class TestTools(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["tool_use_id"], "tu_1", "对不上 id 会 400")
         self.assertIn("看完了", "".join(evs))
+
+    def test_a_tool_round_reports_args_state_and_the_sticker(self):
+        """★ 换成 Claude 之后，工具那一套**得跟 OpenAI 那条一样老实**：
+
+        走查时抓到的三处：① 不报参数 → 工具卡永远停在「（跑着呢…）」；
+        ② `ok` 恒为 True → 失败了前端照样一个 ✓；
+        ③ 不带 `sticker=` → 表情包要刷新才看得见（他刚被告知「贴上了」）。
+        """
+        eng = AnthropicEngine(key="sk-ant-test")
+        eng.tools = [{"type": "function", "function": {
+            "name": "send_sticker", "description": "发一张",
+            "parameters": {"type": "object", "properties": {}}}}]
+        eng.exec_tool = lambda name, args: _ok({
+            "ok": True, "note": "贴上了", "sticker": {"url": "/uploads/s.png", "name": "猫猫歪头"}})
+
+        evs, _ = _run(eng, Turn(message="发一张"), [
+            _Resp(200, {"stop_reason": "tool_use", "content": [
+                {"type": "tool_use", "id": "tu_1", "name": "send_sticker",
+                 "input": {"name": "猫猫歪头"}}]}),
+            _Resp(200, {"stop_reason": "end_turn", "content": [{"type": "text", "text": "给。"}]}),
+        ])
+        kinds = [json.loads(e[6:]) if e.startswith("data: ") else {} for e in evs]
+        live = [k for k in kinds if k.get("type") == "tool_live"]
+        done = [k for k in kinds if k.get("type") == "tool_done"]
+        args = [k for k in kinds if k.get("type") == "tool"]
+        self.assertTrue(live, "先报「他动手了」")
+        self.assertTrue(args, "参数也要报 —— 不报工具卡永远停在「跑着呢」")
+        self.assertIn("猫猫歪头", json.dumps(args[0], ensure_ascii=False))
+        self.assertTrue(done and done[0]["ok"] is True)
+        self.assertEqual((done[0].get("sticker") or {}).get("url"), "/uploads/s.png",
+                         "表情包要随事件带出去，前端才贴得出来")
+
+    def test_a_failed_tool_really_reads_as_failed(self):
+        """工具自己回 ok:false 时，前端那个 ✓ 不能照绿 —— OpenAI 那条 0831 修过同一处。"""
+        eng = AnthropicEngine(key="sk-ant-test")
+        eng.tools = [{"type": "function", "function": {
+            "name": "send_sticker", "description": "发一张",
+            "parameters": {"type": "object", "properties": {}}}}]
+        eng.exec_tool = lambda name, args: _ok({"ok": False, "err": "表里没有这张"})
+
+        evs, _ = _run(eng, Turn(message="发一张"), [
+            _Resp(200, {"stop_reason": "tool_use", "content": [
+                {"type": "tool_use", "id": "tu_1", "name": "send_sticker", "input": {}}]}),
+            _Resp(200, {"stop_reason": "end_turn", "content": [{"type": "text", "text": "没发出去。"}]}),
+        ])
+        done = [json.loads(e[6:]) for e in evs if e.startswith("data: ")]
+        done = [k for k in done if k.get("type") == "tool_done"]
+        self.assertTrue(done)
+        self.assertIs(done[0]["ok"], False, "回了 ok:false 就得报失败")
+        self.assertIn("表里没有这张", done[0]["err"])
+
+    def test_a_tool_that_raises_still_tells_the_model_something(self):
+        """★ 原来异常那条路把 `err` 先清空再当 tool_result 发出去 —— 模型收到的是空字符串，
+        只有人看得见报错。模型看不见，就会自己编一个「我做好了」。"""
+        eng = AnthropicEngine(key="sk-ant-test")
+        eng.tools = [{"type": "function", "function": {
+            "name": "boom", "description": "炸",
+            "parameters": {"type": "object", "properties": {}}}}]
+
+        async def run(name, args):
+            raise RuntimeError("炸了")
+        eng.exec_tool = run
+
+        evs, fake = _run(eng, Turn(message="炸一个"), [
+            _Resp(200, {"stop_reason": "tool_use", "content": [
+                {"type": "tool_use", "id": "tu_1", "name": "boom", "input": {}}]}),
+            _Resp(200, {"stop_reason": "end_turn", "content": [{"type": "text", "text": "它炸了。"}]}),
+        ])
+        second = fake.seen[1]["body"]["messages"]
+        results = [b for b in second[-1]["content"] if b["type"] == "tool_result"]
+        self.assertTrue(results[0].get("content", "").strip(),
+                        "给模型的 tool_result 不能是空的")
+        self.assertIn("炸了", str(results[0]["content"]))
+        self.assertTrue(results[0].get("is_error"))
 
 
 class TestHonesty(unittest.TestCase):
