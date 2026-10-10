@@ -48,6 +48,13 @@ END = "。！？…!?"
 MIN_SAY = 6
 #: 一句最多攒多长，超了强行断（防止模型一口气不打标点）
 MAX_SAY = 180
+#: **一轮对话里最多连着走几轮工具。**
+#: ★ 用户定的：要能一口气做完多步的事（翻记忆 → 查东西 → 写下来 → 回报），
+#:   不要做一步就停下来等人催。原来是写死在 `while rounds < 5` 里的字面量 5 ——
+#:   五步够干什么？查一次记忆就没得剩了。
+#: ★ 别往上调太多：轮数越多，这一轮越慢、越烧 token。20 是先试的数。
+#:   一轮里模型可以一次要求好几只手，所以「20 轮」实际能做的动作 ≥ 20 件。
+MAX_TOOL_ROUNDS = 20
 
 
 
@@ -257,9 +264,10 @@ class OpenAICompatEngine(Engine):
         if self.tools and self.exec_tool and not self._reasoner_only():
             import httpx as _hx
             rounds = 0
+            ran = []                      # 这一轮它真动过的手，兜底时要如实报出来
             client = _hx.AsyncClient(timeout=_hx.Timeout(180.0, connect=15.0), transport=_browser_transport())
             try:
-                while rounds < 5:
+                while rounds < MAX_TOOL_ROUNDS:
                     rounds += 1
                     _payload = {"model": self.model, "messages": msgs, "tools": self.tools}
                     _eff = self._effort(turn)
@@ -291,6 +299,17 @@ class OpenAICompatEngine(Engine):
                             said = True
                             yield sse(SAY, text=sseg)
                         break
+                    # ★ 它可能**一边说话一边动手**（content 和 tool_calls 同时有）。
+                    #   这一路原来只取 tool_calls，把同一句里的 content 整个丢了 ——
+                    #   那也是「做完了屏幕上什么都没有」的一个来源。
+                    if (m.get("content") or "").strip():
+                        for kind, sseg in self._feeder()((m.get("content") or "").strip(),
+                                                         flush=True):
+                            if kind == "t":
+                                yield sse(THINK, delta=sseg)
+                                continue
+                            said = True
+                            yield sse(SAY, text=sseg)
                     msgs.append(m)
                     for c in calls:
                         fn = (c.get("function") or {})
@@ -316,10 +335,43 @@ class OpenAICompatEngine(Engine):
                         #   不带的话，人得刷新一次才看得见 —— 而他刚被告知「贴上了」。
                         _st = result.get("sticker") if isinstance(result, dict) else None
                         yield sse("tool_done", name=name, ok=ok, err=err, sticker=_st)
+                        ran.append(name)
                         msgs.append({"role": "tool", "tool_call_id": c.get("id"),
                                      "content": json.dumps(result, ensure_ascii=False)[:2000]})
                 if not said:
-                    yield sse("error", text="它光动手没说话 —— 看顶上的 🧠 面板")
+                    # ★ 原来是 `error`：「它光动手没说话 —— 看顶上的 🧠 面板」——
+                    #   那等于「事做完了，屏幕上什么都没有」，做一步就没了下文。
+                    #   用户定的：**每次动作都必须输出一些东西**。
+                    #   先逼它回一句话（这一趟 tool_choice=none，把手收起来），
+                    #   还是没话，就把它真做过的事如实摆出来 —— 不替它编话。
+                    try:
+                        _p2 = {"model": self.model, "messages": msgs,
+                               "tool_choice": "none"}
+                        _eff2 = self._effort(turn)
+                        if _eff2:
+                            _p2["reasoning_effort"] = _eff2
+                        _r2 = await self._post_json(
+                            client, f"{self.base}/v1/chat/completions",
+                            {"Authorization": f"Bearer {self._key}",
+                             "Content-Type": "application/json"}, _p2, turn)
+                        if _r2.status_code == 200:
+                            _j2 = _r2.json()
+                            _u2 = _j2.get("usage") or {}
+                            used["tin"] += int(_u2.get("prompt_tokens") or 0)
+                            used["tout"] += int(_u2.get("completion_tokens") or 0)
+                            _m2 = (_j2.get("choices") or [{}])[0].get("message") or {}
+                            for kind, sseg in self._feeder()(_m2.get("content") or "",
+                                                             flush=True):
+                                if kind == "t":
+                                    yield sse(THINK, delta=sseg)
+                                    continue
+                                said = True
+                                yield sse(SAY, text=sseg)
+                    except Exception:
+                        pass
+                if not said:
+                    _did = "、".join(dict.fromkeys(ran))[:120] or "几件事"
+                    yield sse(SAY, text=f"（它把「{_did}」做完了，没留下话。）")
             except Exception as e:
                 yield sse("error", text=f"跟模型说话时出事了：{type(e).__name__}"[:160])
             finally:
