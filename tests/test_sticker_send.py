@@ -286,8 +286,22 @@ class TestTheUi(unittest.TestCase):
                       "表情包得画在气泡**后面**")
 
     def test_the_live_turn_shows_it_without_a_refresh(self):
+        """★ 他发的表情包要**当场**贴出来，不能等刷新 —— 而他刚被告知「贴上了」。
+
+        ★★ 这条原来只查「ev.sticker 这个词在不在文件里」—— 于是漏掉了一个真 bug：
+        基础版 handle（function handle(ev,L)）里写着这段，可「第二批补丁」那句
+        `window.handle=function(ev,L){…}` 把整个 handler **换掉了**，
+        基础版成了死代码：词还在，功能没了，表情包要刷新一次才看得见。
+        所以现在查的是「**生效的那个** handler 里有没有这一段」。
+        """
         self.assertIn("ev.sticker", self.html)
         self.assertIn("L.sticker", self.html)
+        # 生效的是后面那个 window.handle（补丁把它整个换掉了）
+        live = self.html[self.html.index("window.handle=function(ev,L){"):]
+        self.assertIn("ev.sticker", live,
+                      "表情包那一段得在**生效的** handler 里，不能只在被覆盖掉的基础版里")
+        self.assertIn("L.sticker", live)
+        self.assertIn("stickerEl(", live)
 
     def test_a_sticker_that_will_not_load_says_so(self):
         """★ 真机上撞的：他说发了，屏幕上什么都没有 —— 因为图取不到时那块被**悄悄摘掉**了。

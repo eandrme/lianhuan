@@ -1040,6 +1040,16 @@ boot();
       case "tool_done":{
         const c=lastTool(L,ev.name)||toolCard(L,ev,false);
         bump(c,ev.ok!==false,ev.ms,ev.err);
+        /* ★ 他发的表情包：**当场**贴在末尾。
+           这一段原来只写在上面那个基础版 handle 里，而这个补丁把
+           window.handle 整个换掉了 —— 基础版成了死代码，于是表情包
+           要刷新一次才看得见，而他刚被告知「贴上了」。
+           改哪一个 handle，这一段就得跟到哪一个。 */
+        if(ev.sticker&&ev.sticker.url&&!L.sticker){
+          L.sticker=ev.sticker;
+          L.w.append(stickerEl({url:ev.sticker.url,name:ev.sticker.name||"表情",sticker:true}));
+        }
+        toBottom();
         break;}
       case "usage": L.usage={tin:ev.tin||0,tout:ev.tout||0}; break;
       case "done":
