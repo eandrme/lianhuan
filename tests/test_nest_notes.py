@@ -418,11 +418,16 @@ class TestNestFrontendWiring(unittest.TestCase):
         self.assertNotIn("winFlags", js)
 
     def test_the_thread_list_shows_both_switches(self):
-        self.assertIn("nestWinFlags.row", self._read("nest-threads.js"))
+        """每一行右边那两枚开关（主动消息 / 离线模式）。
+
+        ★ 这个列表原来在 nest-threads.js 里，后来统一到了 nest-tabs.js 的
+          threadsInto()（抽屉 / 主界面那颗 HOME /「巢」那一格走的都是它）。
+          意图不变，只是换了地方 —— 所以这条也跟过去。"""
+        self.assertIn("nestWinFlags.row", self._read("nest-tabs.js"))
 
     def test_the_bar_switches_are_not_plain_buttons(self):
-        """顶栏那两枚不能带 .ibtn：nest-threads 用 `#bar .ibtn` 认「＋」，
-        混进去会让点开关变成开新对话。"""
+        """顶栏那两枚不能带 .ibtn —— 那个类是顶栏动作按钮的记号，
+        开关混进去会被当成一个「动作」，点一下就不是拨开关了。"""
         js = self._read("nest-window.js")
         self.assertIn('el("button","wf")', js)
         self.assertNotIn('"wf ibtn"', js)

@@ -1,7 +1,10 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 对话窗口 v2：窗口列表可删 + 修「重新生成重复用户话」
+   巢 · 对话窗口 v2：修「重新生成重复用户话」+（原）窗口列表
    装法：nest.html 再加一行 <script src="/nest-threads.js?v=1"></script>
-   不改任何旧文件 —— 用捕获点击接管「+」和「重新生成」
+
+   现在这儿只剩一件事：接管「⋯ › 重新生成」，保证**你的话只发一遍**、
+   旧的那条不再记得它。
+   窗口列表（含删除按钮）统一在 nest-tabs.js 的 threadsInto()。
    ══════════════════════════════════════════════════════════ */
 (function(){
 "use strict";
@@ -28,16 +31,6 @@ try{
   };
   const turnText=w=>[...w.querySelectorAll(":scope > .bubbles > .bubble")]
                      .map(b=>b.textContent).join("|||");
-
-  const css=document.createElement("style");
-  css.textContent=`
-.thr2{display:flex;align-items:center;gap:8px;padding:10px 8px;border-bottom:1px solid var(--line)}
-.thr2 .tt{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap;cursor:pointer}
-.thr2 .tn{font-size:11.5px;color:var(--dim2);flex:0 0 auto}
-.thr2.on .tt{color:var(--accent)}
-`;
-  document.head.append(css);
 
   /* ── 重画某个窗口的历史 ── */
   async function renderThread(){
@@ -103,80 +96,17 @@ try{
     await sendQuiet(ask, rid);
   }
 
-  /* ── 窗口列表（带删除）── */
-  async function openThreads(){
-    const wrap=el("div","sheet"), bx=el("div","box");
-    const h=el("div","bh"), b=el("b",null,"对话窗口"), x=el("button","x ibtn");
-    x.append(nestIcon("close"));
-    x.onclick=()=>wrap.remove(); h.append(b,x); bx.append(h); wrap.append(bx);
-    wrap.onclick=e=>{if(e.target===wrap)wrap.remove();};
-    document.body.append(wrap);
-
-    const nb=el("button",null);
-    nb.append(nestIcon("plus"),document.createTextNode(" 新对话"));
-    nb.style.cssText="padding:8px 12px;border:1px solid var(--accent);border-radius:9px;"+
-                     "color:var(--accent);margin-bottom:8px";
-    nb.onclick=()=>{
-      sSid("t"+Date.now().toString(36));
-      const S=document.querySelector("#stream"); if(S)S.innerHTML="";
-      wrap.remove(); say("开了一个新窗口");
-    };
-    bx.append(nb);
-    const list=el("div"); bx.append(list);
-    list.append(el("div","res","读取中…"));
-    /* 每扇窗的两枚开关（主动消息 / 离线模式）。读一次「被拨过的窗口」，
-       没拨过的就是默认「开」—— nest-window.js 是这套语义唯一的出处。
-       读不到（老服务端）就把按钮画成「未知」，别拿默认值冒充服务端的真值。 */
-    let WFLAGS={}, WFLAGS_OK=true;
-    try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }
-    catch(e){ WFLAGS={}; WFLAGS_OK=false; }
-    try{
-      const j=await jget("/api/nest/threads");
-      list.innerHTML="";
-      const its=j.items||[];
-      const cur=gSid();
-      if(!its.length)list.append(el("div","res","还没有对话"));
-      its.forEach(it=>{
-        const r=el("div","thr2"+(it.sid===cur?" on":""));
-        r.append(el("div","tt",it.title||"（空窗口）"),el("div","tn",it.n+" 条"));
-        if(window.nestWinFlags&&window.nestWinFlags.row){
-          r.append(window.nestWinFlags.row(it.sid,
-                   Object.assign({push:true,offline:true},WFLAGS[it.sid]||{}),WFLAGS_OK));
-        }
-        const dx=el("button","cp","删");
-        dx.style.cssText="color:var(--err);border:1px solid var(--err);border-radius:7px;"+
-                         "padding:3px 9px;font-size:12px;margin-left:4px";
-        dx.onclick=async(e)=>{
-          e.stopPropagation();
-          if(it.sid==="main"){ say("主窗口是老记录，不给整个删"); return; }
-          if(!confirm("删掉这个窗口的全部聊天记录？删了就没了"))return;
-          const rr=await jpost("/api/nest/thread/del",{sid:it.sid});
-          if(rr.ok){
-            r.remove(); say("删了");
-            if(it.sid===cur){ sSid("main"); try{await renderThread();}catch(e){} }
-          }else say("删不掉："+(rr.err||"?"));
-        };
-        r.append(dx);
-        r.onclick=async()=>{
-          sSid(it.sid); try{await renderThread();}catch(e){}
-          wrap.remove(); say("切到这个窗口了");
-        };
-        list.append(r);
-      });
-    }catch(e){ list.innerHTML=""; list.append(el("div","res","读不出来："+e.message)); }
-  }
-
-  /* ── 捕获点击：接管「+」和「重新生成」── */
+  /* ── 捕获点击：接管「重新生成」──
+     ★ 窗口列表（含「删」那颗按钮）已经统一到 nest-tabs.js 的 threadsInto() ——
+       抽屉 / 主界面中间那颗 HOME / 「巢」那一格走的都是它。
+       这里原来还有一份自己的列表，后来它的入口（#bar 上那颗「新对话」）没了，
+       就成了够不着的死代码，两份还会越走越不一样 —— 一并删了。 */
   let LASTTURN=null;
   document.addEventListener("click",e=>{
     const t=e.target; if(!t||!t.closest)return;
     const d=t.closest("#stream .dots");
     if(d)LASTTURN=d.closest(".turn");
 
-    const plus=t.closest("#bar .ibtn");
-    if(plus&&plus.title==="新对话"){
-      e.preventDefault(); e.stopPropagation(); openThreads(); return;
-    }
     const rb=t.closest(".menu button");
     if(rb&&(rb.textContent||"").trim()==="重新生成"){
       e.preventDefault(); e.stopPropagation();

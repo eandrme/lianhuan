@@ -20,6 +20,19 @@ try{
   const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
   const say=t=>{try{if(typeof toast==="function")toast(t);}catch(e){}};
   const jget=async u=>{const r=await fetch(u,{credentials:"same-origin"});if(!r.ok)throw new Error("HTTP "+r.status);return r.json();};
+  /* ★ 只看 body 不看状态码是不行的：老服务端回 404 {"error":"…"} 里没有 ok 字段，
+     会被当成功 —— 界面翻了，库里一个字没动。状态码不对就是没成。 */
+  const jpost=async(u,b)=>{
+    let r;
+    try{
+      r=await fetch(u,{method:"POST",credentials:"same-origin",
+        headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});
+    }catch(e){ return {ok:false,err:"连不上服务器"}; }
+    let d=null; try{ d=await r.json(); }catch(e){}
+    if(!r.ok||!d||d.ok===false)
+      return {ok:false,status:r.status,err:(d&&(d.err||d.error))||("HTTP "+r.status)};
+    return d;
+  };
   const hm=ts=>{const d=new Date((ts||0)*1000);const p=n=>String(n).padStart(2,"0");
     return p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());};
   const getSid=()=>{try{return (typeof SID!=="undefined"&&SID)||localStorage.getItem("nest_sid")||"main";}
@@ -95,6 +108,17 @@ try{
   padding:16px;color:var(--dim);box-shadow:var(--shadow)}
 .ph-card b{color:var(--fg);font-size:15px;font-weight:500;letter-spacing:.08em}
 pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre-wrap;word-break:break-all}
+/* 每扇窗右边那颗「删」（44×44 触控目标，线稿垃圾桶） */
+.thr .thr-del{width:44px;height:44px;min-width:44px;flex:0 0 44px;display:flex;
+  align-items:center;justify-content:center;background:none;border:1px solid transparent;
+  border-radius:10px;color:var(--tx-3);cursor:pointer;
+  transition:color .3s ease,border-color .3s ease,transform .3s ease}
+.thr .thr-del:hover{color:var(--err);border-color:var(--err)}
+.thr .thr-del:active{transform:scale(.94)}
+.thr .thr-del[disabled]{opacity:.4;cursor:default}
+/* 主窗口那条：删不了，就别画成一个能按的样子 */
+.thr .thr-del.off{opacity:.35;cursor:default}
+.thr .thr-del.off:hover{color:var(--tx-3);border-color:transparent}
 /* ── 子页共用顶栏（‹ 返回 / 标题 / 拉丁小标 / 右侧动作）── */
 .pg-head{position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;
   padding:calc(8px + env(safe-area-inset-top)) 8px 8px;
@@ -289,6 +313,30 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   /* ── 多窗口：一份列表，两处用（对话窗口 sheet ＋「巢」这一格）──
      ★ 每扇窗的两枚开关（主动消息 / 离线模式）就在列表里拨，语义在后端 core/windows.py；
        读不到（老服务端）就画一个「问号」，别拿默认值冒充真值。 */
+  /* 删一扇窗（连它名下所有聊天记录）。后端也有这道门
+     （`POST /api/nest/thread/del`），主窗口它自己也拦着。 */
+  async function delThread(it, row, reload){
+    if(it.sid==="main"){ say("主窗口是老记录，不能整个删 —— 点进去逐条删可以"); return; }
+    if(!confirm("删掉这扇窗的全部聊天记录？\n\n「"+(it.title||"（空窗口）")+"」 · "+it.n+" 条\n\n"
+               +"删了就没了（它自己写进记忆/日记的东西不受影响）。")) return;
+    const d=await jpost("/api/nest/thread/del",{sid:it.sid});
+    if(!d.ok){ say("删不掉："+(d.err||"?")); return; }
+    say("删了这扇窗的 "+((d.n!=null)?d.n:it.n)+" 条");
+    /* ★ 删的正好是**现在这扇**：退回主窗口。
+       不退回的话，会话 id 还指着一扇已经不存在的窗 —— 下一条主动消息
+       会拿这个 id 重新落库，那扇窗就**又冒出来了**，人会以为没删掉。 */
+    if(it.sid===getSid()){
+      setSid("main");
+      try{
+        await fetch("/api/nest/focus",{method:"POST",credentials:"same-origin",
+          headers:{"Content-Type":"application/json"},body:JSON.stringify({sid:"main"})});
+      }catch(e){}
+      await renderThread();
+      say("这扇是当前窗口，已经退回主窗口了");
+    }
+    await reload();
+  }
+
   async function threadsInto(container, close){
     const bt=el("button","pri");
     bt.style.cssText="display:inline-flex;align-items:center;gap:7px;padding:9px 14px;"
@@ -297,15 +345,17 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
     bt.onclick=async()=>{ if(close)close(); newThread(); };
     container.append(bt);
     const list=el("div"); container.append(list);
-    list.append(el("div","res","读取中…"));
     let WFLAGS={}, WFLAGS_OK=true;
-    try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; }
-    catch(e){ WFLAGS={}; WFLAGS_OK=false; }
-    try{
-      const j=await jget("/api/nest/threads");
+
+    async function load(){
+      try{ const f=await jget("/api/nest/windows"); WFLAGS=(f&&f.items)||{}; WFLAGS_OK=true; }
+      catch(e){ WFLAGS={}; WFLAGS_OK=false; }
+      list.innerHTML=""; list.append(el("div","res","读取中…"));
+      let its;
+      try{ its=((await jget("/api/nest/threads")).items)||[]; }
+      catch(e){ list.innerHTML=""; list.append(el("div","res","读不出来："+e.message)); return; }
       list.innerHTML="";
-      const its=j.items||[];
-      if(!its.length)list.append(el("div","res","还没有任何对话"));
+      if(!its.length){ list.append(el("div","res","还没有任何对话")); return; }
       its.forEach(it=>{
         const r=el("div","thr"+(it.sid===getSid()?" on":""));
         r.append(el("div","tt",it.title||"（空窗口）"),el("div","tn",it.n+" 条"));
@@ -313,12 +363,28 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
           r.append(window.nestWinFlags.row(it.sid,
                    Object.assign({push:true,offline:true},WFLAGS[it.sid]||{}),WFLAGS_OK));
         }
+        /* ── 删掉这扇窗 ──
+           44×44 的触控目标；线稿垃圾桶，不用字形。主窗口画成灰的：
+           后端也拦着它，与其点了挨一句拒绝，不如一开始就看得出删不了。 */
+        const dx=el("button","thr-del"+(it.sid==="main"?" off":""));
+        dx.append(nestIcon("trash",17));
+        const dlabel=(it.sid==="main")
+          ? "主窗口是老记录，不能整个删（可以进去逐条删）"
+          : "删除这扇窗口的全部聊天记录";
+        dx.title=dlabel;
+        dx.setAttribute("aria-label",dlabel);
+        dx.onclick=async(e)=>{
+          e.preventDefault(); e.stopPropagation();     // 别顺手把窗口也切过去
+          await delThread(it, r, load);
+        };
+        r.append(dx);
         /* ★ 选了窗就**进聊天**（原来只 renderThread，人还停在主界面上看着没动） */
         r.onclick=async()=>{ setSid(it.sid); go("chat"); await renderThread();
           if(close)close(); say("切到这个窗口了"); };
         list.append(r);
       });
-    }catch(e){ list.innerHTML=""; list.append(el("div","res","读不出来："+e.message)); }
+    }
+    await load();
   }
 
   async function openThreads(){
