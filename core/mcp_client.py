@@ -312,11 +312,46 @@ class _HttpServer(_Server):
                 raise RuntimeError(str(d["error"])[:200])
             return d.get("result") or {}
 
-    async def _rpc(self, method: str, params: dict, timeout: float = 45) -> dict:
+    async def _once(self, method: str, params: dict, timeout: float = 45) -> dict:
         async with self._lock:
             self._id += 1
             return await self._post({"jsonrpc": "2.0", "id": self._id,
                                      "method": method, "params": params}, timeout)
+
+    async def _rehandshake(self) -> None:
+        """丢掉过期的会话，重新握手（并把工具表刷一遍）。
+
+        ★ 先把 `self.sid` 清空再 initialize —— 带着旧 id 去 initialize 会被
+          同一个 404 再打回来，那就成了死循环。
+        """
+        self.sid = ""
+        async with self._lock:
+            self._id += 1
+            await self._post({"jsonrpc": "2.0", "id": self._id, "method": "initialize",
+                              "params": {"protocolVersion": PROTO, "capabilities": {},
+                                         "clientInfo": {"name": "lianhuan", "version": "0.2"}}},
+                             20)
+        await self._notify("notifications/initialized")
+        try:                                  # 顺手刷新工具表：服务端重启后工具可能变了
+            ts = (await self._once("tools/list", {}, 20) or {}).get("tools") or []
+            if ts:
+                self.tools = ts
+        except Exception:
+            pass
+
+    async def _rpc(self, method: str, params: dict, timeout: float = 45) -> dict:
+        try:
+            return await self._once(method, params, timeout)
+        except RuntimeError as e:
+            # ★ 服务端重启 / 会话超时之后，旧 id 就作废了。原来这里直接把
+            #   `HTTP 404 … Session not found` 抛出去 —— 那台 MCP 在**整个进程重启
+            #   之前**一直是坏的：`alive()` 只看 httpx 客户端还在不在，永远说「活着」，
+            #   `start_all()` 也就永远不去重连。现在按规范就地重连一次。
+            if not (self.sid and _session_gone(e)):
+                raise
+            self.err = ""
+            await self._rehandshake()
+            return await self._once(method, params, timeout)
 
     async def _notify(self, method: str) -> None:
         try:
@@ -535,6 +570,22 @@ def _slug(s: str) -> str:
         return safe                       # 本来就是 ASCII：一个字都不动（老用户的工具名不变）
     h = hashlib.sha1(s.encode("utf-8")).hexdigest()[:6]
     return (safe[:24] or "") + "_" + h
+
+
+def _session_gone(err) -> bool:
+    """这个报错是不是「你那边的会话已经没了」。
+
+    Streamable HTTP 的规矩：`initialize` 时服务端在 `Mcp-Session-Id` 里给一个会话，
+    之后每个请求都要带上它。**服务端一重启、或者会话闲置超时，这个 id 就作废了** ——
+    再拿它去问，回的是一句
+      `HTTP 404 {"code":-32600,"message":"Session not found"}`。
+    ★ MCP 规范对此有明文：收到 404 且请求里带着 session id 时，客户端**必须**
+      丢掉旧 id、重新发一次 initialize，而不是把这个 404 直接抛给人。
+    """
+    t = str(err or "").lower()
+    if "404" not in t:
+        return False
+    return ("session not found" in t) or ("-32600" in t) or ("session" in t and "not found" in t)
 
 
 def _fn_name(server: str, tool: str) -> str:
