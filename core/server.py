@@ -1235,6 +1235,32 @@ def _secrets() -> dict:
         return {}
 
 
+#: 两个引擎各有一套字段名。`api` = OpenAI 兼容那一大票（DeepSeek/Kimi/智谱…），
+#: `anthropic` = Claude（它不是 OpenAI 兼容的形状）。
+ENGINE_SLOTS = (("api", "OpenAI 兼容", "LIANHUAN_API_KEY"),
+                ("anthropic", "Claude", "LIANHUAN_ANTHROPIC_KEY"))
+
+
+def _slot_of(sec: dict, eng: str) -> dict:
+    """这一个槽位现在是什么状况。
+
+    ★ `key` 只回**末四位**，明文一个字都不出去 —— 跟 `/api/mcp` 那套同一个规矩。
+    ★ `from` 说清这把钥匙哪来的：本机贴的（local）还是环境变量给的（env）。
+      环境变量那份 app 删不掉（那不是它管的文件），界面得照实说，别给一个按了没用的「删」。
+    """
+    key = (sec.get(eng + "_key") or "").strip()
+    env_key = (os.environ.get(dict((e, v) for e, _, v in ENGINE_SLOTS)[eng]) or "").strip()
+    return {
+        "engine": eng,
+        "label": dict((e, l) for e, l, _ in ENGINE_SLOTS)[eng],
+        "key_set": bool(key or env_key),
+        "key_tail": (key or env_key)[-4:] if (key or env_key) else "",
+        "from": "local" if key else ("env" if env_key else ""),
+        "base": sec.get(eng + "_base") or "",
+        "model": sec.get(eng + "_model") or "",
+    }
+
+
 @app.get("/api/engine/config")
 def engine_config_get():
     """★ key 永远不回读 —— 只说有没有、末四位。它也不进 /api/export、不进数据库。"""
@@ -1253,6 +1279,11 @@ def engine_config_get():
     return {"base": base,
             "model": model,   # 界面优先，跟引擎一致
             "key_set": bool(key), "key_tail": key[-4:] if key else "",
+            # ★ 上面那三个字段说的是「**当前选中**的引擎」。可钥匙有**两把**
+            #   （OpenAI 兼容一把、Claude 一把），只看当前那把的话，
+            #   人在界面上永远看不到自己另一把填没填 —— 「我要看到我之前添加的
+            #   那两个 key」就是这儿缺的。slots 两把都报，界面照着列。
+            "slots": [_slot_of(sec, e) for e, _, _ in ENGINE_SLOTS],
             "engine": store.get_setting("engine", "echo"),
             # ★ 0904 外部验收抓的 P0：每条**明说自己是哪种协议**，界面点了就带着走。
             #   原来只给 base，后端只好看地址里有没有 anthropic.com 去猜 ——
@@ -1301,6 +1332,20 @@ async def engine_config_set(req: Request):
     fields = (("base", "anthropic_base"), ("model", "anthropic_model"), ("key", "anthropic_key")) if anth \
         else (("base", "api_base"), ("model", "api_model"), ("key", "api_key"))
     keyfield = "anthropic_key" if anth else "api_key"
+    if b.get("clear_key"):
+        # ★ 「删除这把钥匙」。原来这个接口**只会写不会删** —— 每个字段都是
+        #   `if v: sec[dst] = v`，空值直接跳过。所以界面上填过的 key 没有任何办法
+        #   拿掉，只能去服务器上编辑 secrets.json。用户要的「可删除」就是指这个。
+        for f in ("_key", "_base", "_model"):
+            sec.pop(("anthropic" if anth else "api") + f, None)
+        SECRETS.parent.mkdir(parents=True, exist_ok=True)
+        SECRETS.write_text(json.dumps(sec, ensure_ascii=False, indent=1), encoding="utf-8")
+        try:
+            os.chmod(SECRETS, 0o600)
+        except Exception:
+            pass
+        print(f"[engine] 清掉了 {want} 这一把钥匙（engine/config clear）", flush=True)
+        return {"ok": True, "engine": want, "cleared": True}
     for src, dst in fields:
         v = (b.get(src) or "").strip()
         if v:

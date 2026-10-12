@@ -44,6 +44,25 @@ try{
 .set-sec h4{margin:0 0 4px;font-size:14.5px}
 .set-sec .sub{font-size:11.5px;color:var(--dim2);line-height:1.6;margin-bottom:9px}
 /* 外观那一节 */
+/* API key 管理那一节 */
+.keys-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.keys-row{border:1px solid var(--glass-line);border-radius:16px;padding:12px;
+  background:var(--glass-bg)}
+.keys-hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.keys-hd b{font-size:14.5px;font-weight:500}
+.keys-tag{font-family:var(--latin);font-size:11px;letter-spacing:.1em;
+  color:var(--tx-2);border:1px solid var(--line);border-radius:8px;padding:2px 8px}
+.keys-tag.off{color:var(--tx-3)}
+.keys-tag.env{color:var(--warn);border-color:var(--warn)}
+.keys-meta{font-size:12px;color:var(--tx-3);margin-top:7px;word-break:break-all}
+.keys-ops{display:flex;gap:8px;margin-top:10px}
+.keys-ops button{min-height:38px;padding:0 14px;border-radius:10px;
+  border:1px solid var(--ink-1);background:transparent;color:var(--tx-2);
+  font:inherit;font-size:13px;cursor:pointer;transition:color .3s ease,border-color .3s ease}
+.keys-ops button:hover{color:var(--accent);border-color:var(--accent)}
+.keys-ops button.pri{color:var(--accent);border-color:var(--accent)}
+.keys-ops button.danger:hover{color:var(--err);border-color:var(--err)}
+.keys-edit{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .set-presets{display:flex;gap:10px;flex-wrap:wrap;margin:2px 0 14px}
 .set-preset{width:36px;height:28px;border-radius:8px;border:1px solid var(--ink-1);
   cursor:pointer;padding:0}
@@ -125,6 +144,9 @@ try{
     box.innerHTML="";
     /* ★ 用户定的：主题 / 气泡颜色都收到「我的」这儿（原来只在侧栏那个面板里） */
     secAppearance(box);
+    /* ★ 用户要的「API key 管理」：两把模型钥匙都摆出来，可改可删。
+       放在「大模型引擎」上面 —— 先看到自己有哪些钥匙，再去挑引擎。 */
+    secApiKeys(box);
     secEngine(box);
     secThink(box);
     secMcp(box);
@@ -516,6 +538,126 @@ try{
   };
 
   /* ═══ 大模型引擎 ═══ */
+  /* ═══ API key 管理 ═══
+     模型这一侧其实有**两把**钥匙（后端 `ENGINE_SLOTS` 一处定义）：
+       · OpenAI 兼容那一大票（DeepSeek / Kimi / 智谱 / 硅基流动 / Ollama…）
+       · Claude（它不是 OpenAI 兼容的形状，字段也另存一套）
+     两把都住在同一台服务器的 data/secrets.json（0600）里。
+
+     ★ 原来界面上**看不到两把**：`/api/engine/config` 只报「当前选中那个引擎」的
+       key_set / key_tail —— 所以关掉页面再回来，另一把填没填完全不知道。
+     ★ 而且填过就删不掉：那个接口每个字段都是 `if v: 才写`，空值直接跳过。
+       现在后端认 `clear_key`，这一节才有「删」可按。
+
+     ★ 明文一个字都不回读（后端只给末四位）。「改」＝重新贴一把覆盖，
+       不是把旧的显示出来给你编辑 —— 跟 /api/mcp 那套同一个规矩。
+  */
+  async function secApiKeys(box){
+    const sec=el("div","set-sec"); sec.id="keys-sec";
+    sec.append(el("h4",null,"API key 管理"));
+    sec.append(el("div","sub","模型这两把钥匙就在这儿看、这儿改、这儿删。"
+      +"只写进这台服务器的 data/secrets.json（0600），不进数据库、不进导出。"
+      +"界面只回**末四位**，明文不回读 —— 想换就重新贴一把。"));
+    const list=el("div","keys-list");
+    const msg=el("div","set-msg");
+    sec.append(msg,list);
+    box.append(sec);
+
+    let SLOTS=[];
+
+    async function load(){
+      list.innerHTML=""; list.append(el("div","set-msg","读着…"));
+      let j;
+      try{ j=await jget("/api/engine/config"); }
+      catch(e){
+        list.innerHTML="";
+        msg.className="set-msg err";
+        msg.textContent="读不到（"+(e.message||e)+"）—— 服务端太旧就得先重启一下";
+        return;
+      }
+      SLOTS=j.slots||[];
+      msg.className="set-msg";
+      msg.textContent=(j.engine?("现在接的是："+(ENGNAME[j.engine]||j.engine)):"");
+      draw();
+    }
+
+    function draw(){
+      list.innerHTML="";
+      SLOTS.forEach(sl=>{
+        const row=el("div","keys-row"+(sl.key_set?" on":""));
+        const hd=el("div","keys-hd");
+        hd.append(el("b",null,sl.label));
+        if(sl.key_set){
+          const tag=el("span","keys-tag","•••• "+sl.key_tail);
+          hd.append(tag);
+          if(sl.from==="env"){
+            const e2=el("span","keys-tag env","来自环境变量（.env）");
+            e2.title="这把是启动脚本从 .env 读进来的，不是界面里贴的 —— "
+                    +"这儿删不掉它，要去那台服务器上改 .env 再重启";
+            hd.append(e2);
+          }
+        }else{
+          hd.append(el("span","keys-tag off","还没填"));
+        }
+        row.append(hd);
+        if(sl.base||sl.model){
+          row.append(el("div","keys-meta",[sl.base,sl.model].filter(Boolean).join(" · ")));
+        }
+        const ops=el("div","keys-ops");
+        const bEdit=el("button",null,sl.key_set?"换一把":"填一把");
+        bEdit.onclick=()=>editor(row,sl);
+        ops.append(bEdit);
+        if(sl.key_set && sl.from!=="env"){
+          const bDel=el("button","danger","删掉");
+          bDel.onclick=async()=>{
+            if(!confirm("删掉「"+sl.label+"」这把 key？\n\n"
+                       +"删了之后这家就接不上了（base/model 也会一起清掉）。"))return;
+            bDel.disabled=true;
+            const r=await jpost("/api/engine/config",{engine:sl.engine,clear_key:true});
+            if(r.ok){ say("删了"); load(); }
+            else{ bDel.disabled=false; say("删不掉："+(r.err||"?")); }
+          };
+          ops.append(bDel);
+        }
+        row.append(ops);
+        list.append(row);
+      });
+      if(!SLOTS.length)list.append(el("div","set-msg","读不到钥匙槽位 —— 服务端可能是旧的。"));
+    }
+
+    function editor(row,sl){
+      if(row.querySelector(".keys-edit"))return;
+      const w=el("div","keys-edit");
+      const ki=el("input","set-in full"); ki.type="password";
+      ki.placeholder="贴一把新 key（旧的看不见，直接覆盖）";
+      const bi=el("input","set-in"); bi.type="text";
+      bi.placeholder="接口地址"; bi.value=sl.base||"";
+      const mi=el("input","set-in"); mi.type="text";
+      mi.placeholder="模型名"; mi.value=sl.model||"";
+      const ops=el("div","keys-ops");
+      const ok=el("button","pri","存下");
+      const no=el("button",null,"算了");
+      ops.append(ok,no);
+      w.append(ki,bi,mi,ops);
+      row.append(w);
+      no.onclick=()=>w.remove();
+      ok.onclick=async()=>{
+        const key=ki.value.trim();
+        if(!key){ say("新 key 是空的 —— 要删就用「删掉」那颗"); return; }
+        ok.textContent="存…"; ok.disabled=true;
+        const body={engine:sl.engine,key:key};
+        if(bi.value.trim())body.base=bi.value.trim();
+        if(mi.value.trim())body.model=mi.value.trim();
+        const r=await jpost("/api/engine/config",body);
+        ok.textContent="存下"; ok.disabled=false;
+        if(r.ok){ say("存好了"); load(); }
+        else say("没存上："+(r.err||"?"));
+      };
+    }
+
+    await load();
+  }
+
   async function secEngine(box){
     const sec=el("div","set-sec");
     sec.append(el("h4",null,"大模型引擎"));
