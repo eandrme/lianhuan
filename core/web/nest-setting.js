@@ -44,6 +44,23 @@ try{
 .set-sec h4{margin:0 0 4px;font-size:14.5px}
 .set-sec .sub{font-size:11.5px;color:var(--dim2);line-height:1.6;margin-bottom:9px}
 /* 外观那一节 */
+/* 用量那一节 */
+.use-body{margin-top:6px}
+.use-h{font-size:12px;letter-spacing:.14em;color:var(--tx-3);margin:14px 0 6px;
+  font-family:var(--latin)}
+.use-row{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  padding:8px 0;border-bottom:1px solid var(--line)}
+.use-k{flex:1;min-width:120px;font-size:13.5px;color:var(--tx-2)}
+.use-v{font-size:13px;color:var(--tx-2);font-variant-numeric:tabular-nums}
+.use-v b{font-weight:500;color:var(--ink-1);margin-right:2px}
+.use-cache{color:var(--tx-3);font-size:12px;margin-left:4px}
+.use-n{font-size:12px;color:var(--tx-3)}
+.use-days{display:flex;align-items:flex-end;gap:6px;height:82px;margin-top:4px}
+.use-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;
+  justify-content:flex-end;min-width:0}
+.use-bar{width:100%;max-width:26px;border-radius:4px;
+  background:color-mix(in srgb,var(--accent) 55%,transparent)}
+.use-dl{font-size:10px;color:var(--tx-3);font-family:var(--latin)}
 /* API key 管理那一节 */
 .keys-list{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .keys-row{border:1px solid var(--glass-line);border-radius:16px;padding:12px;
@@ -147,6 +164,7 @@ try{
     /* ★ 用户要的「API key 管理」：两把模型钥匙都摆出来，可改可删。
        放在「大模型引擎」上面 —— 先看到自己有哪些钥匙，再去挑引擎。 */
     secApiKeys(box);
+    secUsage(box);
     secEngine(box);
     secThink(box);
     secMcp(box);
@@ -655,6 +673,111 @@ try{
       };
     }
 
+    await load();
+  }
+
+  /* ═══ 用量 ═══
+     跟「API key 管理」挨着：钥匙和它的账在一块儿看。
+
+     ★ 这个看板原来**一直是 0**，不是没烧 token，是根本没记上：
+       `usage` 那个事件只写在 openai_compat 的**流式**那条路末尾，
+       而只要引擎带工具（走 API 的引擎一直带着）就走「有手」那条路，
+       那条路走完直接 DONE + return，到不了那一行。（已修，见 _usage_line。）
+     ★ 只记数、不记内容；也不折算成钱 —— 各家单价不同还会变，
+       猜一个数比不给更糟。没有的日子就是不画，不补 0 装作有。
+  */
+  async function secUsage(box){
+    const sec=el("div","set-sec"); sec.id="usage-sec";
+    sec.append(el("h4",null,"用量"));
+    sec.append(el("div","sub","这一台服务器替你跟模型之间跑的 token 数。"
+      +"只记数、不记内容 —— 从这张表里读不到你们说过什么。"
+      +"回声不烧 token；本机 CLI 走的是你自己的订阅，这儿不记它的账。"));
+    const chips=el("div","set-chips");
+    const body=el("div","use-body");
+    sec.append(chips,body);
+    box.append(sec);
+
+    const fmt=n=>Number(n||0).toLocaleString("en-US");
+    let days=30;
+
+    function paintChips(){
+      chips.innerHTML="";
+      [[7,"近 7 天"],[30,"近 30 天"],[90,"近 90 天"]].forEach(([d,label])=>{
+        const b=el("button",(days===d?"on":""),label);
+        b.onclick=()=>{ days=d; paintChips(); load(); };
+        chips.append(b);
+      });
+    }
+
+    function line(label,o,turns){
+      const r=el("div","use-row");
+      r.append(el("span","use-k",label));
+      const v=el("span","use-v");
+      v.append(el("b",null,fmt((o&&o.tin)||0)),el("span",null," 进 "));
+      v.append(el("b",null,fmt((o&&o.tout)||0)),el("span",null," 出"));
+      if(o&&o.tcache_r)v.append(el("span","use-cache","（含缓存读 "+fmt(o.tcache_r)+"）"));
+      r.append(v);
+      if(turns!=null)r.append(el("span","use-n",turns+" 轮"));
+      return r;
+    }
+
+    async function load(){
+      body.innerHTML=""; body.append(el("div","set-msg","读着…"));
+      let j;
+      try{ j=await jget("/api/usage?days="+days); }
+      catch(e){
+        body.innerHTML="";
+        body.append(el("div","set-msg err","读不到（"+(e.message||e)+"）"));
+        return;
+      }
+      if(j&&j.error){ body.innerHTML=""; body.append(el("div","set-msg err",j.error)); return; }
+      body.innerHTML="";
+      const all=j.total||{}, today=j.today||{}, win=j.window||{};
+      const zero=!((all.tin||0)+(all.tout||0));
+      body.append(line("今天",today,null));
+      body.append(line("近 "+days+" 天",win,null));
+      body.append(line("总计",all,j.turns));
+
+      if(zero){
+        const w=el("div","set-msg");
+        w.textContent="还没有一笔账。走 API 的两条引擎（OpenAI 兼容 / Claude）从下一轮"
+          +"对话起就会开始记 —— 回声不烧 token，所以它一个字也不会记。";
+        body.append(w);
+        return;
+      }
+
+      const ms=(j.by_model||[]).filter(m=>m.tin||m.tout);
+      if(ms.length){
+        body.append(el("div","use-h","按模型"));
+        ms.slice(0,8).forEach(m=>{
+          const r=el("div","use-row");
+          r.append(el("span","use-k",m.model||"?"));
+          const v=el("span","use-v");
+          v.append(el("b",null,fmt(m.tin)),el("span",null," 进 "));
+          v.append(el("b",null,fmt(m.tout)),el("span",null," 出"));
+          r.append(v,el("span","use-n",(m.turns||0)+" 轮"));
+          body.append(r);
+        });
+      }
+
+      const ds=(j.by_day||[]).slice(0,14).reverse();
+      if(ds.length){
+        body.append(el("div","use-h","按天"));
+        const top=Math.max(1,...ds.map(d=>(d.tin||0)+(d.tout||0)));
+        const chart=el("div","use-days");
+        ds.forEach(d=>{
+          const col=el("div","use-day");
+          const bar=el("div","use-bar");
+          bar.style.height=Math.max(2,Math.round(((d.tin||0)+(d.tout||0))/top*56))+"px";
+          bar.title=d.day+"："+fmt((d.tin||0)+(d.tout||0))+" tokens";
+          col.append(bar,el("span","use-dl",String(d.day||"").slice(5)));
+          chart.append(col);
+        });
+        body.append(chart);
+      }
+    }
+
+    paintChips();
     await load();
   }
 

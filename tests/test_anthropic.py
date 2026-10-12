@@ -332,5 +332,26 @@ class TestUpstreamErrorsSpeakHuman(unittest.TestCase):
             self.assertNotIn('text=f"模型那边回了 {r.status_code}', src, f"{p} 有漏网的")
 
 
+class TestTheToolRoundCapIsShared(unittest.TestCase):
+    """两个引擎的一轮步数上限必须是**同一个常量**。
+
+    ★ 原来 anthropic 这边写死了 `rounds < 5`，openai 那边也是 5 ——
+      用户提「一轮里连着做完多步」时只改了 openai 那一处，这边漏了：
+      一旦切到 Claude，五步就又被掐断。两份各自演化就是这个下场。
+    """
+
+    def test_anthropic_uses_the_shared_constant(self):
+        with open("core/engines/anthropic_api.py", encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn("from .openai_compat import MAX_TOOL_ROUNDS", src)
+        self.assertIn("rounds < MAX_TOOL_ROUNDS", src)
+        self.assertNotIn("rounds < 5", src, "不许再写死一个 5")
+        self.assertNotIn("连着动了五轮手", src, "那句 error 已经换成一句 stage 了")
+
+    def test_the_openai_one_is_the_source_of_truth(self):
+        from core.engines.openai_compat import MAX_TOOL_ROUNDS
+        self.assertGreaterEqual(MAX_TOOL_ROUNDS, 10)
+
+
 if __name__ == "__main__":
     unittest.main()

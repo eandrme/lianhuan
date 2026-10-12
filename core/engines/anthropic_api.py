@@ -45,6 +45,8 @@ from typing import AsyncIterator
 import httpx
 
 from .base import Engine, Turn, upstream_error
+#: 一轮最多连着走几轮工具。**跟 OpenAI 兼容那边同一份** —— 两个引擎别各定一套。
+from .openai_compat import MAX_TOOL_ROUNDS
 from ..protocol import DONE, SAY, STAGE, THINK, USAGE, sse
 
 #: 版本头。Anthropic 要求每个请求都带，缺了直接 400。
@@ -178,7 +180,7 @@ class AnthropicEngine(Engine):
             # ── 有手的路：先走工具轮（非流式），它说要动手就替它动，动完再想 ──
             tool_defs = self._tools_for_anthropic(self.tools) if (self.tools and self.exec_tool) else []
             rounds = 0
-            while tool_defs and rounds < 5:
+            while tool_defs and rounds < MAX_TOOL_ROUNDS:
                 rounds += 1
                 body = self._body(turn, msgs, stream=False)
                 body["tools"] = tool_defs
@@ -253,8 +255,11 @@ class AnthropicEngine(Engine):
                 # ★ 一条 user 消息里装齐所有 tool_result —— 拆成几条会让它以后不敢并行动手
                 msgs.append({"role": "user", "content": results})
             else:
-                if tool_defs and rounds >= 5:
-                    yield sse("error", text="它连着动了五轮手还没说话……再叫它一声？")
+                if tool_defs and rounds >= MAX_TOOL_ROUNDS:
+                    # ★ 别报 error：下面紧接着就走流式、正常出一句回复，
+                    #   上面挂一条红字等于自己打自己。（openai 那条路早就改成了
+                    #   「逼它回一句话 + 如实的兜底」，这边对齐一下轮数就行。）
+                    yield sse(STAGE, text="这一轮动的手有点多，收一收，先把话说出来")
 
             if said:
                 for kind, s in feed("", flush=True):

@@ -58,6 +58,24 @@ MAX_TOOL_ROUNDS = 20
 
 
 
+def _usage_line(used: dict, eng) -> str:
+    """把这一轮烧的 token 报上去（返回 SSE 那一行）。
+
+    ★ 这是个**真机上埋了很久的洞**：`usage` 事件原来越写越靠后，
+      只在「没有手」的那条流式路末尾（现在的第 471 行附近）。
+      可只要引擎带工具 —— 走 API 的引擎**一直带着** —— 就永远走「有手」那条路，
+      那条路走完直接 `yield DONE; return`，**根本到不了**那一行。
+      于是 `token_usage` 表一直是空的：聊了几百轮，「用量」看板上一个数都没有。
+      （anthropic 那边没这毛病 —— 它的 USAGE 挂在 `finally` 里，每条出路都过。）
+
+    ★ 记的是**这一轮所有工具回合加起来的**数：`used` 在工具循环里逐轮累加的，
+      不是最后一回合的数 —— 一轮翻五次记忆就是六次请求的账。
+    """
+    if not any((used or {}).values()):
+        return ""
+    return sse(USAGE, engine=eng.name, model=eng.model, **used)
+
+
 def _browser_transport():
     """浏览器版（Pyodide）没有 socket：让 httpx 走页面的 fetch。电脑上回 None ＝ httpx 默认，行为一字不变。"""
     if sys.platform != "emscripten":
@@ -279,6 +297,9 @@ class OpenAICompatEngine(Engine):
                          "Content-Type": "application/json"}, _payload, turn)
                     if r.status_code != 200:
                         yield sse("error", text=upstream_error(r.status_code, r.text, self.model))
+                        _ul = _usage_line(used, self)      # 摔了的那半截照样烧了钱
+                        if _ul:
+                            yield _ul
                         yield sse(DONE, session_id=turn.session_id)
                         return
                     _j = r.json()
@@ -379,6 +400,9 @@ class OpenAICompatEngine(Engine):
                     await client.aclose()
                 except Exception:
                     pass
+            _ul = _usage_line(used, self)              # ★ 见 _usage_line 的注释：以前这儿漏了
+            if _ul:
+                yield _ul
             yield sse(DONE, session_id=turn.session_id)
             return
 
