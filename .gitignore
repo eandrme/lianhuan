@@ -69,3 +69,8 @@ apps/local/.wheels/
 # Playwright（端到端验收）的产物
 apps/local/test-results/
 apps/local/playwright-report/
+mem_backup/
+.tools/
+.home/
+kelivo/
+_t.py

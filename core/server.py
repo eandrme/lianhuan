@@ -38,6 +38,7 @@ from . import think as _think
 from . import datadir as _datadir
 from . import assistants as _asst
 from . import windows as _winflags
+from core.flags import mood_enabled
 
 HERE = Path(__file__).parent
 WEB = HERE / "web"
@@ -391,7 +392,8 @@ async def chat(req: Request):
     #   配过之后：人设换成他这份、系统提示词换成他这份、工具按他的许可过滤。
     assistant = _asst.assistant_of(store, session_id)
     system = build_injection(store, msg, exclude_id=uid, include_dialogue=False, here=channel,
-                             persona=_asst.persona_for(store, assistant))
+                             persona=_asst.persona_for(store, assistant),
+                             session_id=session_id)
     _sign = _asst.sign_line(assistant)
     if _sign:
         system += "\n\n" + _sign
@@ -418,7 +420,8 @@ async def chat(req: Request):
     # 心情随注入走(照原项目):他此刻什么心情、这一轮怎么自己记 —— 挂在 server 这层,
     # 因为注入模块是内核、不认识选装包;homelife 是内置默认装,server 本来就 import 它
     try:
-        system = system + "\n\n" + _home_mood_inject()
+        if mood_enabled():
+            system = system + "\n\n" + _home_mood_inject()
     except Exception as e:
         print("[mood inject] fail:", e, flush=True)
     # ★ 0831 自查：原来是 `recent_turns(25)` —— 不分频道、不看 spoken，
@@ -429,7 +432,8 @@ async def chat(req: Request):
     history = [{"role": t.role, "content": _hist_files_note(t)}
                for t in store.context_turns(channel=channel, call_id=call_id,
                                             limit=25, exclude_id=uid,
-                                            before_id=before_id)]
+                                            before_id=before_id,
+                                            session_id=session_id)]
     # (0906) 引用:挑了上头某一句再说话。引用**就在正文第一行**、跟着消息一起落库
     #        (前端 quoteMark 拼的),所以这儿不用另收字段——翻历史、蒸馏、上下文里全都带着它,
     #        格式本身人和模型都读得懂:「▎引用他说的：…」。这儿只补一句"冲着它来的"。
@@ -764,9 +768,10 @@ async def api_redo(req: Request):
         f"（不用写什么『教训』、不用总结分寸——你不是要记一条规则去更顺着说，"
         f"是当下用你的判断把话说对。）〕"
     )
-    system = build_injection(store, user_msg)
+    system = build_injection(store, user_msg, session_id=session_id)
     try:
-        system = system + "\n\n" + _home_mood_inject()
+        if mood_enabled():
+            system = system + "\n\n" + _home_mood_inject()
     except Exception:
         pass
     history = [{"role": t.role, "content": t.content} for t in store.recent_turns(25)]
@@ -1695,7 +1700,7 @@ def _pick_engine_for_active():
 
 
 _proactive.bind(store, engine_turn=EngineTurn, pick_engine=_pick_engine_for_active,
-                add_turn=_proactive_add_turn, mood_inject=_home_mood_inject,
+                add_turn=_proactive_add_turn, mood_inject=_home_mood_inject if mood_enabled() else None,
                 send_push=_push.send_push, activity=jobs.activity)
 
 

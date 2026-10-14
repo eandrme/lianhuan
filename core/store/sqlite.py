@@ -216,14 +216,22 @@ class SqliteStore(Store):
                     call_id=(r["call_id"] if "call_id" in keys else None),
                     session_id=r["session_id"], ts=r["ts"])
 
-    def recent_turns(self, limit: int = 24) -> list[Turn]:
-        rows = self.db.execute("SELECT * FROM turns ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    def recent_turns(self, limit: int = 24, *, session_id: str | None = None) -> list[Turn]:
+        sql = ["SELECT * FROM turns"]
+        args: list = []
+        if session_id is not None:
+            sql.append("WHERE COALESCE(NULLIF(TRIM(session_id), ''), 'main') = ?")
+            args.append((session_id or '').strip() or 'main')
+        sql.append("ORDER BY id DESC LIMIT ?")
+        args.append(limit)
+        rows = self.db.execute(" ".join(sql), args).fetchall()
         return [self._turn(r) for r in reversed(rows)]     # 还原成时间正序，模型才读得顺
 
     def context_turns(self, *, channel: str = "text", call_id: str | None = None,
                       limit: int = 24, exclude_id: int | None = None,
                       since: float | None = None,
-                      before_id: int | None = None) -> list[Turn]:
+                      before_id: int | None = None,
+                      session_id: str | None = None) -> list[Turn]:
         """给模型看的那几句 —— **只有人真说出口的**，而且分频道。
 
         ★ 0831 自查（GPT 上下文专项 P0-01/02/03，真捕获 EngineTurn 复现过）：
@@ -241,6 +249,9 @@ class SqliteStore(Store):
         """
         sql = ["SELECT * FROM turns WHERE spoken=1 AND channel=?"]
         args: list = [channel]
+        if session_id is not None:
+            sql.append("AND COALESCE(NULLIF(TRIM(session_id), ''), 'main') = ?")
+            args.append((session_id or '').strip() or 'main')
         if channel == "call":
             # ★ 没给 call_id = 一通全新的电话，什么都不该读到（而不是读全部）
             sql.append("AND call_id IS NOT NULL AND call_id=?")

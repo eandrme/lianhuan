@@ -231,8 +231,10 @@ async def relay(ws) -> None:
             #   同一个人在文字里知道自己什么心情、一接电话就不知道了。补齐。
             #   （homelife 是内置默认装；没装就跳过，不是错。）
             try:
-                from optional.homelife.routes import mood_inject as _mi
-                system += "\n\n" + _mi()
+                from core.flags import mood_enabled
+                if mood_enabled():
+                    from optional.homelife.routes import mood_inject as _mi
+                    system += "\n\n" + _mi()
             except Exception:
                 pass
             eng = _pick()

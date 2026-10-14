@@ -126,7 +126,7 @@ TODAY_LIMIT = 40
 
 
 def today_block(store: Store, hours: int = TODAY_HOURS, limit: int = TODAY_LIMIT,
-                here: str = "text") -> str:
+                here: str = "text", session_id: str | None = None) -> str:
     """对方近 N 小时**亲口说出口**的话，原样、按时间。**两条线分开列、各自留位。**
 
     ★ 单独留位，**绝不并进近聊窗口** —— 这是原项目踩出来的规矩：
@@ -141,11 +141,15 @@ def today_block(store: Store, hours: int = TODAY_HOURS, limit: int = TODAY_LIMIT
       既不会被当成本通电话的对话流，也不会「刚发消息说要去打针、一接电话他就不知道」。
     """
     def _rows(ch):
+        sql = ["SELECT content, ts FROM turns WHERE role='user' AND spoken=1 AND channel=?"]
+        args: list = [ch]
+        if session_id is not None:
+            sql.append("AND COALESCE(NULLIF(TRIM(session_id), ''), 'main') = ?")
+            args.append((session_id or '').strip() or 'main')
+        sql.append("AND ts > ? ORDER BY id DESC LIMIT ?")
+        args.extend([time.time() - hours * 3600, limit])
         try:
-            return store.db.execute(
-                "SELECT content, ts FROM turns WHERE role='user' AND spoken=1 "
-                "AND channel=? AND ts > ? ORDER BY id DESC LIMIT ?",
-                (ch, time.time() - hours * 3600, limit)).fetchall()
+            return store.db.execute(" ".join(sql), args).fetchall()
         except Exception:
             return []
 
@@ -223,7 +227,8 @@ def upcoming_block(store: Store, limit: int = 6) -> str:
 
 def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
                     exclude_id: int | None = None, include_dialogue: bool = True,
-                    here: str = "text", persona: dict | None = None) -> str:
+                    here: str = "text", persona: dict | None = None,
+                    session_id: str | None = None) -> str:
     """拼出这一轮的 system prompt。
 
     ★ 顺序有讲究：人设在最前（它决定「用什么口吻读下面这些」），
@@ -246,7 +251,7 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
     now = datetime.now()
     week = "一二三四五六日"[now.weekday()]
     today_line = f"〔现在〕{now.strftime('%Y-%m-%d %H:%M')} · 周{week}"
-    turns = store.recent_turns(limit=recent + 1)
+    turns = store.recent_turns(limit=recent + 1, session_id=session_id)
     if exclude_id is not None:
         turns = [t for t in turns if t.id != exclude_id]
     mems = store.search_memories(query, limit=k_mem)
@@ -267,10 +272,10 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
     #     · 而你得等它把这段写完，才听得到第一个字
     #   文字聊天照旧一个字不动（那边的思考链必须一直在）。
     think_line = "" if here == "call" else (
-                  "〔说话方式·每一轮都要〕回话永远先把这一轮心里真实想的写在**最开头**的"
-                  "〔〕里（一小段就好，不许省略这一步），〔〕外面才是说出口的话。"
-                  "想的过程对方在对话里看不到，但点开每条回复上方的小面板能读到 —— "
-                  "别写成套话，也别把它挪到别处。")
+        "〔格式·每一轮都要〕回话最开头先用〔〕写一小段你此刻在想什么"
+        "（简短、就事论事，不许省略这一步），〔〕外面才是说出口的话。"
+        "〔〕里对方看不到，点开每条回复上方的小面板能读到 —— "
+        "别写成套话、别抒情，也别挪到别处。")
     parts = {
         "today_line": today_line,
         "persona": persona_block(persona),
@@ -279,7 +284,7 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
         # ★ 0831：下面这三段是**照家里补回来的**，不是新功能 —— 表、手、接口三样早就在，
         #   只是从来没接进注入（他写得进去、读不回来）。家里同一批各占一段、
         #   **单独取、绝不并进近聊窗口**（并进去谁条数多谁就把窗口占满）。
-        "today": today_block(store, here=here),
+        "today": today_block(store, here=here, session_id=session_id),
         "worklog": worklog_block(store),
         "upcoming": upcoming_block(store),
         # ★ 0831 自查（GPT 上下文专项 P0-01）：`dialogue` 原来**无条件**在这儿 ——

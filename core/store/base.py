@@ -70,7 +70,7 @@ class Store:
 
     # ── 对话 ──
     def add_turn(self, turn: Turn) -> int: raise NotImplementedError
-    def recent_turns(self, limit: int = 24) -> list[Turn]: raise NotImplementedError
+    def recent_turns(self, limit: int = 24, *, session_id: str | None = None) -> list[Turn]: raise NotImplementedError
     def all_turns(self) -> list[Turn]: raise NotImplementedError
 
     # ── 记忆 ──
