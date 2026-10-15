@@ -230,13 +230,6 @@ async def relay(ws) -> None:
             # ★ 0831 外部验收 P1-04：普通 /chat 会额外加一段心情注入，这条路没有 ——
             #   同一个人在文字里知道自己什么心情、一接电话就不知道了。补齐。
             #   （homelife 是内置默认装；没装就跳过，不是错。）
-            try:
-                from core.flags import mood_enabled
-                if mood_enabled():
-                    from optional.homelife.routes import mood_inject as _mi
-                    system += "\n\n" + _mi()
-            except Exception:
-                pass
             eng = _pick()
             buf, tools, rest = [], [], []
             spoken_first = False

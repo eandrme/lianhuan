@@ -1,10 +1,9 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 记事 ⑥：日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
+   巢 · 记事 ⑥：日记 · 碎碎念 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
    装法：nest.html 再加一行 <script src="/nest-notes.js?v=1"></script>
 
    后端各归各家，前端一处收口：
      /api/diary · /api/notes            optional/homelife
-     /api/mood · /api/mood/bump · …     optional/homelife（心情那 12 维）
      /api/calendar · /api/calendar/add  optional/homeplus
      /api/memes · /api/stickers         optional/homelife
      /api/health_recent · /api/health   optional/homelife（一天一条）
@@ -88,20 +87,6 @@ try{
 .nt-sheet select{width:100%;box-sizing:border-box;padding:9px 11px;border-radius:9px;
   border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:inherit;
   outline:none;margin-top:8px}
-/* 心情 */
-.mo-head{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);
-  padding:12px;margin-bottom:10px}
-.mo-head .d{font-size:15px;line-height:1.7}
-.mo-head .s{font-size:11.5px;color:var(--dim2);margin-top:4px}
-.mo-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px}
-.mo-row .nm{flex:0 0 44px;color:var(--dim)}
-.mo-row .track{flex:1;height:1px;background:var(--line);overflow:hidden}
-.mo-row .fill{height:1px;background:var(--accent)}
-.mo-row .v{flex:0 0 40px;text-align:right;font-family:var(--latin);font-size:10px;
-  letter-spacing:.14em;color:var(--tx-3)}
-.mo-row button{width:26px;height:26px;border-radius:8px;border:1px solid var(--ink-1);
-  background:none;color:var(--dim);font-size:14px;line-height:1}
-.mo-row button:hover{border-color:var(--accent);color:var(--accent)}
 /* 日历 */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:10px}
 .cal-grid .h{text-align:center;font-size:11px;color:var(--dim2);padding:3px 0}
@@ -204,7 +189,6 @@ try{
     const SECS=[
       ["diary","日记",secDiary],
       ["notes","碎碎念",secNotes],
-      ["mood","心情",secMood],
       ["cal","日历",secCal],
       ["memes","梗库",secMemes],
       ["sticker","表情包",secSticker],
@@ -361,108 +345,6 @@ try{
           : await jpost("/api/notes/"+d.id+"/edit",{content:content,kind:kd.value.trim()||"note",mood:mo.value.trim()});
         if(r.ok){say(isNew?"记下了":"改好了");bx.parentNode.remove();secNotes(body);}
         else say("没存上："+(r.err||"?"));
-      };
-    });
-  }
-
-  /* ═══ 心情 ═══ */
-  async function secMood(body){
-    body.innerHTML="";
-    const list=el("div"); body.append(list);
-    loading(list);
-    let j;
-    try{ j=await jget("/api/mood"); }
-    catch(e){ list.innerHTML=""; failed(list,e); return; }
-    list.innerHTML="";
-
-    const head=el("div","mo-head");
-    head.append(el("div","d","此刻："+(j.desc||"—")));
-    head.append(el("div","s","这 12 维会自己随时间落回基线；想看某一维现在多少、加减一格都行。"));
-    list.append(head);
-
-    const dims=j.dims||Object.keys(j.mood||{});
-    const card=el("div","nt-card");
-    dims.forEach(d=>{
-      const v=Number((j.mood||{})[d]||0);
-      const row=el("div","mo-row");
-      row.append(el("span","nm",d));
-      const track=el("div","track"), fill=el("div","fill");
-      fill.style.width=Math.max(0,Math.min(100,v))+"%";
-      track.append(fill); row.append(track);
-      row.append(el("span","v",String(Math.round(v))));
-      const minus=el("button",null); minus.append(nestIcon("down")); minus.title="降一点（-3）";
-      const plus=el("button",null); plus.append(nestIcon("up")); plus.title="涨一点（+3）";
-      const bump=async delta=>{
-        const r=await jpost("/api/mood/bump",{dimension:d,delta:delta,reason:"人自己拨的"});
-        if(r.ok)secMood(body); else say("没拨动："+(r.err||"?"));
-      };
-      minus.onclick=()=>bump(-3);
-      plus.onclick=()=>bump(3);
-      row.append(minus,plus);
-      card.append(row);
-    });
-    const ops=el("div","nt-btns");
-    const mix=el("button","pri","自己记一笔");
-    mix.onclick=()=>editMoodBump(body,dims);
-    ops.append(mix); card.append(ops);
-    list.append(card);
-
-    const logs=j.log||[];
-    list.append(el("div","nt-lb","最近的心情账（自上而下由新到旧）"));
-    if(!logs.length){
-      const c=el("div","nt-card");
-      c.append(el("div","nt-txt","还没有记过。它自己在回复末尾标的 ‹心情› 会落到这儿。"));
-      list.append(c);
-    }
-    logs.forEach(g=>{
-      const c=el("div","nt-card");
-      const t=el("div","nt-txt");
-      t.textContent=g.dimension+" "+(g.delta>0?"+":"")+g.delta;
-      c.append(t);
-      if(g.reason){
-        const why=el("div","nt-meta"); why.append(el("span",null,"为什么："+(g.reason||"")));
-        c.append(why);
-      }
-      const m=el("div","nt-meta");
-      m.append(el("span",null,g.t||""));
-      const o=el("div","nt-ops");
-      const del=el("button","danger","删");
-      del.onclick=async()=>{
-        if(!confirm("撤掉这一笔？只删这本账，当前心情值按时间自己算，不会倒着改回去。"))return;
-        const r=await jpost("/api/mood/log/"+g.id+"/del",{});
-        if(r.ok){say("撤了");secMood(body);}else say("删不掉");
-      };
-      o.append(del); m.append(o); c.append(m);
-      list.append(c);
-    });
-
-    const ns=j.notes||[];
-    if(ns.length){
-      list.append(el("div","nt-lb","跟心情有关的碎碎念"));
-      ns.forEach(n=>{
-        const c=el("div","nt-card");
-        c.append(el("div","nt-txt",n.content||""));
-        const m=el("div","nt-meta"); m.append(el("span",null,n.t||"")); c.append(m);
-        list.append(c);
-      });
-    }
-  }
-
-  function editMoodBump(body,dims){
-    sheet("自己记一笔心情", bx=>{
-      const dim=pick(bx,"哪一维",dims.map(d=>[d,d]),dims[0]);
-      const dv=field(bx,"加减多少（3~12，减就写负数）","比如 6 或 -4","6");
-      const why=field(bx,"为什么（可空）","今天他说…","");
-      const row=el("div","nt-btns");
-      const ok=el("button","pri","记下"), no=el("button",null,"取消");
-      row.append(ok,no); bx.append(row);
-      no.onclick=()=>bx.parentNode.remove();
-      ok.onclick=async()=>{
-        const n=Number(dv.value);
-        if(!n){say("写个加减的数");return;}
-        const r=await jpost("/api/mood/bump",{dimension:dim.value,delta:n,reason:why.value.trim()});
-        if(r.ok){say("记下了");bx.parentNode.remove();secMood(body);}
-        else say("没记上："+(r.err||"?"));
       };
     });
   }

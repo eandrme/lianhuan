@@ -38,7 +38,6 @@ from . import think as _think
 from . import datadir as _datadir
 from . import assistants as _asst
 from . import windows as _winflags
-from core.flags import mood_enabled
 
 HERE = Path(__file__).parent
 WEB = HERE / "web"
@@ -208,8 +207,8 @@ async def engine_say(prompt: str) -> str:
 
 # 过日子那一套（记事四件套/心情/梗库/玩具厅）：**内置实现，默认就装上** ——
 # 定的：想偷懒直接用我们的；不喜欢魔改再去 UPSTREAM 找原文献
-from optional.homelife.routes import bind as _home_bind, mood_bump, router as _home_router   # noqa: E402
-from optional.homelife.routes import apply_marker as _home_mood_marker, mood_inject as _home_mood_inject   # noqa: E402
+from optional.homelife.routes import bind as _home_bind, router as _home_router   # noqa: E402
+from optional.homelife.routes import apply_marker as _home_mood_marker   # noqa: E402
 _home_bind(store, engine_say)
 app.include_router(_home_router)
 
@@ -417,13 +416,6 @@ async def chat(req: Request):
         system += ("\n\n〔一口气做完〕要做的事如果需要好几步（翻记忆 → 查东西 → 写下来 → 回报），"
                    "就在这一轮里连着做完，不要做一步就停下来等对方催。"
                    "只有真的需要对方拿主意、或需要等外部条件时，才中途停。")
-    # 心情随注入走(照原项目):他此刻什么心情、这一轮怎么自己记 —— 挂在 server 这层,
-    # 因为注入模块是内核、不认识选装包;homelife 是内置默认装,server 本来就 import 它
-    try:
-        if mood_enabled():
-            system = system + "\n\n" + _home_mood_inject()
-    except Exception as e:
-        print("[mood inject] fail:", e, flush=True)
     # ★ 0831 自查：原来是 `recent_turns(25)` —— 不分频道、不看 spoken，
     #   打电话时读得到三天前的文字聊天和机器拼的场景指令（捕获 EngineTurn 验过）。
     # ★ 重新生成时再卡一道 before_id：只看到被重问的那句之前（见上面那段注释）。
@@ -769,11 +761,6 @@ async def api_redo(req: Request):
         f"是当下用你的判断把话说对。）〕"
     )
     system = build_injection(store, user_msg, session_id=session_id)
-    try:
-        if mood_enabled():
-            system = system + "\n\n" + _home_mood_inject()
-    except Exception:
-        pass
     history = [{"role": t.role, "content": t.content} for t in store.recent_turns(25)]
     turn = EngineTurn(message=redo_prompt, system=system, history=history, session_id=session_id)
     eng = pick_engine()
@@ -1700,7 +1687,7 @@ def _pick_engine_for_active():
 
 
 _proactive.bind(store, engine_turn=EngineTurn, pick_engine=_pick_engine_for_active,
-                add_turn=_proactive_add_turn, mood_inject=_home_mood_inject if mood_enabled() else None,
+                add_turn=_proactive_add_turn,
                 send_push=_push.send_push, activity=jobs.activity)
 
 

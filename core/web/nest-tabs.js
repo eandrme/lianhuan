@@ -151,7 +151,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
   document.head.append(css);
 
   /* ★ 视图注册表。顺序是定下的：聊天 · 记忆 · 巢 · 书房 · 一起 · 我的。
-     「一起」＝记事（日记/碎碎念/心情/日历/梗库/表情包/健康/空间/时间线/收藏）
+     「一起」＝记事（日记/碎碎念/日历/梗库/表情包/健康/空间/时间线/收藏）
      ＋ **玩具箱**（他写的小网页）—— 玩具箱不再单独占一格。
      ★ 主界面（home）不在这张表里：它不是「一格」，是这一页本身。 */
   const TABS=[["chat","chat","聊天","CHAT"],
@@ -241,7 +241,7 @@ pre.js{margin:6px 0 0;font:12px/1.5 var(--mono);color:var(--dim);white-space:pre
       }else{
         const info={memory:["记忆库","L1/L2/L3 分层浏览 · 搜索 · 增删改 · 可见性"],
                     study:["书房","书架 · 在读进度 · 边读边聊的小窗"],
-                    notes:["一起","日记 · 碎碎念 · 心情 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏 · 玩具箱"],
+                    notes:["一起","日记 · 碎碎念 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏 · 玩具箱"],
                     setting:["我的","美化 · MCP 工具包 · 头像 · 消息推送 · 大模型 API · 助手管理"]}[k];
         if(info){
           const c=el("div","ph-card");

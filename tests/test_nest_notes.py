@@ -277,22 +277,6 @@ class TestNotesRemainingPages(unittest.TestCase):
         app.include_router(hp_router)
         self.c = TestClient(app)
 
-    # ── 心情 ──
-    def test_mood_bump_and_undo_one_entry(self):
-        self.assertEqual(12, len(self.c.get("/api/mood").json()["mood"]))
-        r = self.c.post("/api/mood/bump", json={"dimension": "想念", "delta": 6,
-                                                "reason": "测试"})
-        self.assertTrue(r.json()["ok"])
-        log = self.c.get("/api/mood").json()["log"]
-        self.assertEqual("想念", log[0]["dimension"])
-        self.assertIn("id", log[0], "带 id 才删得掉记错的那一笔")
-        self.assertTrue(self.c.post("/api/mood/log/%d/del" % log[0]["id"]).json()["ok"])
-        self.assertEqual([], self.c.get("/api/mood").json()["log"])
-
-    def test_mood_bump_refuses_a_dimension_that_does_not_exist(self):
-        r = self.c.post("/api/mood/bump", json={"dimension": "发疯", "delta": 6})
-        self.assertEqual(400, r.status_code)
-
     # ── 日历 ──
     def test_calendar_add_toggle_and_delete(self):
         self.assertTrue(self.c.post("/api/calendar/add", json={
@@ -406,7 +390,7 @@ class TestNestFrontendWiring(unittest.TestCase):
 
     def test_all_seven_notes_sections_are_real(self):
         js = self._read("nest-notes.js")
-        for fn in ("secDiary", "secNotes", "secMood", "secCal",
+        for fn in ("secDiary", "secNotes", "secCal",
                    "secMemes", "secSticker", "secHealth"):
             self.assertIn("function " + fn, js, fn + " 还没写")
         self.assertNotIn("下一批接上", js, "记事里不该再留「下一批」的占位")

@@ -14,8 +14,6 @@ import re
 import time
 from pathlib import Path
 
-from optional.homelife.routes import mood_bump
-
 _store = None
 
 
@@ -135,7 +133,7 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 31 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 30 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
 
@@ -249,9 +247,6 @@ async def execute(name: str, args: dict) -> dict:
                           (str(args.get("content") or "")[:500],))
         _store.db.commit()
         return {"ok": True}
-    if name == "update_mood":
-        return mood_bump(str(args.get("dimension") or ""), float(args.get("delta") or 0),
-                         str(args.get("reason") or ""))
     if name in ("pick_kaomoji", "collect_kaomoji"):
         # 抽屉是选装包。没装就老实说没装，别装作做了。
         try:

@@ -41,12 +41,12 @@ def _nullctx():
     yield
 
 
-def bind(store, *, engine_turn, pick_engine, add_turn, mood_inject=None, send_push=None,
+def bind(store, *, engine_turn, pick_engine, add_turn, send_push=None,
          activity=None) -> None:
     global _store
     _store = store
     _deps.update(engine_turn=engine_turn, pick_engine=pick_engine, add_turn=add_turn,
-                 mood_inject=mood_inject, send_push=send_push, activity=activity)
+                 send_push=send_push, activity=activity)
     store.db.execute(
         "CREATE TABLE IF NOT EXISTS speak_log (id INTEGER PRIMARY KEY AUTOINCREMENT,"
         " source TEXT DEFAULT 'proactive', ts REAL)")
@@ -177,12 +177,6 @@ async def speak_once(reason: str = "") -> str:
     # 拿最近说的话当检索词 —— 这样翻出来的记忆才跟眼下这件事有关
     probe = " ".join((t.content or "")[:80] for t in recent[-6:]).strip() or "想用户了，主动说一句"
     system = build_injection(_store, probe)
-    mi = _deps.get("mood_inject")
-    if mi:
-        try:
-            system = system + "\n\n" + mi()
-        except Exception:
-            pass
     if reason:
         system += ("\n\n〔★你之前给自己定了个闹钟，到点了，就是现在。当时你写给自己的是：\n"
                    + reason.strip()[:400]

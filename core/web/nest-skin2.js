@@ -39,7 +39,7 @@ try{
 /* ── ① 统一材质：纸底上的同一块玻璃 ──
    卡片 / 弹层 / 输入框都是：rgba(255,255,255,.42) + blur(18px) saturate(140%)
    + 1px rgba(255,255,255,.65) 描边 + 圆角。没有第二种材质。 */
-.nt-card,.set-sec,.mcp-row,.as-row,.mo-head,.ty-card,.ph-card,.cal-mo,
+.nt-card,.set-sec,.mcp-row,.as-row,.ty-card,.ph-card,.cal-mo,
 .mem-card,.st-book,.st-ann,.tl-item,.sk-grid>button,.cal-grid button{
   background:var(--glass-bg)!important;
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
@@ -53,7 +53,7 @@ try{
 .set-sec{padding:14px!important}
 .nt-card,.set-sec,.ty-card,.ph-card,.mem-card,.st-book{
   transition:transform .28s ease,box-shadow .28s ease}
-.nt-card,.mo-head,.ty-card{padding:13px}
+.nt-card,.ty-card{padding:13px}
 .crow,.thr,.res{border-radius:14px!important;border:1px solid transparent!important;
   box-shadow:none;background:transparent!important}
 .crow:hover,.thr:hover,.res:hover{background:var(--panel2)!important}
@@ -98,7 +98,7 @@ hr,.rule,.nt-hr{height:1px;width:48px;border:0;background:currentColor;opacity:.
   border-radius:var(--r)!important;box-shadow:var(--shadow)}
 /* 元信息 / 拉丁小标：10~13px、字距 .24em、#8A95A2 */
 .cr-h,.cr-card .ct,.cr-note .who,.st-ann .who,.set-slide .v,.mcp-meta,.mcp-tag,
-.mem-card .meta,.st-meta,.mo-row .v,.usage,.nt-meta,.as-mid .mt{
+.mem-card .meta,.st-meta,.usage,.nt-meta,.as-mid .mt{
   font-family:var(--latin);font-size:10px;letter-spacing:.24em;color:var(--latin-c)}
 /* 次要文字 */
 .cr-card .nt,.set-sec .sub,.set-msg,.set-kv,.cr-row .nt{color:var(--tx-2)}
@@ -120,7 +120,7 @@ hr,.rule,.nt-hr{height:1px;width:48px;border:0;background:currentColor;opacity:.
   backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid var(--glass-line)!important;box-shadow:var(--shadow)!important}
 /* 元信息排版：10px、A7B0BB */
-.nt-meta,.mcp-meta,.as-mid .mt,.mo-row .v,.usage{font-family:var(--font);
+.nt-meta,.mcp-meta,.as-mid .mt,.usage{font-family:var(--font);
   font-size:10px;letter-spacing:.14em;color:var(--tx-3)}
 /* 拉丁标签：Jost、全大写、字距 .24em、10~13px、#8A95A2 */
 .en-cap{font-family:var(--latin)!important;font-size:10px;letter-spacing:.24em;

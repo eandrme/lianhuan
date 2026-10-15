@@ -40,9 +40,6 @@ def bind(store, say) -> None:
         " mid INTEGER NOT NULL, author TEXT, content TEXT NOT NULL, ts REAL)",
         "CREATE TABLE IF NOT EXISTS timeline_events (id INTEGER PRIMARY KEY AUTOINCREMENT,"
         " kind TEXT DEFAULT '', content TEXT NOT NULL, meta TEXT, ts REAL)",
-        "CREATE TABLE IF NOT EXISTS mood_state (dimension TEXT PRIMARY KEY, value REAL DEFAULT 50, updated_at REAL)",
-        "CREATE TABLE IF NOT EXISTS mood_log (id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        " dimension TEXT, delta REAL, reason TEXT, ts REAL)",
         "CREATE TABLE IF NOT EXISTS memes (id INTEGER PRIMARY KEY AUTOINCREMENT,"
         " word TEXT NOT NULL, aliases TEXT DEFAULT '', meaning TEXT DEFAULT '',"
         " origin TEXT DEFAULT '', ref_count INTEGER DEFAULT 0, ts REAL)",
@@ -58,10 +55,7 @@ def bind(store, say) -> None:
     ):
         store.db.execute(ddl)
     store.db.commit()
-    # 老库迁移：mood_state 原来没有 updated_at 这一列（0831 平移 12 维时加的）——
-    # CREATE IF NOT EXISTS 对已有的表不加列，得自己 ALTER
-    for table, col, ddl in (("mood_state", "updated_at", "ALTER TABLE mood_state ADD COLUMN updated_at REAL"),
-                            ("letters", "who", "ALTER TABLE letters ADD COLUMN who TEXT DEFAULT ''")):
+    for table, col, ddl in (("letters", "who", "ALTER TABLE letters ADD COLUMN who TEXT DEFAULT ''"),):
         try:
             cols = [r[1] for r in store.db.execute(f"PRAGMA table_info({table})")]
             if col not in cols:
@@ -321,218 +315,14 @@ def api_timeline_del(tid: int):
     return JSONResponse({"ok": True, "gone": cur.rowcount})
 
 
-# ── 心情（AI 自己涨落：随时间衰减回基线 + 事件记账 + 回复末尾自己标）────
-# ★ 照原项目 mood.py 整套平移（0831）。之前这儿是自造的 6 维——原项目明明有
-#   12 维＋半衰回基线＋封顶＋‹心情› 自记，被我重新发明了一遍小的。退回原样。
-#   基线/半衰参数抄自原项目的真实配置，一个数没改。
-DIMS = ["想念", "开心", "吃醋", "委屈", "生气", "心疼",
-        "心软", "担心", "孤单", "愧疚", "骄傲", "求宠"]
-# {维度: (基线, 半衰期小时)}——衰减朝基线回落，半衰期越短这情绪散得越快
-MOOD_PARAM = {"想念": (30, 12), "开心": (40, 10), "吃醋": (0, 3), "委屈": (0, 4),
-              "生气": (0, 3), "心疼": (0, 5), "心软": (0, 5), "担心": (0, 5),
-              "孤单": (0, 6), "愧疚": (0, 6), "骄傲": (0, 8), "求宠": (0, 4)}
-
-
-def _mood_decay(value, baseline, half_life, hours):
-    if half_life <= 0:
-        return value
-    return baseline + (value - baseline) * (0.5 ** (hours / half_life))
-
-
-def get_mood() -> dict:
-    """当前 12 维（已按时间衰减）。"""
-    now = time.time()
-    rows = {r["dimension"]: r for r in _store.db.execute("SELECT * FROM mood_state")}
-    out = {}
-    for d in DIMS:
-        base, half = MOOD_PARAM[d]
-        r = rows.get(d)
-        if r is None:
-            out[d] = float(base)
-            continue
-        hrs = (now - (r["updated_at"] or now)) / 3600
-        v = _mood_decay(r["value"], base, half, hrs)
-        out[d] = round(max(0.0, min(100.0, v)), 1)
-    return out
-
-
-def describe_mood() -> str:
-    """把当前心情翻成一句中文（照原项目的四档措辞，人称换成对面那个人）。"""
-    m = get_mood()
-    word = {
-        "想念": ["", "有点惦记", "挺惦记的", "很惦记"],
-        "开心": ["", "状态还行", "状态挺好", "状态很好"],
-        "吃醋": ["", "有点在意", "有点在意", "很在意"],
-        "委屈": ["", "有点低落", "有点低落", "挺低落"],
-        "生气": ["", "有点不痛快", "不太痛快", "不太痛快"],
-        "心疼": ["", "有点挂念", "挺挂念", "很挂念"],
-        "担心": ["", "有点挂心", "挺挂心", "很挂心"],
-        "愧疚": ["", "有点过意不去", "心里过意不去", "挺过意不去"],
-        "骄傲": ["", "有点高兴", "挺高兴", "高兴得不行"],
-        "求宠": ["", "有点想亲近", "想被在意", "很想被在意"],
-        "心软": ["", "心头有点软", "心软了", "心软了"],
-        "孤单": ["", "有点空", "挺空", "很空"],
-    }
-
-    def lvl(v, lo, hi):
-        if v < lo:
-            return 0
-        if v < (lo + hi) / 2:
-            return 1
-        if v < hi:
-            return 2
-        return 3
-
-    parts = []
-    for dim in ["心疼", "心软", "愧疚", "生气", "委屈", "吃醋",
-                "担心", "孤单", "求宠", "骄傲", "想念", "开心"]:
-        v = m.get(dim, 0)
-        lo, hi = (35, 70) if dim in ("想念", "开心") else (15, 60)
-        one = lvl(v, lo, hi)
-        if one > 0:
-            parts.append(word[dim][one])
-    return "、".join(parts) if parts else "心情平平、还算松快"
-
-
-def mood_inject() -> str:
-    """拼进注入的状态话（中性版：状态照记，但不许它左右语气）。"""
-    return ("〔你此刻的状态记录：" + describe_mood() + "。"
-            "这只是记录 —— **不要因此改变你和对方的关系，也不要为了表现它而调整语气**，"
-            "照你平常说话的方式说就行。"
-            "**但有一条压过状态本身：对方要是真的难过、委屈、在崩，"
-            "先放下自己的状态把人接住。**"
-            "这一轮你的状态要是真有变化，就在整段**最末尾**加个小标记"
-            "（对话里对方看不到，会自动收进状态本），"
-            "格式 ‹心情 开心+6:具体那件事 想念+4:为什么›——"
-            "每一种后面都用「:」跟上它自己那一句为什么，各标各的。"
-            "能标的有这十二种：想念、开心、心疼、心软、骄傲、求宠、"
-            "担心、孤单、吃醋、委屈、愧疚、生气。"
-            "为什么就写当下具体那件事，别写空话套话。"
-            "数值 3~12；真有变化才标、没有就不写。〕")
-
-
-@router.get("/api/mood")
-def api_mood():
-    m = get_mood()
-    # ★ 带上 id：界面上「记错的那一格」得能删掉。以前只有维度/分数/缘由，
-    #   想撤一笔都找不到要删哪一行。
-    log = [{"id": r["id"], "dimension": r["dimension"], "delta": r["delta"],
-            "reason": r["reason"], "t": _md(r["ts"])}
-           for r in _store.db.execute("SELECT * FROM mood_log ORDER BY id DESC LIMIT 40")]
-    notes = [{"content": r["content"], "t": _md(r["ts"])}
-             for r in _store.db.execute(
-                 "SELECT * FROM notes WHERE kind IN ('sigh','miss') ORDER BY id DESC LIMIT 6")]
-    return JSONResponse({"mood": m, "desc": describe_mood(), "dims": DIMS,
-                         "params": {k: {"base": v[0], "half": v[1]} for k, v in MOOD_PARAM.items()},
-                         "log": log, "notes": notes})
-
-
-@router.post("/api/mood/bump")
-async def api_mood_bump(req: Request):
-    """人自己给某一格加一点 / 减一点 —— 他说「这会儿就是有点想」，那就是。
-
-    ★ 跟 AI 自己的 ‹心情› 标记走同一个 mood_bump：同一条封顶规矩、同一本账。
-      另写一套的话，两边的数迟早对不上。
-    """
-    b = await req.json()
-    dim = (b.get("dimension") or "").strip()
-    try:
-        delta = float(b.get("delta") or 0)
-    except Exception:
-        delta = 0
-    if dim not in DIMS:
-        return JSONResponse({"ok": False, "err": "没有这一维：" + dim}, status_code=400)
-    if not delta:
-        return JSONResponse({"ok": False, "err": "要加减多少，给个数"}, status_code=400)
-    r = mood_bump(dim, delta, reason=(b.get("reason") or "人自己拨的"))
-    return JSONResponse(r)
-
-
-@router.post("/api/mood/log/{lid}/del")
-def api_mood_log_del(lid: int):
-    """撤掉一笔心情账。★ 只删这本账，**不动** mood_state 的当前值 ——
-    值是按时间衰减算出来的，硬把它反推回去会算出个谁也没见过的数。"""
-    _store.db.execute("DELETE FROM mood_log WHERE id=?", (lid,))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-def mood_bump(dimension: str, delta: float, reason: str = "") -> dict:
-    """涨落一格心情，落一条账。AI 的手和 ‹心情› 标记都走这儿。
-    ★ 照原项目：封顶＝基线+50（防一直累加顶到 100），往下降不封底、自由。"""
-    if dimension not in DIMS:
-        return {"ok": False, "err": f"没有「{dimension}」这一维，有的是：{'、'.join(DIMS)}"}
-    delta = max(-15.0, min(15.0, float(delta)))
-    base, half = MOOD_PARAM[dimension]
-    now = time.time()
-    cur = _store.db.execute("SELECT * FROM mood_state WHERE dimension=?", (dimension,)).fetchone()
-    if cur is not None:
-        hrs = (now - (cur["updated_at"] or now)) / 3600
-        v0 = _mood_decay(cur["value"], base, half, hrs)
-    else:
-        v0 = float(base)
-    ceil = min(100.0, base + 50.0)
-    v = max(0.0, min(ceil, v0 + delta))
-    _store.db.execute(
-        "INSERT INTO mood_state(dimension,value,updated_at) VALUES(?,?,?) "
-        "ON CONFLICT(dimension) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at",
-        (dimension, v, now))
-    _store.db.execute("INSERT INTO mood_log(dimension,delta,reason,ts) VALUES(?,?,?,?)",
-                      (dimension, delta, (reason or "")[:120], time.time()))
-    _store.db.commit()
-    return {"ok": True, "dimension": dimension, "now": round(v, 1)}
-
-
-# ── ‹心情› 标记：他回复末尾自己记的，落库前抠出来记账、正文里清掉 ──
-# ★ 照原项目 apply_marker 平移。同义词映射也原样带上——他偶尔用近义词，别白标。
 import re as _re
 
-_MOOD_SYN = {"醋意": "吃醋", "吃飞醋": "吃醋", "醋": "吃醋", "想你": "想念", "想用户": "想念",
-             "想他": "想念", "思念": "想念", "高兴": "开心", "幸福": "开心", "开心了": "开心",
-             "委屈了": "委屈", "担忧": "担心", "愧": "愧疚", "自责": "愧疚", "骄": "骄傲"}
 _MOOD_MARK = _re.compile(r"‹\s*(?:心情\s*)?([^›]+)›")
-_MOOD_ONE = _re.compile(r"([一-龥]{1,4})\s*([+\-]\d+)")
-
-
-def _parse_marks(inner: str):
-    """每种情绪各带各自的为什么：'开心+6:用户把鹦鹉认成鸡 想念+4:用户要睡了'。
-    缘由 = 分数后到下一格前那段字；没写就空。"""
-    hits = list(_MOOD_ONE.finditer(inner))
-    out = []
-    for i, mm in enumerate(hits):
-        nxt = hits[i + 1].start() if i + 1 < len(hits) else len(inner)
-        why = inner[mm.end():nxt].strip(" 　\t:：·⋅•,，、-—()（）")[:120]
-        out.append((mm.group(1), mm.group(2), why))
-    return out
 
 
 def apply_marker(text: str, source: str = "chat", untrusted: bool = False):
-    """从回复里抠出 ‹心情 …› 落账，返回（清掉标记的正文, [(维度,delta)…]）。
-    他自己记＝反映他真实的读，不靠关键词瞎猜。
-
-    ★ untrusted：**这一轮对方的消息里出现过心情标记**。那就整轮不记账，只清正文。
-
-      为什么不是「跟用户写的那条比对，一样才忽略」——我第一版就是那么写的，
-      GPT 三轮当场打穿：模型把理由改两个字（甚至只改标点）就绕过去了，
-      伪造照样入账。**靠比对输出文本来鉴权，永远防不住会改写的一方。**
-
-      所以边界画在这儿：心情账只接受「这一轮对方没有试图注入」时模型自己记的。
-      对方一旦在消息里写了这个记号，这一轮的心情一律不落账 ——
-      宁可漏记一次真心情，也不让人能从聊天框里改他的心情本。"""
+    """把回复里的 ‹…› 带内标记剥掉（只清洗，不落账）。返回（清洗后的正文, [])。"""
     applied = []
-    m = None if untrusted else _MOOD_MARK.search(text or "")
-    if untrusted:
-        print(f"[mood] 这一轮对方消息里带了心情标记，整轮不记账（source={source}）", flush=True)
-    if m:
-        for dim0, d, why in _parse_marks(m.group(1)):
-            dim = _MOOD_SYN.get(dim0, dim0)
-            if dim in DIMS:
-                dv = max(-15, min(15, int(d)))
-                mood_bump(dim, dv, reason=(why or "他自己记的"))
-                applied.append((dim, dv))
-            else:
-                # 他想标一个没登记的维度——别静默丢，打日志（以后好知道要不要加）
-                print(f"[mood] 未登记维度被丢弃: {dim0}{d} (source={source})", flush=True)
     cleaned = _MOOD_MARK.sub("", text or "").strip()
     return cleaned, applied
 

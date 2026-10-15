@@ -332,7 +332,7 @@ class TestThePhoneShell(unittest.TestCase):
 
     def test_every_progress_bar_is_a_hairline(self):
         """所有进度条都是 1px 细线填充 —— 不许有 5px / 7px 的粗色块。"""
-        for f, sel in (("nest-study.js", ".st-bar .track"), ("nest-notes.js", ".mo-row .track")):
+        for f, sel in (("nest-study.js", ".st-bar .track"),):
             txt = (WEB / f).read_text(encoding="utf-8")
             line = next(l for l in txt.splitlines() if l.startswith(sel + "{"))
             self.assertIn("height:1px", line, f + " 的进度条还是粗的")
