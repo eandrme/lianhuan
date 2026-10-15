@@ -213,12 +213,6 @@ _home_bind(store, engine_say)
 app.include_router(_home_router)
 
 
-@app.get("/plays/{name}")
-def get_play(name: str):
-    p = _safe(_datadir.home_dir() / "plays", name)
-    return FileResponse(p) if p else JSONResponse({"error": "没有这个小玩意"}, status_code=404)
-
-
 # 家什与台账（日历/钱包/相册/在哪/正在听/人设历史/颜文字）＋ 共读：内置默认装
 from optional.homeplus.routes import bind as _hp_bind, router as _hp_router   # noqa: E402
 _hp_bind(store)
@@ -919,9 +913,9 @@ WIRED = ["latent", "latentAct", "distill",
          "通知与频率",
          # 过日子那一套（内置实现，默认装上）
          "letters", "moments", "momentMine", "momentNew",
-         "momentComment", "memes", "memeEdit", "plays",
+         "momentComment", "memes", "memeEdit",
          "信", "空间",
-         "梗库", "memepage", "玩具厅",
+         "梗库", "memepage",
          # 家什与台账 ＋ 共读（内置默认装）
          "calendar", "anniversaries", "gallery", "where", "whereSet",
          "workbook", "工作本",                              # 0831 接真（外部验收连点两轮）

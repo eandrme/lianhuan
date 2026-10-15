@@ -126,12 +126,6 @@ class TestThePhoneShell(unittest.TestCase):
         """房间顺序是定下的：聊天 · 记忆 · 巢 · 书房 · 一起 · 我的（书房第 4、一起在它后面）。"""
         ids = self._tab_ids()
         self.assertEqual(["chat", "memory", "rooms", "study", "notes", "setting"], ids)
-        self.assertNotIn("toys", ids, "玩具箱并进「一起」了，不再单独占一格")
-
-    def test_the_toy_box_lives_inside_together(self):
-        notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")
-        self.assertRegex(notes, r'"玩具"', "「一起」里得有玩具那一档")
-        self.assertIn("NEST_PANES.toys", notes, "那一档得真把玩具箱画出来")
 
     @staticmethod
     def _tab_ids():
@@ -365,7 +359,7 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn("var(--accent)", tg)
         # ③ 一个下拉 + ④ 标签行（横向可滑，选中态才 accent）
         self.assertIn("el(\"select\")", tg)
-        for c in ("全部", "梗库", "表情包", "健康", "收藏", "玩具"):
+        for c in ("全部", "梗库", "表情包", "健康", "收藏"):
             self.assertIn('"%s"' % c, tg, c)
         self.assertRegex(tg, r"\.tg-chips\{[^}]*overflow-x:auto")
         self.assertRegex(tg, r"\.tg-chips button\.on\{[^}]*color:var\(--accent\)")

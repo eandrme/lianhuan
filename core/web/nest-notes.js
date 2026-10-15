@@ -191,8 +191,6 @@ try{
       ["health","健康",secHealth],
       ["space","空间",secMoments],
       ["star","收藏",secStar],
-      /* ★ 玩具箱并进「一起」（不再单独占一格导航）：那一格本来就是「你们俩的东西」 */
-      ["toys","玩具",secToys]
     ];
     SECS.forEach(s=>{
       const b=el("button",(s[0]===SEC?"on":""),s[1]);
@@ -826,16 +824,6 @@ try{
       else say("这回没写出来"+((r.err)?("："+r.err):"")+" —— 引擎接上了再试");
     };
     load();
-  }
-
-  /* ═══ 玩具箱（本体在 nest-toys.js，这里只是「一起」里的一档）═══ */
-  async function secToys(body){
-    body.innerHTML="";
-    if(window.NEST_PANES&&typeof window.NEST_PANES.toys==="function"){
-      await window.NEST_PANES.toys(body);
-      return;
-    }
-    body.append(el("div","hint","玩具箱模块没装上（nest-toys.js）"));
   }
 
   /* ═══ 收藏 ═══

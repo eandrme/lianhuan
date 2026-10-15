@@ -9,13 +9,13 @@
      ① 顶栏      ‹ 返回 · 一起 TOGETHER · 右侧（分区 / ✕）
      ② 引用块    左侧一条 2px accent 竖线 + 宋体 15px 斜体
      ③ 一个下拉  「八维 ∨」
-     ④ 标签行    全部 / 梗库 / 表情包 / 健康 / 收藏 / 玩具
+     ④ 标签行    全部 / 梗库 / 表情包 / 健康 / 收藏
      ⑤ 居中一枚「日报」
      ⑥ 一行      左「十月八日」· 右「No. 155」
      ⑦ 信息流    三列：品类 | 内容 | 时间，行间 1px 细横线
 
    ★ 「不改功能」：原本那些档（日历 / 梗库 / 表情包 /
-     健康 / 空间 / 收藏 / 玩具箱）的**完整界面一个都没删** ——
+     健康 / 空间 / 收藏）的**完整界面一个都没删** ——
      顶栏那颗「分区」按一下就进去，点某一条也能跳到它所属的那一档。
    ══════════════════════════════════════════════════════════ */
 (function(){
@@ -26,10 +26,9 @@ try{
   const jget=async u=>{const r=await fetch(u,{credentials:"same-origin"});if(!r.ok)throw new Error("HTTP "+r.status);return r.json();};
   const pad2=n=>String(n).padStart(2,"0");
 
-  /* ── 七档（就是标签行那一排；「全部」在最前）── */
+  /* ── 标签行那一排（「全部」在最前）── */
   const CATS=[["全部",null],
-              ["梗库","meme"],["表情包","sticker"],["健康","health"],["收藏","star"],
-              ["玩具","toy"]];
+              ["梗库","meme"],["表情包","sticker"],["健康","health"],["收藏","star"]];
 
   const css=document.createElement("style");
   css.textContent=`
@@ -109,8 +108,7 @@ try{
 
   /* ── 各档 → 信息流的一行 ──
      一行统一成 {cat, icon, text, ts, raw}；ts 是秒，用来排序和显示时间。 */
-  const CAT_ICON={"梗库":"meme","表情包":"sticker","健康":"health","收藏":"star",
-                  "玩具":"toy"};
+  const CAT_ICON={"梗库":"meme","表情包":"sticker","健康":"health","收藏":"star"};
   function toTs(v){
     if(v==null)return 0;
     if(typeof v==="number")return v>1e11?v/1000:v;      /* 有的字段是毫秒 */
@@ -145,7 +143,6 @@ try{
         add("健康",bits.join(" · ")||"记了一天",toTs(x.day||x.ts),x);
       })),
       soft("/api/chat/starred",its=>(its||[]).forEach(x=>add("收藏",x.content,x.ts,x))),
-      soft("/api/plays",its=>(its||[]).forEach(x=>add("玩具",x.name||x.title||"一个小玩具",x.ts,x))),
     ]);
     out.sort((a,b)=>b.ts-a.ts);
     return out;
@@ -223,7 +220,7 @@ try{
   }
 
   window.NEST_PANES=window.NEST_PANES||{};
-  /* ★ 第二个参数是「进来就落到哪一档」—— 首页那 7 个小入口是
+  /* ★ 第二个参数是「进来就落到哪一档」—— 首页那几个小入口是
      go("together", 名字) 进来的，不接住的话它们全都只到「全部」。 */
   window.NEST_PANES.together=async function(box,cat){
     box.innerHTML="";
@@ -251,7 +248,7 @@ try{
     box.append(wrap);
 
     let ALL=[], FILTER="全部", GROUP="dim";
-    /* 进来时点名要看哪一档（首页那 7 个小入口），认不出来就当「全部」 */
+    /* 进来时点名要看哪一档（首页那几个小入口），认不出来就当「全部」 */
     if(cat&&CATS.some(c=>c[0]===cat))FILTER=cat;
 
     chips.append(...CATS.map(([label])=>{
@@ -277,7 +274,7 @@ try{
       if(!rows.length){
         feed.append(el("div","tg-empty",ALL.length
           ? "这一档还空着。"
-          : "还没有记下什么。梗库、表情包、健康、收藏、玩具 —— 记下的都会汇总到这儿。"));
+          : "还没有记下什么。梗库、表情包、健康、收藏 —— 记下的都会汇总到这儿。"));
         return;
       }
       if(GROUP==="dim"){
@@ -295,7 +292,7 @@ try{
 
     /* 全部档位的完整界面：一个入口都不藏 */
     function openSections(){
-      const SECS=["日历","梗库","表情包","健康","空间","收藏","玩具"];
+      const SECS=["日历","梗库","表情包","健康","空间","收藏"];
       window.nestSheet("一起 · 全部档位",(bx)=>{
         bx.append(el("div","hd","原本那些档，一个都没少"));
         const sec=el("div","tg-sec");

@@ -14,7 +14,8 @@
   2) 行动  最多 OFFLINE_MAX_TURNS 轮，手边有工具；每轮之间检查「你回来了 / 到点」
   3) 收尾  单独一轮，不带工具，只让它写两三句给自己（这段文字才是唯一留下来的东西）
   4) 落库  加密写进 priv，日志里留一行「私密库 #行号」
-  5) 状态  data/offline_state.json + data/plays/_offline.json（前端徽章读）
+  5) 状态  data/offline_state.json + data/offline.json（离线徽章的静态快照。
+     现在没有 URL 在服务它：唯一读它的老 index.html 已废弃；巢前端走 /api/offline，不读这个文件）
 
 .env 旋钮：
   OFFLINE_ENABLED=1          总开关
@@ -55,7 +56,7 @@ def home_dir() -> Path:
 
 READONLY_TOOLS = {
     "search_memory", "read_calendar", "read_workbook",
-    "list_books", "read_chapter", "list_plays", "list_packs", "list_my_tools",
+    "list_books", "read_chapter", "list_packs", "list_my_tools",
 }
 STRICT_TOOLS = {"list_my_tools", "list_packs"}
 
@@ -258,9 +259,13 @@ def _payload(st: dict) -> dict:
 
 
 def _publish(st: dict | None = None) -> None:
-    """给前端徽章看的一份静态快照（data/plays/_offline.json）。"""
+    """给前端徽章看的一份静态快照（data/offline.json）。
+
+    ★ 这个文件现在**没有 URL 在服务它**（data/ 不做静态挂载）。唯一读它的是**已废弃的**
+      老 core/web/index.html 里那条三级兜底链（/plays/_offline.json → /_offline.json →
+      /api/offline/state，后两个本来就已失效）；巢前端走 /api/offline，不读这个文件。"""
     try:
-        p = home_dir() / "plays" / "_offline.json"
+        p = home_dir() / "offline.json"
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(_payload(st or _state()), ensure_ascii=False), "utf-8")
     except Exception:

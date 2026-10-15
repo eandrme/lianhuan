@@ -422,7 +422,7 @@ try{
   /* ══ ⑤ 一起区块 ══ */
   const TOGETHER_ITEMS=[
     ["梗库","meme","memes"],["表情包","sticker","sticker"],["健康","health","health"],
-    ["收藏","star","star"],["玩具","toy","toys"]
+    ["收藏","star","star"]
   ];
   function togetherBlock(){
     const c=el("div","hm-card hm-blk tap");

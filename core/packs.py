@@ -265,9 +265,6 @@ PACKS = [
     {"id": "memes", "name": "梗库", "kind": "builtin",
      "desc": "只有你们懂的词条：加梗、改梗、翻梗。内置实现，装好就在用。",
      "contract": "docs/API.md（memes）。颜文字抽屉见 UPSTREAM.md（那是另一个人的开源项目，接它的 MCP）"},
-    {"id": "play", "name": "玩具厅", "kind": "builtin",
-     "desc": "AI 写的小网页丢进 data/plays/ 就上架。内置实现，装好就在用。",
-     "contract": "docs/API.md（plays）"},
 ]
 
 

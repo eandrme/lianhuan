@@ -59,9 +59,6 @@ TOOLS = [
        {"word": {"type": "string"}, "meaning": {"type": "string"},
         "aliases": {"type": "string", "description": "别名，逗号分隔，尽量给全"},
         "origin": {"type": "string", "description": "出处"}}, ["word", "meaning"]),
-    _t("write_play", "写一个小网页玩意会上架到玩具厅（完整 HTML，自包含，不引外链）",
-       {"filename": {"type": "string", "description": "文件名，英文小写加连字符，如 guess-number"},
-        "html": {"type": "string", "description": "完整的 HTML 文档"}}, ["filename", "html"]),
     _t("list_packs", "看功能包：哪些装了、哪些缺什么", {}, []),
     _t("list_my_tools", "看你自己现在有哪些手（含外接的 MCP 工具）——被问「你会什么」时如实报", {}, []),
     _t("install_pack", "给自己装一个功能包（条件齐的才装得上）",
@@ -108,7 +105,6 @@ TOOLS = [
         "quote": {"type": "string"}, "note": {"type": "string"}}, ["book_id", "note"]),
     _t("set_my_reading_progress", "推进你自己的阅读进度（对方的进度不归你管）",
        {"book_id": {"type": "integer"}, "chapter": {"type": "integer"}}, ["book_id", "chapter"]),
-    _t("list_plays", "看玩具厅里已经有哪些小玩意", {}, []),
     _t("write_workbook", "记进工作本（要做的事、想到的点子、捡到的资料 —— "
                          "聊到「回头要做 X」就记一条，别等人提醒。"
                          "标题里写【项目名】它会自己归到那一组）",
@@ -123,7 +119,7 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 26 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 24 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
 
@@ -251,18 +247,6 @@ async def execute(name: str, args: dict) -> dict:
                            str(args["meaning"])[:500], str(args.get("origin") or "")[:300]))
         _store.db.commit()
         return {"ok": True}
-    if name == "write_play":
-        from . import datadir as _dd
-        fn = re.sub(r"[^a-z0-9-]", "", str(args.get("filename") or "").lower())[:40]
-        html = str(args.get("html") or "")
-        if not fn or len(html) < 40:
-            return {"ok": False, "err": "文件名或内容不像样"}
-        if len(html) > 400_000:
-            return {"ok": False, "err": "太大了（上限 400KB）"}
-        d = _dd.home_dir() / "plays"
-        d.mkdir(parents=True, exist_ok=True)
-        (d / (fn + ".html")).write_text(html, encoding="utf-8")
-        return {"ok": True, "url": "/plays/" + fn + ".html", "note": "上架了，玩具厅里能看到"}
     # ── 共读（0830）。表由「共读」那个包建；包没装就老实说没装，别抛栈。 ──
     if name in ("list_books", "read_chapter", "write_annotation",
                 "set_my_reading_progress"):
@@ -309,12 +293,6 @@ async def execute(name: str, args: dict) -> dict:
                               (int(args.get("chapter") or 0), bid))
             _store.db.commit()
             return {"ok": True}
-    if name == "list_plays":
-        from . import datadir as _dd
-        d = _dd.home_dir() / "plays"
-        if not d.exists():
-            return {"items": []}
-        return {"items": sorted(p.name for p in d.glob("*.html"))}
     if name == "write_workbook":
         from optional.homeplus.routes import workbook_add
         return workbook_add(str(args.get("title") or ""), str(args.get("body") or ""),

@@ -1932,28 +1932,6 @@ class TestToyHallLinksToARouteThatExists(unittest.TestCase):
         self.assertNotIn('href="/play/', seg, "`/play/` 少了一个 s，后端没有这条路由")
         self.assertNotIn("x.name)", seg, "接口给的字段是 file，不是 name")
 
-    def test_the_route_really_serves_a_toy_and_the_wrong_one_404s(self):
-        """不是只对字符串 —— 真起一个 app，真打两条路径。"""
-        need("core/server.py")
-        import tempfile
-        from starlette.testclient import TestClient
-        d = tempfile.mkdtemp()
-        _os.makedirs(_os.path.join(d, "plays"))
-        with open(_os.path.join(d, "plays", "t.html"), "w") as f:
-            f.write("<title>玩具</title>")
-        old = _os.environ.get("LIANHUAN_DB")
-        _os.environ["LIANHUAN_DB"] = _os.path.join(d, "lianhuan.db")
-        try:
-            import core.server as sv
-            with TestClient(sv.app) as c:
-                self.assertEqual(200, c.get("/plays/t.html").status_code, "对的那条得通")
-                self.assertEqual(404, c.get("/play/t.html").status_code, "少一个 s 的那条本来就不存在")
-        finally:
-            if old is None:
-                _os.environ.pop("LIANHUAN_DB", None)
-            else:
-                _os.environ["LIANHUAN_DB"] = old
-
 
 class TestServiceWorkerReallyRuns(unittest.TestCase):
     """★ 0831 自查（病灶 11）：sw.js 原来只被三条「读源码 + assertIn 某字样」的测试守着。
