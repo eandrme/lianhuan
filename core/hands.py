@@ -34,7 +34,7 @@ TOOLS = [
        {"content": {"type": "string"}, "layer": {"type": "string", "enum": ["L1", "L2", "L3"],
         "description": "L1 最近的事 / L2 重要的事 / L3 长期的事"}}, ["content"]),
     _t("search_memory", "翻记忆库", {"q": {"type": "string"}}, ["q"]),
-    _t("post_moment", "在共享空间发一条动态", {"content": {"type": "string"}}, ["content"]),
+    _t("post_moment", "在空间发一条动态", {"content": {"type": "string"}}, ["content"]),
     # _t("update_mood", "记一笔你此刻状态的变化（真实，别演）",
     #    {"dimension": {"type": "string", "enum": ["开心", "安定", "想念", "好奇", "疲惫", "委屈"]},
     #     "delta": {"type": "number", "description": "-15 到 +15"},

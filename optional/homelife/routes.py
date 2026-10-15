@@ -128,10 +128,10 @@ def api_moments():
 
 
 async def _ai_reply_to(mid: int, context: str) -> None:
-    """AI 在楼里接一句。失败就不接 —— 帖子本身已经落库，不能因为嘴笨丢帖子。"""
+    """AI 回一句。失败就不接 —— 帖子本身已经落库，不能因为嘴笨丢帖子。"""
     try:
-        text = await _say("对方刚在你们共享的空间里贴了一条动态：「" + context[:300]
-                          + "」\n用一两句话在楼里自然地接话（不要引号，不要解释）。")
+        text = await _say("对方刚发了一条动态：「" + context[:300]
+                          + "」\n用一两句话自然回一句（不要引号，不要解释）。")
         if text.strip():
             _store.db.execute("INSERT INTO moment_comments(mid,author,content,ts) VALUES(?,?,?,?)",
                               (mid, "ai", text.strip()[:500], time.time()))
@@ -157,7 +157,7 @@ async def api_moment_mine(req: Request):
 async def api_moment_new(req: Request):
     """戳 AI 发一条。真用引擎写，写不出来老实说。"""
     try:
-        text = await _say("在你们共享的空间里发一条你自己的动态：此刻想说的一两句话"
+        text = await _say("写一条动态：此刻想说的一两句话"
                           "（不要引号，不要解释，就是那条动态本身）。")
     except Exception:
         text = ""
@@ -197,7 +197,7 @@ async def api_moment_edit(mid: int, req: Request):
 
 @router.post("/api/moments/{mid}/del")
 def api_moment_del(mid: int):
-    """删一条动态（连同它楼里的评论）。自己的空间，删就是删。"""
+    """删一条动态（连同它的回复）。删就是删。"""
     _store.db.execute("DELETE FROM moment_comments WHERE mid=?", (mid,))
     cur = _store.db.execute("DELETE FROM moments WHERE id=?", (mid,))
     _store.db.commit()

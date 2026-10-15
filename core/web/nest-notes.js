@@ -661,7 +661,7 @@ try{
     const top=el("div","nt-top");
     const add=el("button","pri");
     add.append(nestIcon("plus"),document.createTextNode(" 贴一条"));
-    const poke=el("button",null,"戳他发一条");
+    const poke=el("button",null,"让他发一条");
     const sp=el("div","sp");
     const msg=el("div","hint");
     top.append(add,poke,sp);
@@ -669,9 +669,9 @@ try{
     const list=el("div");
     body.append(top,chips,msg,list);
     let ALL=[], FILT="全部";
-    const TABS=[["全部","这儿贴的都是随手想给对方看的"],
-                ["他发的","他贴上去的"],["你发的","你贴上去的"],
-                ["有评论","底下接过话的那些"]];
+    const TABS=[["全部","这儿都是随手发的一条条"],
+                ["他发的","他发的"],["你发的","你发的"],
+                ["有评论","有回复的"]];
     function mineOf(x){ return !x.author||x.author==="ai"; }   /* true＝他发的 */
     function paint(){
       const n={"他发的":0,"你发的":0,"有评论":0};
@@ -713,7 +713,7 @@ try{
       };
       const bd=el("button","danger","删");
       bd.onclick=async()=>{
-        if(!confirm("删掉这条？楼里的评论也一起没。"))return;
+        if(!confirm("删掉这条？下面的回复也一起没。"))return;
         const r=await jpost("/api/moments/"+x.id+"/del",{});
         if(r.ok){say("删了");load();} else say("删不掉："+(r.err||"?"));
       };
@@ -756,7 +756,7 @@ try{
             const v=t.value.trim(); if(!v){say("空的");return;}
             ok.disabled=true;
             const r=await jpost("/api/moments/"+x.id+"/comment",{content:v});
-            if(r.ok){ say("回了 —— 他看到会接一句"); close(); setTimeout(load,1200); }
+            if(r.ok){ say("回了"); close(); setTimeout(load,1200); }
             else{ ok.disabled=false; say("没回上："+(r.err||"?")); }
           };
         });
@@ -770,12 +770,12 @@ try{
       try{ j=await jget("/api/moments"); }
       catch(e){ list.innerHTML=""; failed(list,e); return; }
       ALL=j.items||[];
-      msg.textContent = ALL.length? "" : "还没贴过。贴一条，他会接话。";
+      msg.textContent = ALL.length? "" : "还没有。发一条。";
       paint();
     }
     add.onclick=()=>{
       sheet("贴一条",(bx,close)=>{
-        const t=el("textarea"); t.placeholder="随手想给对方看的一句话…";
+        const t=el("textarea"); t.placeholder="随手写一句…";
         bx.append(t);
         bx.append(el("div","lb","配张图（可以不配）"));
         let img="";
@@ -810,16 +810,16 @@ try{
           bSend.disabled=true;
           const r=await jpost("/api/moments/mine",{content:v,image:img||null});
           bSend.disabled=false;
-          if(r.ok){ say("贴上去了 —— 他可能会在楼里接一句"); close(); setTimeout(load,1500); }
+          if(r.ok){ say("发出去了"); close(); setTimeout(load,1500); }
           else say("没贴上："+(r.err||"?"));
         };
       });
     };
     poke.onclick=async()=>{
-      if(!confirm("让他自己发一条？他会用自己的引擎写一句（花一次调用）。"))return;
+      if(!confirm("让他发一条？会用他自己的引擎写一句（花一次调用）。"))return;
       poke.disabled=true; poke.textContent="他在写…";
       const r=await jpost("/api/moments/new",{});
-      poke.disabled=false; poke.textContent="戳他发一条";
+      poke.disabled=false; poke.textContent="让他发一条";
       if(r.ok){ say("他贴了一条"); load(); }
       else say("这回没写出来"+((r.err)?("："+r.err):"")+" —— 引擎接上了再试");
     };
