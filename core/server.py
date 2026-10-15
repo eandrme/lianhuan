@@ -306,7 +306,7 @@ def pick_engine():
     engines = available_engines()
     eng = engines.get(want) or engines["echo"]
     eng = eng if eng.ready else engines["echo"]
-    # AI 的手：会用工具的引擎都带上（改签名/写记忆/发动态/记心情/写小玩意/装包）
+    # AI 的手：会用工具的引擎都带上（改签名/写记忆/发动态/写小玩意/装包）
     # ★ 0904 加了 anthropic —— 换个模型不该把手弄丢，那是「静默降级」，比坏掉还糟。
     if getattr(eng, "name", "") in ("openai", "anthropic"):
         eng.tools = _hands.all_tools()          # 内置的手 + 用户登记的 MCP 工具
@@ -918,10 +918,10 @@ WIRED = ["latent", "latentAct", "distill",
          "pushKey", "pushSub", "pushTest",                  # 推送＋主动找你（0831 接真）
          "通知与频率",
          # 过日子那一套（内置实现，默认装上）
-         "letters", "diary", "notes", "moments", "momentMine", "momentNew",
-         "momentComment", "timeline", "mood", "memes", "memeEdit", "plays",
-         "信", "他的日记", "你的日记", "碎碎念", "空间", "时间线",
-         "我的心情 · 数值", "moodpage", "梗库", "memepage", "玩具厅",
+         "letters", "moments", "momentMine", "momentNew",
+         "momentComment", "timeline", "memes", "memeEdit", "plays",
+         "信", "空间", "时间线",
+         "梗库", "memepage", "玩具厅",
          # 家什与台账 ＋ 共读（内置默认装）
          "calendar", "anniversaries", "gallery", "where", "whereSet",
          "workbook", "工作本",                              # 0831 接真（外部验收连点两轮）
@@ -1666,7 +1666,7 @@ def _proactive_add_turn(role: str, content: str, session_id=None) -> None:
 def _pick_engine_for_active():
     """主动消息 / 离线自由时段走的那条取引擎的路。
 
-    ★ 这两条路也会用手（写日记、记心情、翻记忆…）。不筛的话，它们就**绕过了**
+    ★ 这两条路也会用手（翻记忆…）。不筛的话，它们就**绕过了**
       「这位助手的 MCP 白名单」—— 那是静默越权：界面上没给他开，半夜自己用上了。
       它们说话的对象就是「现在这扇窗」，所以按 `active_sid` 认助手，跟 /chat 一个口径。
     """

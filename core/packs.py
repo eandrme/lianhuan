@@ -252,9 +252,9 @@ PACKS = [
      "desc": "日历与纪念日、相册、我在哪、正在听、人设改动历史、"
              "一抽屉基础颜文字。内置实现，装好就在用。",
      "contract": "docs/API.md。更全的颜文字抽屉见装配单（那是另一个人的开源项目）"},
-    {"id": "writings", "name": "记事四件套", "kind": "builtin",
-     "desc": "信、日记、碎碎念、空间（动态与楼中回复，AI 会在楼里接话）。内置实现，装好就在用。",
-     "contract": "docs/API.md（letters / diary / notes / moments）—— 不想用内置的，照契约换成自己的"},
+    {"id": "writings", "name": "记事", "kind": "builtin",
+     "desc": "信、空间（动态与楼中回复，AI 会在楼里接话）。内置实现，装好就在用。",
+     "contract": "docs/API.md（letters / moments）—— 不想用内置的，照契约换成自己的"},
     {"id": "mood", "name": "心情", "kind": "builtin",
      "desc": "六维心情值，AI 自己一笔一笔记涨落和原因。内置实现，装好就在用。",
      "contract": "docs/API.md（mood）。原项目那套 12 维引擎见 UPSTREAM.md 心潮那条"},

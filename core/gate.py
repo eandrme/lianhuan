@@ -54,7 +54,7 @@ def command_path(path: str) -> bool:
     return path in LOCAL_ONLY or (path.startswith("/api/packs/") and path.endswith("/setup"))
 
 #: 口令的最短长度。★ 16 不是拍脑袋：这道门开在公网上，谁都能敲，
-#: 而它后面是一整个家（聊天、记忆、日记）。短口令在这种位置上等于没有。
+#: 而它后面是一整个家（聊天、记忆）。短口令在这种位置上等于没有。
 MIN_LEN = 16
 
 #: 我们自己在文档和一键部署链接里写过的占位串。**它们不许当真口令用** ——

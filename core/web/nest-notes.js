@@ -1,9 +1,8 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 记事 ⑥：日记 · 碎碎念 · 日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
+   巢 · 记事 ⑥：日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
    装法：nest.html 再加一行 <script src="/nest-notes.js?v=1"></script>
 
    后端各归各家，前端一处收口：
-     /api/diary · /api/notes            optional/homelife
      /api/calendar · /api/calendar/add  optional/homeplus
      /api/memes · /api/stickers         optional/homelife
      /api/health_recent · /api/health   optional/homelife（一天一条）
@@ -166,11 +165,11 @@ try{
     if(val!=null)s.value=val; bx.append(s); return s;
   };
 
-  let SEC="diary", WHO="ai";
+  let SEC="cal";
   /* ★ 「跳到某一档」的口子必须在**模块作用域**上 ——
      原来它定义在 NEST_PANES.notes 里面，也就是「这一页至少开过一次之后」才有。
      结果全新一次会话里，首页的「日历 / 空间」、一起页点开一条、十一档弹层
-     全都只落到默认的「日记」档（弱回退 go("notes") 不带档位）。
+     全都只落到默认档（弱回退 go("notes") 不带档位）。
      现在：记下想要哪一档 → 渲染 → 渲染完立刻按上去。 */
   let notesSel=null, wantSec=null;
   window.nestNotesOpen=function(label){
@@ -187,8 +186,6 @@ try{
     const body=el("div");
     box.append(chips,body);
     const SECS=[
-      ["diary","日记",secDiary],
-      ["notes","碎碎念",secNotes],
       ["cal","日历",secCal],
       ["memes","梗库",secMemes],
       ["sticker","表情包",secSticker],
@@ -225,129 +222,6 @@ try{
 
   const loading=list=>list.append(el("div","hint","读取中…"));
   const failed=(list,e)=>list.append(el("div","errbox","读不出来："+((e&&e.message)||e)));
-
-  /* ═══ 日记 ═══ */
-  async function secDiary(body){
-    body.innerHTML="";
-    const top=el("div","nt-top");
-    const t1=el("button",(WHO==="ai"?"on":""),"它写的");
-    const t2=el("button",(WHO==="me"?"on":""),"我写的");
-    const add=el("button","pri");
-    add.append(nestIcon("plus"),document.createTextNode(" 写一篇"));
-    top.append(t1,t2,el("div","sp"),add);
-    body.append(top);
-    const list=el("div"); body.append(list);
-    t1.onclick=()=>{WHO="ai";secDiary(body);};
-    t2.onclick=()=>{WHO="me";secDiary(body);};
-    add.onclick=()=>editDiary(body,null);
-    loading(list);
-    try{
-      const j=await jget("/api/diary?who="+WHO);
-      list.innerHTML="";
-      const its=j.items||[];
-      if(!its.length)list.append(el("div","hint",WHO==="ai"?"它还没写过日记":"你还没写过日记"));
-      its.forEach(d=>{
-        const c=el("div","nt-card");
-        c.append(el("div","nt-txt",d.content||""));
-        const m=el("div","nt-meta");
-        m.append(el("span",null,(d.day||"")+" "+(d.tmin||"")));
-        if(d.mood)m.append(el("span","tag",d.mood));
-        if(d.kind&&d.kind!=="diary")m.append(el("span","tag",d.kind));
-        const ops=el("div","nt-ops");
-        const e1=el("button",null,"改"); e1.onclick=()=>editDiary(body,d);
-        const e2=el("button","danger","删"); e2.onclick=async()=>{
-          if(!confirm("删掉这篇日记？"))return;
-          const r=await jpost("/api/diary/"+d.id+"/del",{});
-          if(r.ok){say("删了");secDiary(body);}else say("删不掉");
-        };
-        ops.append(e1,e2); m.append(ops);
-        c.append(m);
-        list.append(c);
-      });
-    }catch(e){list.innerHTML="";failed(list,e);}
-  }
-
-  function editDiary(body,d){
-    const isNew=!d;
-    sheet(isNew?("写一篇（"+(WHO==="ai"?"它":"我")+"）"):"改日记", bx=>{
-      const t=el("textarea"); t.value=(d&&d.content)||""; t.placeholder="今天…";
-      bx.append(t);
-      const mo=field(bx,"心情（可空，比如 开心 / 有点累）","开心",(d&&d.mood)||"");
-      const row=el("div","nt-btns");
-      const ok=el("button","pri","存"), no=el("button",null,"取消");
-      row.append(ok,no); bx.append(row);
-      no.onclick=()=>bx.parentNode.remove();
-      ok.onclick=async()=>{
-        const content=t.value.trim();
-        if(!content){say("写点什么");return;}
-        const r=isNew
-          ? await jpost("/api/diary",{who:WHO,content:content,mood:mo.value.trim()})
-          : await jpost("/api/diary/"+d.id+"/edit",{content:content,mood:mo.value.trim()});
-        if(r.ok){say(isNew?"写好了":"改好了");bx.parentNode.remove();secDiary(body);}
-        else say("没存上："+(r.err||"?"));
-      };
-    });
-  }
-
-  /* ═══ 碎碎念 ═══ */
-  async function secNotes(body){
-    body.innerHTML="";
-    const top=el("div","nt-top");
-    const add=el("button","pri");
-    add.append(nestIcon("plus"),document.createTextNode(" 说一句"));
-    top.append(el("div","sp"),add);
-    body.append(top);
-    const list=el("div"); body.append(list);
-    add.onclick=()=>editNote(body,null);
-    loading(list);
-    try{
-      const j=await jget("/api/notes?limit=300");
-      list.innerHTML="";
-      const its=j.items||[];
-      if(!its.length)list.append(el("div","hint","还没有碎碎念"));
-      its.forEach(d=>{
-        const c=el("div","nt-card");
-        c.append(el("div","nt-txt",d.content||""));
-        const m=el("div","nt-meta");
-        m.append(el("span",null,d.t||""));
-        if(d.kind)m.append(el("span","tag",d.kind));
-        if(d.mood)m.append(el("span","tag",d.mood));
-        const ops=el("div","nt-ops");
-        const e1=el("button",null,"改"); e1.onclick=()=>editNote(body,d);
-        const e2=el("button","danger","删"); e2.onclick=async()=>{
-          if(!confirm("删掉这条？"))return;
-          const r=await jpost("/api/notes/"+d.id+"/del",{});
-          if(r.ok){say("删了");secNotes(body);}else say("删不掉");
-        };
-        ops.append(e1,e2); m.append(ops);
-        c.append(m);
-        list.append(c);
-      });
-    }catch(e){list.innerHTML="";failed(list,e);}
-  }
-
-  function editNote(body,d){
-    const isNew=!d;
-    sheet(isNew?"说一句":"改这条", bx=>{
-      const t=el("textarea"); t.value=(d&&d.content)||""; t.placeholder="随便写两句…";
-      bx.append(t);
-      const kd=field(bx,"类型（可空，比如 note / thought）","note",(d&&d.kind)||"");
-      const mo=field(bx,"心情（可空）","",(d&&d.mood)||"");
-      const row=el("div","nt-btns");
-      const ok=el("button","pri","存"), no=el("button",null,"取消");
-      row.append(ok,no); bx.append(row);
-      no.onclick=()=>bx.parentNode.remove();
-      ok.onclick=async()=>{
-        const content=t.value.trim();
-        if(!content){say("写点什么");return;}
-        const r=isNew
-          ? await jpost("/api/notes",{content:content,kind:kd.value.trim()||"note",mood:mo.value.trim()})
-          : await jpost("/api/notes/"+d.id+"/edit",{content:content,kind:kd.value.trim()||"note",mood:mo.value.trim()});
-        if(r.ok){say(isNew?"记下了":"改好了");bx.parentNode.remove();secNotes(body);}
-        else say("没存上："+(r.err||"?"));
-      };
-    });
-  }
 
   /* ═══ 日历 ═══ */
   async function secCal(body){

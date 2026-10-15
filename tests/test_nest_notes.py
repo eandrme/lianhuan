@@ -388,10 +388,9 @@ class TestNestFrontendWiring(unittest.TestCase):
     def test_the_page_loads_the_switch_module(self):
         self.assertIn('src="/nest-window.js', self._read("nest.html"))
 
-    def test_all_seven_notes_sections_are_real(self):
+    def test_all_notes_sections_are_real(self):
         js = self._read("nest-notes.js")
-        for fn in ("secDiary", "secNotes", "secCal",
-                   "secMemes", "secSticker", "secHealth"):
+        for fn in ("secCal", "secMemes", "secSticker", "secHealth"):
             self.assertIn("function " + fn, js, fn + " 还没写")
         self.assertNotIn("下一批接上", js, "记事里不该再留「下一批」的占位")
 

@@ -70,57 +70,6 @@ def _hm(ts): return datetime.fromtimestamp(ts or 0).strftime("%H:%M")
 def _md(ts): return datetime.fromtimestamp(ts or 0).strftime("%m-%d %H:%M")
 
 
-# ── 碎碎念 ────────────────────────────────────────────────
-@router.get("/api/notes")
-def api_notes(limit: int = 200, kind: str = "", dropped: str = "all"):
-    limit = max(1, min(int(limit or 200), 1000))
-    kinds = [k.strip() for k in (kind or "").split(",") if k.strip()]
-    rows = []
-    for r in _store.db.execute("SELECT * FROM notes ORDER BY id DESC LIMIT ?", (limit,)):
-        if kinds and r["kind"] not in kinds:
-            continue
-        if dropped == "hide" and r["dropped"]:
-            continue
-        rows.append({"id": r["id"], "kind": r["kind"], "content": r["content"],
-                     "mood": r["mood"], "t": _md(r["ts"]), "day": _d(r["ts"])})
-    return JSONResponse({"items": rows})
-
-
-@router.post("/api/notes")
-async def api_note_add(req: Request):
-    b = await req.json()
-    if not (b.get("content") or "").strip():
-        return JSONResponse({"ok": False, "err": "空的"}, status_code=400)
-    _store.db.execute("INSERT INTO notes(kind,content,mood,ts) VALUES(?,?,?,?)",
-                      (b.get("kind") or "note", b["content"].strip(), b.get("mood"), time.time()))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-# ── 日记 ──────────────────────────────────────────────────
-@router.get("/api/diary")
-def api_diary(who: str = "ai"):
-    who = "me" if who == "me" else "ai"
-    rows = []
-    for r in _store.db.execute("SELECT * FROM diary WHERE who=? ORDER BY id DESC LIMIT 400", (who,)):
-        rows.append({"id": r["id"], "kind": r["kind"], "mood": r["mood"],
-                     "content": r["content"], "context_text": None, "user_note": None,
-                     "bot_reply": None, "day": _d(r["ts"]), "tmin": _hm(r["ts"])})
-    return JSONResponse({"items": rows})
-
-
-@router.post("/api/diary")
-async def api_diary_add(req: Request):
-    b = await req.json()
-    if not (b.get("content") or "").strip():
-        return JSONResponse({"ok": False, "err": "空的"}, status_code=400)
-    _store.db.execute("INSERT INTO diary(who,kind,mood,content,ts) VALUES(?,?,?,?,?)",
-                      ("me" if b.get("who") == "me" else "ai", b.get("kind") or "diary",
-                       b.get("mood"), b["content"].strip(), time.time()))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
 # ── 信 ────────────────────────────────────────────────────
 @router.get("/api/letters")
 def api_letters(who: str = ""):
@@ -507,61 +456,6 @@ async def api_play_new(req: Request):
                             status_code=502)
     return JSONResponse({"ok": True, "file": fn + ".html", "title": title,
                          "url": r.get("url") or ("/plays/" + fn + ".html")})
-
-
-# ══════════ 巢：记事补「改」和「删」（原项目只有读和写）══════════
-@router.post("/api/notes/{nid}/edit")
-async def note_edit(nid: int, req: Request):
-    b = await req.json()
-    sets, args = [], []
-    if "content" in b:
-        if not (b.get("content") or "").strip():
-            return JSONResponse({"ok": False, "err": "空的"}, status_code=400)
-        sets.append("content=?"); args.append(b["content"].strip())
-    if "kind" in b:
-        sets.append("kind=?"); args.append(b.get("kind") or "note")
-    if "mood" in b:
-        sets.append("mood=?"); args.append(b.get("mood"))
-    if not sets:
-        return JSONResponse({"ok": False, "err": "没什么要改的"}, status_code=400)
-    args.append(nid)
-    _store.db.execute("UPDATE notes SET " + ",".join(sets) + " WHERE id=?", args)
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-@router.post("/api/notes/{nid}/del")
-def note_del(nid: int):
-    _store.db.execute("DELETE FROM notes WHERE id=?", (nid,))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-@router.post("/api/diary/{did}/edit")
-async def diary_edit(did: int, req: Request):
-    b = await req.json()
-    sets, args = [], []
-    if "content" in b:
-        if not (b.get("content") or "").strip():
-            return JSONResponse({"ok": False, "err": "空的"}, status_code=400)
-        sets.append("content=?"); args.append(b["content"].strip())
-    if "mood" in b:
-        sets.append("mood=?"); args.append(b.get("mood"))
-    if "kind" in b:
-        sets.append("kind=?"); args.append(b.get("kind") or "diary")
-    if not sets:
-        return JSONResponse({"ok": False, "err": "没什么要改的"}, status_code=400)
-    args.append(did)
-    _store.db.execute("UPDATE diary SET " + ",".join(sets) + " WHERE id=?", args)
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-@router.post("/api/diary/{did}/del")
-def diary_del(did: int):
-    _store.db.execute("DELETE FROM diary WHERE id=?", (did,))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
 
 
 # ══════════ 巢：表情包（用户自己攒的图）══════════

@@ -9,12 +9,12 @@
      ① 顶栏      ‹ 返回 · 一起 TOGETHER · 右侧（分区 / ✕）
      ② 引用块    左侧一条 2px accent 竖线 + 宋体 15px 斜体
      ③ 一个下拉  「八维 ∨」
-     ④ 标签行    全部 / 梗库 / 表情包 / 健康 / 收藏 / 玩具 / 日记 / 碎碎念
+     ④ 标签行    全部 / 梗库 / 表情包 / 健康 / 收藏 / 玩具
      ⑤ 居中一枚「日报」
      ⑥ 一行      左「十月八日」· 右「No. 155」
      ⑦ 信息流    三列：品类 | 内容 | 时间，行间 1px 细横线
 
-   ★ 「不改功能」：原来那十一档（日记 / 碎碎念 / 日历 / 梗库 / 表情包 /
+   ★ 「不改功能」：原本那些档（日历 / 梗库 / 表情包 /
      健康 / 空间 / 时间线 / 收藏 / 玩具箱）的**完整界面一个都没删** ——
      顶栏那颗「分区」按一下就进去，点某一条也能跳到它所属的那一档。
    ══════════════════════════════════════════════════════════ */
@@ -29,7 +29,7 @@ try{
   /* ── 七档（就是标签行那一排；「全部」在最前）── */
   const CATS=[["全部",null],
               ["梗库","meme"],["表情包","sticker"],["健康","health"],["收藏","star"],
-              ["玩具","toy"],["日记","diary"],["碎碎念","notes"]];
+              ["玩具","toy"]];
 
   const css=document.createElement("style");
   css.textContent=`
@@ -110,7 +110,7 @@ try{
   /* ── 各档 → 信息流的一行 ──
      一行统一成 {cat, icon, text, ts, raw}；ts 是秒，用来排序和显示时间。 */
   const CAT_ICON={"梗库":"meme","表情包":"sticker","健康":"health","收藏":"star",
-                  "玩具":"toy","日记":"diary","碎碎念":"notes"};
+                  "玩具":"toy"};
   function toTs(v){
     if(v==null)return 0;
     if(typeof v==="number")return v>1e11?v/1000:v;      /* 有的字段是毫秒 */
@@ -146,9 +146,6 @@ try{
       })),
       soft("/api/chat/starred",its=>(its||[]).forEach(x=>add("收藏",x.content,x.ts,x))),
       soft("/api/plays",its=>(its||[]).forEach(x=>add("玩具",x.name||x.title||"一个小玩具",x.ts,x))),
-      soft("/api/diary?who=ai",its=>(its||[]).forEach(x=>add("日记",x.content,toTs(x.day||x.ts),x))),
-      soft("/api/diary?who=me",its=>(its||[]).forEach(x=>add("日记",x.content,toTs(x.day||x.ts),x))),
-      soft("/api/notes?limit=300",its=>(its||[]).forEach(x=>add("碎碎念",x.content,x.ts,x))),
     ]);
     out.sort((a,b)=>b.ts-a.ts);
     return out;
@@ -233,11 +230,10 @@ try{
     const wrap=el("div","tg-wrap");
     const head=window.nestPageHead
       ? window.nestPageHead({title:"一起",en:"TOGETHER",right:[
-          {icon:"more",title:"十一档的完整界面都在这儿",onclick:openSections},
+          {icon:"more",title:"全部档位的完整界面都在这儿",onclick:openSections},
           {icon:"close",title:"回主界面",onclick:()=>{ if(window.nestGo)window.nestGo("home"); }},
         ]})
       : el("div");
-    const quote=el("div","tg-quote");
     const selWrap=el("div","tg-sel");
     const sel=el("select");
     [["dim","八维"],["time","时间"]].forEach(([v,n])=>{
@@ -251,7 +247,7 @@ try{
     daily.append(bDaily);
     const dayline=el("div","tg-dayline");
     const feed=el("div","tg-feed");
-    wrap.append(head,quote,selWrap,chips,daily,dayline,feed);
+    wrap.append(head,selWrap,chips,daily,dayline,feed);
     box.append(wrap);
 
     let ALL=[], FILTER="全部", GROUP="dim";
@@ -281,7 +277,7 @@ try{
       if(!rows.length){
         feed.append(el("div","tg-empty",ALL.length
           ? "这一档还空着。"
-          : "还没有记下什么。日记、碎碎念、梗库、表情包、健康、收藏、玩具 —— 记下的都会汇总到这儿。"));
+          : "还没有记下什么。梗库、表情包、健康、收藏、玩具 —— 记下的都会汇总到这儿。"));
         return;
       }
       if(GROUP==="dim"){
@@ -297,18 +293,11 @@ try{
       }
     }
 
-    /* ② 引用块：最新那条碎碎念（没有就退到最新一篇日记）；都没有就不摆 */
-    async function fillQuote(list){
-      let line=list.filter(x=>x.cat==="碎碎念")[0]||list.filter(x=>x.cat==="日记")[0];
-      if(!line){ quote.remove(); return; }
-      quote.textContent=clip(line.text,120);
-    }
-
-    /* 十一档的完整界面：一个入口都不藏 */
+    /* 全部档位的完整界面：一个入口都不藏 */
     function openSections(){
-      const SECS=["日记","碎碎念","日历","梗库","表情包","健康","空间","时间线","收藏","玩具"];
-      window.nestSheet("一起 · 十一档",(bx)=>{
-        bx.append(el("div","hd","原本那十一档，一个都没少"));
+      const SECS=["日历","梗库","表情包","健康","空间","时间线","收藏","玩具"];
+      window.nestSheet("一起 · 全部档位",(bx)=>{
+        bx.append(el("div","hd","原本那些档，一个都没少"));
         const sec=el("div","tg-sec");
         SECS.forEach(label=>{
           const b=el("button",null,label);
@@ -326,7 +315,6 @@ try{
 
     feed.append(el("div","tg-empty","读取中…"));
     ALL=await gather();
-    await fillQuote(ALL);
     paint();
   };
 }catch(e){console.error("nest-together:",e);}

@@ -356,7 +356,7 @@ class TestThePhoneShell(unittest.TestCase):
     def test_the_together_page_is_a_three_column_feed(self):
         """一起页：引用块 + 下拉 + 标签行 + 日报 + 日期/总数 + 三列信息流。
 
-        ★「不改功能」：原来那十一档的完整界面一个都没删，顶栏「分区」按一下就进去。
+        ★「不改功能」：原本那些档的完整界面一个都没删，顶栏「分区」按一下就进去。
         """
         tg = (WEB / "nest-together.js").read_text(encoding="utf-8")
         # ① 引用块：左侧一条 2px accent 竖线 + 斜体正文
@@ -365,7 +365,7 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn("var(--accent)", tg)
         # ③ 一个下拉 + ④ 标签行（横向可滑，选中态才 accent）
         self.assertIn("el(\"select\")", tg)
-        for c in ("全部", "梗库", "表情包", "健康", "收藏", "玩具", "日记", "碎碎念"):
+        for c in ("全部", "梗库", "表情包", "健康", "收藏", "玩具"):
             self.assertIn('"%s"' % c, tg, c)
         self.assertRegex(tg, r"\.tg-chips\{[^}]*overflow-x:auto")
         self.assertRegex(tg, r"\.tg-chips button\.on\{[^}]*color:var\(--accent\)")
@@ -380,9 +380,8 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertRegex(tg, r"\.tg-row \.tx\{[^}]*font-size:15px")
         self.assertRegex(tg, r"\.tg-row \.tm\{[^}]*text-align:right")
         self.assertRegex(tg, r"\.tg-row\{[^}]*border-bottom:1px solid rgba\(110,130,150,\.22\)")
-        # 十一档一个都没少
+        # 全部档位一个都没少
         self.assertIn("nestNotesOpen", tg)
-        self.assertIn("十一档", tg)
 
     def test_the_study_page_is_a_shelf_of_book_spines(self):
         """书房页：一排竖立的书脊（高低不一、底纹各异）+ 底下一条隔板。"""

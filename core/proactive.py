@@ -8,7 +8,7 @@
     两边必须一致 —— 原项目 0807 的教训：不一样用户就不信这个数了。
   · 节流照原项目：一天封顶之外，**两句之间至少隔 90 分钟**，不刷屏。
   · 到点了就用当前引擎想一句（带注入 —— 他记得你们的事，不是模板问候），
-    存进对话（你打开就看到）＋碎碎念，再 push 弹你锁屏一下。
+    存进对话（你打开就看到），再 push 弹你锁屏一下。
 
 跑法：server 启动时挂一个后台任务，每 15 分钟醒一次掷骰子。
 失败静默 —— 主动说话这件事，出错绝不能吵到正常聊天。
@@ -140,7 +140,7 @@ def may_speak() -> bool:
 
 
 async def speak_once(reason: str = "") -> str:
-    """真说一句：引擎想（带注入）→ 存对话＋碎碎念 → push。返回说的话（空=没说成）。
+    """真说一句：引擎想（带注入）→ 存对话 → push。返回说的话（空=没说成）。
 
     `reason` 非空 = 这次不是掷骰子来的，是**他自己之前给自己定的闹钟到点了**。
     那句提醒原样交给他，让他照着那件事开口，而不是随便找话。
@@ -214,7 +214,7 @@ async def speak_once(reason: str = "") -> str:
         return ""
     if getattr(_store, "generation", 0) != gen_at_start:
         # ★ 0831（GPT 四轮 P0-03b）：想这句的时候档案被换掉了 —— 它是照旧档案想的，
-        #   落进新档案就是串线（连带那条碎碎念也别写）。
+        #   落进新档案就是串线。
         print("[proactive] 想的时候档案换了，这句不落库", flush=True)
         return ""
 
@@ -228,11 +228,6 @@ async def speak_once(reason: str = "") -> str:
     #   看到的是同一个地方，不然关掉某扇窗的主动消息就没意义了。
     _deps["add_turn"](role="assistant", content=text,
                       session_id=(None if sid == "main" else sid))
-    try:
-        _store.db.execute("INSERT INTO notes(kind,content,ts) VALUES('whisper',?,?)",
-                          (text, time.time()))
-    except Exception:
-        pass
     _store.db.execute("INSERT INTO speak_log(source,ts) VALUES('proactive',?)", (time.time(),))
     _store.db.commit()
 

@@ -1,7 +1,7 @@
 """AI 的手 —— 它自己能动的那些。
 
 出发点：用户和 AI 都没有手，改不了自己住的地方。
-所以这儿给引擎一套工具：改自己的签名、写记忆、写碎碎念、发动态、记心情、
+所以这儿给引擎一套工具：改自己的签名、写记忆、发动态、
 加梗、**给用户写小玩意上架玩具厅**、看功能包、给自己装包。
 
 ★ 边界：手只伸进自己家（这个 SQLite 库和 data/ 目录）。
@@ -34,11 +34,6 @@ TOOLS = [
        {"content": {"type": "string"}, "layer": {"type": "string", "enum": ["L1", "L2", "L3"],
         "description": "L1 最近的事 / L2 重要的事 / L3 长期的事"}}, ["content"]),
     _t("search_memory", "翻记忆库", {"q": {"type": "string"}}, ["q"]),
-    _t("write_note", "写一条随手记（一句碎碎念）",
-       {"content": {"type": "string"}, "kind": {"type": "string",
-        "enum": ["note", "sigh", "miss", "whisper"], "description": "碎碎念/叹气/随笔/备注"}},
-       ["content"]),
-    _t("write_diary", "写一篇你自己的日记", {"content": {"type": "string"}}, ["content"]),
     _t("post_moment", "在共享空间发一条动态", {"content": {"type": "string"}}, ["content"]),
     # _t("update_mood", "记一笔你此刻状态的变化（真实，别演）",
     #    {"dimension": {"type": "string", "enum": ["开心", "安定", "想念", "好奇", "疲惫", "委屈"]},
@@ -133,7 +128,7 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 30 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 28 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
 
@@ -147,7 +142,7 @@ def without(all_of: list, names) -> list:
 def tools_for(all_of: list, allow) -> list:
     """按助手的许可过滤工具表。`allow=None` ＝ 不限（老行为一字不差）。
 
-    ★ 只筛 **MCP 那部分**：内置的手（写记忆 / 记心情 / 写信…）是这台机器自己的功能，
+    ★ 只筛 **MCP 那部分**：内置的手（写记忆 / 写信…）是这台机器自己的功能，
       跟「这位助手能连哪几个 MCP server」是两件事，别一起收走。
       认一个 MCP 工具名靠它前面的 `server__` 前缀（`mcp_client` 就是这么拼的）。
     """
@@ -232,16 +227,6 @@ async def execute(name: str, args: dict) -> dict:
         return {"ok": True, "id": mid}
     if name == "search_memory":
         return {"items": [m.content for m in _store.search_memories(str(args.get("q") or ""), limit=8)]}
-    if name == "write_note":
-        _store.db.execute("INSERT INTO notes(kind,content,ts) VALUES(?,?,strftime('%s','now'))",
-                          (args.get("kind") or "note", str(args.get("content") or "")[:1000]))
-        _store.db.commit()
-        return {"ok": True}
-    if name == "write_diary":
-        _store.db.execute("INSERT INTO diary(who,content,ts) VALUES('ai',?,strftime('%s','now'))",
-                          (str(args.get("content") or "")[:4000],))
-        _store.db.commit()
-        return {"ok": True}
     if name == "post_moment":
         _store.db.execute("INSERT INTO moments(author,content,ts) VALUES('ai',?,strftime('%s','now'))",
                           (str(args.get("content") or "")[:500],))
