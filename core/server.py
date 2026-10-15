@@ -205,7 +205,7 @@ async def engine_say(prompt: str) -> str:
     return " ".join(outs).strip()
 
 
-# 过日子那一套（记事四件套/心情/梗库/玩具厅）：**内置实现，默认就装上** ——
+# 过日子那一套（记事 · 梗库 · 表情包 · 健康 …）：**内置实现，默认就装上** ——
 # 定的：想偷懒直接用我们的；不喜欢魔改再去 UPSTREAM 找原文献
 from optional.homelife.routes import bind as _home_bind, router as _home_router   # noqa: E402
 from optional.homelife.routes import apply_marker as _home_mood_marker   # noqa: E402
@@ -439,7 +439,7 @@ async def chat(req: Request):
     #   ① 一句话进 system —— 哪家引擎（Claude / 本机 CLI / 不认参数的家）都吃得到
     #   ② 档位随 turn 交给引擎 —— OpenAI 兼容那条会翻成 reasoning_effort，
     #      认这个字段的家（DeepSeek V4、o 系那类）是真会少想/多想的
-    # ★ 只管聊天这条路：主动消息 / 离线 / 哄睡不读它（用户拨的是聊天界面那枚）。
+    # ★ 只管聊天这条路：主动消息 / 离线那几条不读它（用户拨的是聊天界面那枚）。
     _think_mode = _think.mode(store)
     _think_nudge = _think.nudge(_think_mode)
     if _think_nudge:
@@ -648,92 +648,6 @@ def chat_active():
     return {"jobs": jobs.active()}
 
 
-@app.post("/api/lullaby")
-async def api_lullaby(req: Request):
-    """哄睡：一段一段地要。照原项目 /api/lullaby 平移——三档（随口说/编故事/讲共读的书），
-    对方躺着不回话，所以每段 3~6 句、短句、慢，别问问题。TTS 在前端另拿（没贴 key 就只有字）。"""
-    b = await req.json()
-    n = max(1, min(int(b.get("n") or 1), 60))
-    prev = str(b.get("prev") or "")[:400]
-    mode = (b.get("mode") or "chat").strip()
-    lang = (b.get("lang") or "zh").strip()
-
-    inj = build_injection(store, "哄睡")
-
-    # book 档：拿在读那本、对方读到的那一章打底 —— 是「讲给人听」，不是念原文
-    book_ctx = ""
-    if mode == "book":
-        try:
-            cur_b = store.db.execute(
-                "SELECT * FROM books ORDER BY current DESC, id DESC LIMIT 1").fetchone()
-            if cur_b:
-                idx = int(b.get("chapter") or cur_b["my_idx"] or 0) or 1
-                tot = store.db.execute("SELECT count(*) n FROM book_chapters WHERE bid=?",
-                                       (cur_b["id"],)).fetchone()["n"]
-                ch = store.db.execute("SELECT * FROM book_chapters WHERE bid=? AND idx=?",
-                                      (cur_b["id"], idx)).fetchone()
-                body_txt = (ch["content"] if ch else "") or ""
-                STEP = 1100
-                off = max(0, (n - 1) * STEP)
-                if off >= len(body_txt) and tot and idx < tot:
-                    idx += 1
-                    ch = store.db.execute("SELECT * FROM book_chapters WHERE bid=? AND idx=?",
-                                          (cur_b["id"], idx)).fetchone()
-                    body_txt = (ch["content"] if ch else "") or ""
-                    off = 0
-                chunk = body_txt[off:off + STEP]
-                book_ctx = ("\n\n〔你们在一起读的是《%s》，这会儿在第 %d 章%s。"
-                            "下面是这一章接下来的原文，**给你打底用的，不是让你念**：\n%s\n"
-                            "★ 你要做的是**讲给人听**：用你自己的话把这一段讲出来，"
-                            "该跳的跳、该停的停，讲到一个能停下的地方就停。"
-                            "偶尔可以插一句你自己的看法（半句就够），像两个人躺着说书。〕"
-                            % (cur_b["title"] or "", idx,
-                               ("（共 %d 章）" % tot if tot else ""), chunk))
-        except Exception as e:
-            print("[lullaby] book fail:", e, flush=True)
-
-    scene = (
-        "\n\n〔★你在哄对方睡觉。人躺着，闭着眼，手机搁在旁边，**不会回话** —— 别问问题、"
-        "别等回应、别说「你还醒着吗」。你就一直说下去。\n"
-        "这一段说 3～6 句，慢一点，句子短一点，像在耳边低声说话。\n"
-        + ("这是第 %d 段，接着上一段往下说，别重开头、别总结、别道晚安（除非真到最后）。\n" % n
-           if n > 1 else "这是第一段，先把人安顿下来：说一句让人放松的，再自然地往下说。\n")
-        + ("说的内容：接着讲你们在读的那本书 —— 见下面那段原文，用你自己的话讲；"
-           "顺口把**你读到这儿想说的**那半句也说了。\n"
-           if mode == "book" else
-           "说的内容：**你自己编一个**。童话那种调子最好 —— 会说话的小动物、走错门的月亮、"
-           "河底下开茶馆的老王八，随你。\n"
-           "★ 编得可爱一点、傻一点。一段一段往下讲，别急着讲完，"
-           "也别在这一段里把包袱抖完 —— 留到下一段。\n" if mode == "story" else
-           "说的内容：今天的事、惦记着什么、窗外什么动静都行 —— 散着说，不用有结构。\n")
-        + ("上一段你说的是：「%s」\n" % prev if prev else "")
-        + "★ 只写要说出口的话本身：不要旁白、不要动作描写（「」里那些）、不要标题、不要分点。"
-        + ("\n★ 这一段用**英文**说。自然口语、短句、慢。" if lang == "en" else "")
-        + "〕"
-    )
-
-    turn = EngineTurn(message="（哄对方睡觉，说下一段）", system=inj + scene + book_ctx)
-    eng = pick_engine()
-    outs = []
-    try:
-        async for ev in eng.stream(turn):
-            try:
-                d = json.loads(ev[6:])
-            except Exception:
-                continue
-            if d.get("type") == SAY:
-                outs.append(d.get("text") or "")
-    except Exception as e:
-        print("[lullaby] fail:", e, flush=True)
-    text = " ".join(x for x in outs if x).strip()
-    if not text:
-        text = "我在这儿。你睡，我看着你。"
-    import re as _re
-    text = _re.sub(r"〔[\s\S]*?〕", "", text).strip()
-    text = _re.sub(r"\|\|\|", "。", text).strip()
-    return JSONResponse({"text": text[:600], "n": n})
-
-
 @app.post("/api/redo")
 async def api_redo(req: Request):
     """重说：上句回得不对 → 换个方式重答。照原项目 /api/redo 平移：
@@ -908,7 +822,7 @@ WIRED = ["latent", "latentAct", "distill",
          "aiModel", "think", "选模型",                      # 换个脑子=切引擎
          "chatHide", "chatDel",                             # 藏一句/删一轮
          "upload", "uploadFile", "名字 / 头像",             # 头像/配图/文件上传
-         "redo", "lullaby",                                 # 重说 · 哄睡（0831 接真）
+         "redo",                                           # 重说（0831 接真）
          "pushKey", "pushSub", "pushTest",                  # 推送＋主动找你（0831 接真）
          "通知与频率",
          # 过日子那一套（内置实现，默认装上）

@@ -255,9 +255,6 @@ PACKS = [
     {"id": "writings", "name": "记事", "kind": "builtin",
      "desc": "信、空间（动态与楼中回复，AI 会在楼里接话）。内置实现，装好就在用。",
      "contract": "docs/API.md（letters / moments）—— 不想用内置的，照契约换成自己的"},
-    {"id": "mood", "name": "心情", "kind": "builtin",
-     "desc": "六维心情值，AI 自己一笔一笔记涨落和原因。内置实现，装好就在用。",
-     "contract": "docs/API.md（mood）。原项目那套 12 维引擎见 UPSTREAM.md 心潮那条"},
     {"id": "fish", "name": "钓鱼", "kind": "stub",
      "desc": "钓鱼的鱼篓和图鉴 —— 这儿只有壳子，玩法要自己接。\n"
              "想让他自己去钓鱼：找个钓鱼小游戏，按上面「他的外接工具」那一节接进来。",

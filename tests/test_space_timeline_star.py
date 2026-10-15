@@ -1,7 +1,7 @@
-"""空间 · 时间线 · 收藏 —— 原项目本来就有的三样，这一轮接进巢。
+"""空间 · 收藏 —— 原项目本来就有的两样，这一轮接进巢。
 
-★ 三样都有一条共同的硬线：**界面上看得见的东西，必须是库里真有的**。
-  空间贴了要落库、评论要进楼、删要真删；时间线的「几天前」由后端算；
+★ 两样都有一条共同的硬线：**界面上看得见的东西，必须是库里真有的**。
+  空间贴了要落库、评论要进楼、删要真删；
   收藏按一下要真写进 turns.starred（只是把星星点亮＝过几天回来就没了）。
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from core.store.sqlite import SqliteStore                              # noqa: E
 
 
 class _HomeCase(unittest.TestCase):
-    """空间 / 时间线都住在 homelife 那个包里。"""
+    """空间住在 homelife 那个包里。"""
 
     @classmethod
     def setUpClass(cls):

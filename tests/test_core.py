@@ -1916,13 +1916,13 @@ class TestEmptyStateDoesNotFakeALife(unittest.TestCase):
         self.assertIn("badge: ''", seg, "空态的角标要清掉，不然写死的数留着")
 
 
-class TestToyHallLinksToARouteThatExists(unittest.TestCase):
-    """★ 0831 自查：玩具厅那一段原来两处都错，而且只有真放了玩具才看得见
-    （data/plays 空着列表压根不渲染，所以冒烟扫不到）：
-      ① 前端拼 `/play/`，后端路由是 `/plays/`（core/server.py 的 get_play）
-      ② 前端读 `x.name`，接口给的字段是 `file`（/api/plays）→ 拼出 `/play/undefined`
-    真跑验过：`/play/…` 回 404、`/plays/…` 回 200。
-    """
+class TestTheOldPagesToyHallUrlIsStillWellFormed(unittest.TestCase):
+    """★ 0831 自查抓到过两处错：老前端拼 `/play/`（后端是 `/plays/`）、字段读 `x.name`
+    （接口给的是 `file`）→ 拼出 `/play/undefined`。
+
+    ★ 玩具箱已在卡 G-2 拆掉（`/api/plays` 与 `/plays/{name}` 都没了），所以这条现在
+      **只剩存档价值**：它钉住那份已废弃、但仍在仓库里的 core/web/index.html 里那段
+      字面量不会被悄悄改坏。后端那条真跑的服务用例已随路由一起删掉。"""
 
     def test_the_href_prefix_matches_the_backend_route(self):
         h = open("core/web/index.html", encoding="utf-8").read()
