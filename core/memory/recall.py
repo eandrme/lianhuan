@@ -178,34 +178,6 @@ def today_block(store: Store, hours: int = TODAY_HOURS, limit: int = TODAY_LIMIT
     return SEG.join(blocks)
 
 
-def worklog_block(store: Store, days: int = 7, limit: int = 12) -> str:
-    """工作记录卡 —— 这台机器上**做成了什么**，一件一句。
-
-    ★ 这不是新东西：`timeline_events` 表、`add_timeline` 那只手、`/api/timeline`
-      三样早就都在，**只是从来没接进注入** —— 他写得进去、读不回来。
-      家里同一段读的是「装修日志」（那边还多一路 Mac 工作台的记录，
-      这份开源版没有那条水管，就只读自己写的）。
-    ★ 同样单独留位：那边一条动辄几百字，并进近聊会把日常聊天挤光。
-    """
-    try:
-        rows = store.db.execute(
-            "SELECT kind, content, ts FROM timeline_events WHERE ts > ? "
-            "ORDER BY ts DESC LIMIT ?", (time.time() - days * 86400, limit)).fetchall()
-    except Exception:
-        return ""          # 没装那个包就没这张表 —— 不是错，什么都不加
-    if not rows:
-        return ""
-    out = ["〔**最近做成了什么**（你自己记进时间线的，一件一句）—— "
-           "被问「你最近在忙什么 / 上次那个弄好了吗」时以这些为准，别凭印象编。〕"]
-    for r in reversed(rows):
-        t = datetime.fromtimestamp(r["ts"] or 0).strftime("%m-%d")
-        k = (r["kind"] or "").strip()
-        body = (r["content"] or "").replace("\n", " ").strip()[:180]
-        if body:
-            out.append(f"· {t} " + (f"[{k}] " if k else "") + body)
-    return "\n".join(out) if len(out) > 1 else ""
-
-
 def upcoming_block(store: Store, limit: int = 6) -> str:
     """接下来的事 —— 日历里还没过去的那几条。
 
@@ -285,7 +257,6 @@ def build_injection(store: Store, query: str, recent: int = 24, k_mem: int = 12,
         #   只是从来没接进注入（他写得进去、读不回来）。家里同一批各占一段、
         #   **单独取、绝不并进近聊窗口**（并进去谁条数多谁就把窗口占满）。
         "today": today_block(store, here=here, session_id=session_id),
-        "worklog": worklog_block(store),
         "upcoming": upcoming_block(store),
         # ★ 0831 自查（GPT 上下文专项 P0-01）：`dialogue` 原来**无条件**在这儿 ——
         #   而 `/chat` 紧接着又把最近 25 条塞进 `history`，同一段逐字进了两遍。
@@ -320,11 +291,11 @@ def _fit(parts: dict, turns: list, recent: int, mems: list) -> str:
     """
     KEEP = ("today_line", "persona", "extra", "think")      # 这几样任何时候都不砍
     # ★ sticker 排在最前：它最不要紧（这一轮不发也不会怎样），超长先收它
-    ORDER = ["sticker", "upcoming", "worklog", "dialogue", "today", "memory"]
+    ORDER = ["sticker", "upcoming", "dialogue", "today", "memory"]
 
     def render(p: dict) -> str:
         return SEG.join(p[k] for k in ("today_line", "persona", "extra", "memory",
-                                       "today", "worklog", "upcoming", "dialogue",
+                                       "today", "upcoming", "dialogue",
                                        "sticker", "think")
                         if p.get(k))
 

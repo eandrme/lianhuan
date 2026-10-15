@@ -919,8 +919,8 @@ WIRED = ["latent", "latentAct", "distill",
          "通知与频率",
          # 过日子那一套（内置实现，默认装上）
          "letters", "moments", "momentMine", "momentNew",
-         "momentComment", "timeline", "memes", "memeEdit", "plays",
-         "信", "空间", "时间线",
+         "momentComment", "memes", "memeEdit", "plays",
+         "信", "空间",
          "梗库", "memepage", "玩具厅",
          # 家什与台账 ＋ 共读（内置默认装）
          "calendar", "anniversaries", "gallery", "where", "whereSet",

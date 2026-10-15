@@ -1068,9 +1068,8 @@ class TestEndpointTableHasNoDuplicates(unittest.TestCase):
     """回归：EP 表里同一个名字登记两次，**后一条会静默覆盖前一条** ——
     没有报错、没有警告，只是某个页面从此拿到别人的数据。
 
-    这个坑在这个项目里出现过两次：一次是 `timeline` 登记了两遍（带 limit 那条从没生效过），
-    一次是 0830 我自己往里加通话的语言接口时又叫了 `voice` —— 而那个名字
-    「音色调校」那一族已经在用了。所以钉一条，让它下次自己喊。"""
+    这个坑在这个项目里出现过：0830 我自己往里加通话的语言接口时又叫了 `voice` ——
+    而那个名字「音色调校」那一族已经在用了。所以钉一条，让它下次自己喊。"""
 
     def test_no_key_registered_twice(self):
         import re

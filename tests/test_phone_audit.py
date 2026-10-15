@@ -194,9 +194,9 @@ class TestThePhoneShell(unittest.TestCase):
             for f in NEST_FILES:
                 self.assertNotIn(dead, strip((WEB / f).read_text(encoding="utf-8")),
                                  f + " 还在按已经不存在的那排按钮导航")
-        # 五个可切换视图（主界面 + 记忆详情 + 一起 + 书房 + 时间线）都得有人实现
+        # 四个可切换视图（主界面 + 记忆详情 + 一起 + 书房）都得有人实现
         alljs = _nest_text()
-        for k in ("home", "memory-detail", "together", "study", "timeline"):
+        for k in ("home", "memory-detail", "together", "study"):
             self.assertIn('NEST_PANES["%s"]' % k if k == "memory-detail" else "NEST_PANES.%s" % k,
                           alljs, "「%s」这一页没人画" % k)
 
@@ -294,8 +294,8 @@ class TestThePhoneShell(unittest.TestCase):
         # ② 卡片之间的细线：0.5px、rgba(110,130,150,.25)
         self.assertRegex(home, r"\.hm-thread \.ln\{width:\.5px")
         self.assertIn("rgba(110,130,150,.25)", home)
-        # ③ 一段一段铺下来：记忆 / 一起 / 日历·书房 / 时间线 / 空间
-        for bit in ("memBlock", "togetherBlock", "twoCol", "timelineBlock", "spaceBlock"):
+        # ③ 一段一段铺下来：记忆 / 一起 / 日历·书房 / 空间
+        for bit in ("memBlock", "togetherBlock", "twoCol", "spaceBlock"):
             self.assertIn(bit, home, "主界面上少了这一块：" + bit)
 
     def test_the_memory_index_is_a_horizontal_snap_strip(self):
@@ -415,38 +415,6 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn("/api/books", st, "真正的书还在这一页上")
         self.assertIn("pickFile", st, "放书也还在")
 
-    def test_the_timeline_page_has_alternating_odd_shaped_cards(self):
-        """时间线页：编号 + 竖线 + 标题，卡片形状四种轮着来。"""
-        tl = (WEB / "nest-timeline.js").read_text(encoding="utf-8")
-        # ① 顶栏：‹ 返回 · 时间线 TIMELINE · 搜索
-        self.assertIn("nestPageHead", tl)
-        self.assertIn('title:"时间线"', tl)
-        self.assertIn('en:"TIMELINE"', tl)
-        self.assertIn('icon:"search"', tl)
-        # 编号：Jost 26px / #A7B0BB
-        self.assertRegex(tl, r"\.tl-c \.no\{[^}]*font-size:26px")
-        # 编号与正文之间那条 1px 竖线，高 40px
-        self.assertRegex(tl, r"\.tl-c \.vr\{width:1px;height:40px")
-        # 主标题 15px
-        self.assertRegex(tl, r"\.tl-c \.tt\{[^}]*font-size:15px")
-        # 卡片：76~100 高、1px 描边、浅底、卡间 12px
-        self.assertRegex(tl, r"\.tl-c\{[^}]*min-height:84px")
-        self.assertIn("rgba(110,130,150,.30)", tl)
-        self.assertIn("rgba(255,255,255,.35)", tl)
-        self.assertRegex(tl, r"\.tl-list\{display:flex;flex-direction:column;gap:12px\}")
-        # 四种形状轮着来
-        self.assertIn('SHAPES=["s-a","s-b","s-c","s-d"]', tl)
-        for shape in (".tl-c.s-a", ".tl-c.s-b", ".tl-c.s-c", ".tl-c.s-d"):
-            self.assertIn(shape, tl, shape)
-        self.assertIn("rotate(45deg)", tl, "书签那个 45° 尖角")
-        # 那个弧口是**真的挖掉**一块（mask），不是拿个纸色圆盖上去 ——
-        # 盖上去的话那一小块墨晕就透不过来了。
-        self.assertIn("-webkit-mask:radial-gradient(circle 7px at 0 50%", tl)
-        self.assertIn("mask:radial-gradient(circle 7px at 0 50%", tl)
-        # 邮票齿是探出边缘的一小块卡片（转 45° 的方块），填色跟卡片一致
-        self.assertNotIn("border-bottom:8px solid", tl, "不该是一块实心深色三角")
-        self.assertRegex(tl, r"\.tl-c\.s-d::before,\.tl-c\.s-d::after\{[^}]*background:rgba\(255,255,255,\.35\)")
-
     def test_the_view_container_covers_the_chat(self):
         """★ 视图是**盖在聊天上面的一层** —— 它要是透明的，底下的 #chatCol
         （顶栏 / 消息流 / 输入框）会从每个子页底下透出来。
@@ -512,8 +480,7 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn('el("button","back ibtn")', self.tabs)
         self.assertRegex(self.tabs, r'phead\.append\(pback,')
         # 自己画顶栏的那几页，返回一律走 nestPageHead（它自带 back）
-        for f, key in (("nest-together.js", 'title:"一起"'),
-                       ("nest-timeline.js", 'title:"时间线"')):
+        for f, key in (("nest-together.js", 'title:"一起"'),):
             src = (WEB / f).read_text(encoding="utf-8")
             self.assertIn("nestPageHead", src, f)
             self.assertIn(key, src, f)
@@ -561,14 +528,14 @@ class TestThePhoneShell(unittest.TestCase):
         self.assertIn('["ai","他叫什么"', (WEB / "nest-skin2.js").read_text(encoding="utf-8"))
         self.assertIn('["me","我叫什么"', (WEB / "nest-skin2.js").read_text(encoding="utf-8"))
 
-    def test_the_three_new_sections_are_reachable(self):
+    def test_the_new_sections_are_reachable(self):
         notes = (WEB / "nest-notes.js").read_text(encoding="utf-8")
-        for k in ("空间", "时间线", "收藏"):
+        for k in ("空间", "收藏"):
             self.assertIn(f'"{k}"', notes)
-        for api in ("/api/moments", "/api/timeline", "/api/chat/starred"):
+        for api in ("/api/moments", "/api/chat/starred"):
             self.assertIn(api, notes)
-        # 记事里每一样都要能收拾（用户定的那条），空间 / 时间线也不例外
-        for api in ("/api/moments/", "/api/timeline/"):
+        # 记事里每一样都要能收拾（用户定的那条），空间也不例外
+        for api in ("/api/moments/",):
             self.assertIn(api + '"+x.id+"/edit', notes)
             self.assertIn(api + '"+x.id+"/del', notes)
 

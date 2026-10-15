@@ -86,47 +86,6 @@ class TestSpace(_HomeCase):
         self.assertEqual(["第二条"], left)
 
 
-class TestTimeline(_HomeCase):
-    def test_edit_and_delete_a_note(self):
-        """★ 时间线是这个家怎么起来的流水，记错了得能划掉。"""
-        self.c.post("/api/timeline", json={"kind": "装修", "content": "写错了"})
-        tid = self.c.get("/api/timeline").json()["items"][0]["id"]
-        self.assertTrue(self.c.post(f"/api/timeline/{tid}/edit",
-                                    json={"content": "写对了", "kind": "note"}).json()["ok"])
-        it = self.c.get("/api/timeline").json()["items"][0]
-        self.assertEqual("写对了", it["content"])
-        self.assertEqual("note", it["kind"], "换道也要能换")
-        self.assertTrue(self.c.post(f"/api/timeline/{tid}/del").json()["ok"])
-        self.assertEqual([], self.c.get("/api/timeline").json()["items"])
-
-    def test_edit_needs_something_to_say(self):
-        self.c.post("/api/timeline", json={"kind": "note", "content": "有内容"})
-        tid = self.c.get("/api/timeline").json()["items"][0]["id"]
-        self.assertEqual(400, self.c.post(f"/api/timeline/{tid}/edit",
-                                         json={"content": "  "}).status_code)
-
-    def test_write_a_note_and_read_it_back(self):
-        self.assertTrue(self.c.post("/api/timeline",
-                                    json={"kind": "装修", "content": "换了阳台的灯"}).json()["ok"])
-        it = self.c.get("/api/timeline").json()["items"][0]
-        self.assertEqual("装修", it["kind"])
-        self.assertEqual("换了阳台的灯", it["content"])
-        self.assertRegex(it["date"], r"^\d{4}-\d{2}-\d{2}$")
-        self.assertRegex(it["time"], r"^\d{2}:\d{2}$")
-        self.assertEqual(0, it["days"], "今天写的，距今 0 天")
-
-    def test_the_meta_rides_along(self):
-        """出门走走那条会带天气 / 在哪 —— 原项目就靠这个把上下文带回来。"""
-        self.c.post("/api/timeline", json={"kind": "travel", "content": "出门走走",
-                                           "meta": {"weather": "晴", "where": "河边"}})
-        it = self.c.get("/api/timeline").json()["items"][0]
-        self.assertEqual("晴", it["meta"]["weather"])
-        self.assertEqual("河边", it["meta"]["where"])
-
-    def test_an_empty_note_is_refused(self):
-        self.assertEqual(400, self.c.post("/api/timeline", json={"content": ""}).status_code)
-
-
 class TestStarred(unittest.TestCase):
     """收藏走的是真库（turns.starred）—— 用真 app 测。"""
 

@@ -13,8 +13,7 @@
      ④ 记忆        横向滑动的 MEMORY INDEX（点一张 → 记忆详情）
      ⑤ 一起        → 一起页
      ⑥ 日历 / 书房 一行两列
-     ⑦ 时间线      → 时间线页
-     ⑧ 空间        最下面，最近一条
+     ⑦ 空间        最下面，最近一条
 
    卡片之间用 0.5px 的细线串起来（像用线挂着一串纸片）。
    ══════════════════════════════════════════════════════════ */
@@ -176,7 +175,7 @@ try{
   color:var(--tx-3);max-height:132px;overflow:hidden}
 .hm-mph{padding:22px 18px;font-size:13px;color:var(--tx-2)}
 
-/* ── ⑤ 一起 / ⑥ 日历·书房 / ⑦ 时间线 / ⑧ 空间 ── */
+/* ── ⑤ 一起 / ⑥ 日历·书房 / ⑦ 空间 ── */
 .hm-blk{margin-top:16px;padding:18px}
 .hm-blk .hd{display:flex;align-items:center;gap:11px}
 .hm-blk .hd .ic{width:44px;height:44px;border-radius:12px;flex:0 0 44px;
@@ -454,28 +453,7 @@ try{
     return row;
   }
 
-  /* ══ ⑦ 时间线区块 ══ */
-  function timelineBlock(){
-    const c=el("div","hm-card hm-blk tap");
-    c.append(blockHead("timeline","时间线","TIMELINE"));
-    const box=el("div","hm-latest");
-    box.append(el("div","tt","读取中…"));
-    c.append(box);
-    c.onclick=()=>go("timeline");
-    jget("/api/timeline?limit=1").then(j=>{
-      const it=((j&&j.items)||[])[0];
-      box.innerHTML="";
-      if(!it){ box.append(el("div","hm-empty","还没记过。他做了点什么、你顺手记一笔，都会落在这儿。")); return; }
-      box.append(el("div","tt",String(it.content||"").slice(0,80)));
-      const bits=[dayShort(it.date)];
-      if(it.time)bits.push(it.time);
-      if(it.kind)bits.push(it.kind);
-      box.append(el("div","mt",bits.filter(Boolean).join(" · ")));
-    }).catch(()=>{ box.innerHTML=""; box.append(el("div","hm-empty","时间线读不出来。")); });
-    return c;
-  }
-
-  /* ══ ⑧ 空间区块 ══ */
+  /* ══ ⑦ 空间区块 ══ */
   function spaceBlock(){
     const c=el("div","hm-card hm-blk tap");
     c.append(el("div","hm-tag","空间 · 最近一条"));
@@ -523,7 +501,6 @@ try{
     wrap.append(thread(false),memBlock());
     wrap.append(thread(true),togetherBlock());
     wrap.append(thread(false),twoCol());
-    wrap.append(thread(true),timelineBlock());
     wrap.append(thread(false),spaceBlock());
 
     /* 身份读回来之后，把 OUR TIDE 里的头像和名字刷新一遍 */

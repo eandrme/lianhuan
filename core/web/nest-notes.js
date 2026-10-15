@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════
-   巢 · 记事 ⑥：日历 · 梗库 · 表情包 · 健康 · 空间 · 时间线 · 收藏
+   巢 · 记事 ⑥：日历 · 梗库 · 表情包 · 健康 · 空间 · 收藏
    装法：nest.html 再加一行 <script src="/nest-notes.js?v=1"></script>
 
    后端各归各家，前端一处收口：
@@ -8,7 +8,6 @@
      /api/health_recent · /api/health   optional/homelife（一天一条）
      /api/moments · …/mine · …/new · …/{id}/comment · …/{id}/del
                                         optional/homelife（空间：贴一条 + 楼里接话）
-     /api/timeline                      optional/homelife（时间线：这个家一天一天怎么起来的）
      /api/chat/starred · /api/chat/{id}/star   core/views（收藏：点过星的那些话）
 
    · 七块都带「改」和「删」—— 这是记事，攒着攒着一定要能收拾。
@@ -191,7 +190,6 @@ try{
       ["sticker","表情包",secSticker],
       ["health","健康",secHealth],
       ["space","空间",secMoments],
-      ["timeline","时间线",secTimeline],
       ["star","收藏",secStar],
       /* ★ 玩具箱并进「一起」（不再单独占一格导航）：那一格本来就是「你们俩的东西」 */
       ["toys","玩具",secToys]
@@ -826,138 +824,6 @@ try{
       poke.disabled=false; poke.textContent="戳他发一条";
       if(r.ok){ say("他贴了一条"); load(); }
       else say("这回没写出来"+((r.err)?("："+r.err):"")+" —— 引擎接上了再试");
-    };
-    load();
-  }
-
-  /* ═══ 时间线 ═══
-     `timeline_events` + meta（天气 / 天象 / 在哪）。原项目按 kind 分五条道，
-     这儿照搬那五条道和那些中文名 —— kind 里 24 种中英混着，早期英文那批按意思归。 */
-  const TL_LANE={"装修":"装修","一起做的事":"一起做的事","intimate":"一起做的事",
-    "milestone":"一起做的事","和好":"一起做的事","meal":"一起做的事","饮食":"一起做的事",
-    "order":"一起做的事","conversation":"一起做的事","relationship":"一起做的事",
-    "night_talk":"一起做的事","日常":"一起做的事","daily":"一起做的事","event":"一起做的事",
-    "夜":"一起做的事","我一个人":"我一个人","travel":"我一个人","errand":"我一个人",
-    "对方的事":"你的事","学业纠结":"你的事","情绪事件":"你的事","情绪":"你的事","sleep":"你的事"};
-  const TL_NAME={travel:"出门走走",errand:"跑腿",auto:"随手记",note:"手记",intimate:"亲密",
-    conversation:"聊了很久",milestone:"里程碑",meal:"吃饭",order:"点单",event:"事件",
-    daily:"日常",relationship:"我们俩",night_talk:"夜谈",sleep:"睡"};
-  const TL_TABS=["全部","装修","一起做的事","我一个人","你的事","随手记"];
-  const TL_HINT={"全部":"这个家一天一天是怎么起来的","装修":"在这台电脑上改过的东西",
-    "一起做的事":"你们俩一块儿干的","我一个人":"出门走走、钓鱼那些",
-    "你的事":"你告诉他的","随手记":"顺手记下来的一笔"};
-  async function secTimeline(body){
-    body.innerHTML="";
-    const top=el("div","nt-top");
-    const add=el("button","pri");
-    add.append(nestIcon("plus"),document.createTextNode(" 随手记"));
-    const sp=el("div","sp");
-    const reload=el("button",null,"刷新");
-    top.append(add,sp,reload);
-    const chips=el("div","nt-chips");
-    const msg=el("div","hint");
-    const list=el("div");
-    body.append(top,chips,msg,list);
-    let ALL=[], FILT="全部";
-    function paint(){
-      const cnt={};
-      ALL.forEach(x=>{cnt[x.lane]=(cnt[x.lane]||0)+1;});
-      chips.innerHTML="";
-      TL_TABS.forEach(k=>{
-        const b=el("button",(k===FILT?"on":null),k+" "+(k==="全部"?ALL.length:(cnt[k]||0)));
-        b.title=TL_HINT[k]||"";
-        b.onclick=()=>{FILT=k;paint();};
-        chips.append(b);
-      });
-      list.innerHTML="";
-      const rows=ALL.filter(x=>FILT==="全部"||x.lane===FILT);
-      if(!rows.length){ list.append(el("div","hint","这一档还空着。")); return; }
-      let lastDay="";
-      rows.forEach(x=>{
-        if(x.day!==lastDay){ lastDay=x.day; list.append(el("div","nt-lb",x.day+(x.days===0?" · 今天":""))); }
-        const c=el("div","crow");
-        c.style.cssText="border-bottom:1px solid var(--line);padding:9px 2px";
-        c.append(el("div","dt",x.time||""));
-        const tt=el("div","tt",x.text);
-        if(x.ctx)tt.append(el("em",null," · "+x.ctx));
-        c.append(tt);
-        c.append(el("div","kd",x.name));
-        const ago=el("div","dt",x.days===0?"今天":(x.days<0?(-x.days+" 天前"):(x.days+" 天后")));
-        c.append(ago);
-        const ops=el("div","nt-ops");
-        const be=el("button",null,"改");
-        be.onclick=()=>{
-          sheet("改这一条",(bx,close)=>{
-            const t=el("textarea"); t.value=x.text;
-            bx.append(t);
-            bx.append(el("div","lb","归到哪一道"));
-            const sel=el("select");
-            [["note","随手记"],["装修","装修"],["一起做的事","一起做的事"],
-             ["travel","我一个人"],["对方的事","你的事"]].forEach(([v,n])=>{
-              const o=el("option",null,n); o.value=v;
-              if(v===x.kind)o.selected=true;
-              sel.append(o);
-            });
-            bx.append(sel);
-            const row=el("div","nt-btns");
-            const ok=el("button","pri","存下"), no=el("button",null,"取消");
-            row.append(ok,no); bx.append(row);
-            no.onclick=close;
-            ok.onclick=async()=>{
-              const v=t.value.trim(); if(!v){say("不能空着");return;}
-              const r=await jpost("/api/timeline/"+x.id+"/edit",{content:v,kind:sel.value});
-              if(r.ok){ say("改好了"); close(); load(); } else say("没改成："+(r.err||"?"));
-            };
-          });
-        };
-        const bd=el("button","danger","删");
-        bd.onclick=async()=>{
-          if(!confirm("把这一条从时间线上划掉？"))return;
-          const r=await jpost("/api/timeline/"+x.id+"/del",{});
-          if(r.ok){ say("划掉了"); load(); } else say("删不掉："+(r.err||"?"));
-        };
-        ops.append(be,bd); c.append(ops);
-        list.append(c);
-      });
-    }
-    async function load(){
-      list.innerHTML=""; loading(list);
-      let j;
-      try{ j=await jget("/api/timeline?limit=200"); }
-      catch(e){ list.innerHTML=""; failed(list,e); return; }
-      ALL=(j.items||[]).map(x=>{
-        const m=(x.meta&&typeof x.meta==="object")?x.meta:{};
-        return {id:x.id,kind:x.kind||"",day:x.date||"",time:x.time||"",
-                lane:TL_LANE[x.kind]||"随手记",
-                name:TL_NAME[x.kind]||x.kind||"记事",text:x.content||"",
-                ctx:[m.weather,m.sky,m.where,m.project].filter(Boolean).join(" · "),
-                days:x.days};
-      });
-      msg.textContent = ALL.length? "" : "还没记过。他做了点什么、你顺手记一笔，都会落在这儿。";
-      paint();
-    }
-    reload.onclick=load;
-    add.onclick=()=>{
-      sheet("随手记一笔",(bx,close)=>{
-        const t=el("textarea"); t.placeholder="比如：今天把阳台的灯换了";
-        bx.append(t);
-        bx.append(el("div","lb","归到哪一道"));
-        const sel=el("select");
-        [["note","随手记"],["装修","装修"],["一起做的事","一起做的事"],
-         ["travel","我一个人"],["对方的事","你的事"]].forEach(([v,n])=>{
-          const o=el("option",null,n); o.value=v; sel.append(o);
-        });
-        bx.append(sel);
-        const row=el("div","nt-btns");
-        const ok=el("button","pri","记下"), no=el("button",null,"取消");
-        row.append(ok,no); bx.append(row);
-        no.onclick=close;
-        ok.onclick=async()=>{
-          const v=t.value.trim(); if(!v){say("写一句");return;}
-          const r=await jpost("/api/timeline",{kind:sel.value,content:v});
-          if(r.ok){ say("记下了"); close(); load(); } else say("没记上："+(r.err||"?"));
-        };
-      });
     };
     load();
   }

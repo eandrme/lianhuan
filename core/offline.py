@@ -54,7 +54,7 @@ def home_dir() -> Path:
 
 
 READONLY_TOOLS = {
-    "search_memory", "read_timeline", "read_calendar", "read_workbook",
+    "search_memory", "read_calendar", "read_workbook",
     "list_books", "read_chapter", "list_plays", "list_packs", "list_my_tools",
 }
 STRICT_TOOLS = {"list_my_tools", "list_packs"}

@@ -211,59 +211,6 @@ def api_moment_comment_del(cid: int):
     return JSONResponse({"ok": True, "gone": cur.rowcount})
 
 
-# ── 时间线 ────────────────────────────────────────────────
-@router.get("/api/timeline")
-def api_timeline(limit: int = 80):
-    limit = max(1, min(int(limit or 80), 200))
-    today = datetime.now().date()
-    out = []
-    for r in _store.db.execute("SELECT * FROM timeline_events ORDER BY ts DESC LIMIT ?", (limit,)):
-        d = datetime.fromtimestamp(r["ts"] or 0).date()
-        md = json.loads(r["meta"]) if r["meta"] else {}
-        out.append({"id": r["id"], "kind": r["kind"] or "", "content": r["content"],
-                    "date": d.isoformat(), "time": _hm(r["ts"]),
-                    "days": (d - today).days, "src": md.get("src") or "", "meta": md})
-    return JSONResponse({"items": out})
-
-
-@router.post("/api/timeline")
-async def api_timeline_add(req: Request):
-    b = await req.json()
-    if not (b.get("content") or "").strip():
-        return JSONResponse({"ok": False}, status_code=400)
-    _store.db.execute("INSERT INTO timeline_events(kind,content,meta,ts) VALUES(?,?,?,?)",
-                      (b.get("kind") or "", b["content"].strip(),
-                       json.dumps(b.get("meta") or {}, ensure_ascii=False), time.time()))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-@router.post("/api/timeline/{tid}/edit")
-async def api_timeline_edit(tid: int, req: Request):
-    """改时间线里那一条（写错了、或想换条道）。"""
-    b = await req.json()
-    content = (b.get("content") or "").strip()
-    if not content:
-        return JSONResponse({"ok": False, "err": "不能空着"}, status_code=400)
-    if b.get("kind"):
-        _store.db.execute("UPDATE timeline_events SET content=?, kind=? WHERE id=?",
-                          (content[:500], str(b["kind"])[:20], tid))
-    else:
-        _store.db.execute("UPDATE timeline_events SET content=? WHERE id=?",
-                          (content[:500], tid))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
-@router.post("/api/timeline/{tid}/del")
-def api_timeline_del(tid: int):
-    """删一条。★ 这是一份「这个家怎么起来的」的流水，记错了得能划掉 ——
-    不然错的那条会一直躺在时间线上，越攒越像真的。"""
-    cur = _store.db.execute("DELETE FROM timeline_events WHERE id=?", (tid,))
-    _store.db.commit()
-    return JSONResponse({"ok": True, "gone": cur.rowcount})
-
-
 import re as _re
 
 _MOOD_MARK = _re.compile(r"‹\s*(?:心情\s*)?([^›]+)›")

@@ -66,14 +66,9 @@ TOOLS = [
     _t("list_my_tools", "看你自己现在有哪些手（含外接的 MCP 工具）——被问「你会什么」时如实报", {}, []),
     _t("install_pack", "给自己装一个功能包（条件齐的才装得上）",
        {"id": {"type": "string"}}, ["id"]),
-    _t("add_timeline", "往时间线记一笔今天发生的事",
-       {"content": {"type": "string"}, "kind": {"type": "string"}}, ["content"]),
-    # ★ 0831：这几只「读」的手是补回来的 —— 写的手（add_timeline / add_calendar /
+    # ★ 0831：这几只「读」的手是补回来的 —— 写的手（add_calendar /
     #   write_workbook）早就在，读的一只都没有，于是他记得进去、翻不回来。
     #   注入里现在有最近那一小段，这几只手是给他翻得更远、翻得更具体用的。
-    _t("read_timeline", "翻自己的时间线：最近都做成了什么（被问「上次那个弄好了吗」就翻这儿）",
-       {"days": {"type": "integer", "description": "往回翻几天，默认 30"},
-        "kind": {"type": "string", "description": "只看某一类，如 装修"}}, []),
     _t("read_calendar", "翻你们的日历：接下来有什么、某天有什么",
        {"days": {"type": "integer", "description": "往后看几天，默认 30"}}, []),
     _t("read_workbook", "翻工作本：还没做的、记下的点子和资料",
@@ -128,7 +123,7 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 28 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 26 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
 
@@ -346,12 +341,6 @@ async def execute(name: str, args: dict) -> dict:
         r = _p.enable_pack(str(args.get("id") or ""))
         import json as _j
         return _j.loads(bytes(r.body).decode("utf-8"))
-    if name == "add_timeline":
-        _store.db.execute("INSERT INTO timeline_events(kind,content,meta,ts) "
-                          "VALUES(?,?,'{}',strftime('%s','now'))",
-                          (str(args.get("kind") or "")[:20], str(args.get("content") or "")[:500]))
-        _store.db.commit()
-        return {"ok": True}
     if name == "set_reminder":
         import time as _tm
         from datetime import datetime as _dt
@@ -376,19 +365,6 @@ async def execute(name: str, args: dict) -> dict:
         return {"ok": True, "id": rid,
                 "due": _dt.fromtimestamp(due).strftime("%Y-%m-%d %H:%M"),
                 "note": "到点会提醒你，你再去找对方"}
-    if name == "read_timeline":
-        import time as _tm
-        days = int(args.get("days") or 30)
-        q = ["SELECT kind, content, ts FROM timeline_events WHERE ts > ?"]
-        a = [_tm.time() - days * 86400]
-        if args.get("kind"):
-            q.append("AND kind=?")
-            a.append(str(args["kind"])[:20])
-        q.append("ORDER BY ts DESC LIMIT 40")
-        rows = _store.db.execute(" ".join(q), a).fetchall()
-        from datetime import datetime as _dt
-        return {"items": [{"day": _dt.fromtimestamp(r["ts"] or 0).strftime("%Y-%m-%d"),
-                           "kind": r["kind"] or "", "content": r["content"]} for r in rows]}
     if name == "read_calendar":
         from datetime import date as _ddate, timedelta as _dtd
         days = int(args.get("days") or 30)
