@@ -6,8 +6,10 @@
   也避开它每来源 60 秒 10 次的限流。
 - `OMBRE_INJECT` 关掉就完全回到旧行为（这个文件立刻变成哑巴）。
 - 注入前剥掉 Ombre 的工程外壳：标签行不进上下文，只留正文。
+- 模型自己伸手时也走这儿：recall() 真去问一次（不吃 TTL 缓存），remember() 走 Ombre 自带的旁路 CLI 落一条。
 """
 
+import asyncio
 import os
 import threading
 import time
@@ -93,3 +95,43 @@ def block(session_id: str | None = None) -> str:
             for old_key in list(_cache)[:-64]:
                 _cache.pop(old_key, None)
     return text
+
+def recall() -> str:
+    """给「手」用：真去问一次，不吃 TTL 缓存 —— 这次是模型自己伸手来问的。
+
+    返回剥过壳、能当人话读的正文；没接上 / 拿不到一律返回 ""。
+    """
+    if not enabled():
+        return ""
+    return _fetch()
+
+
+async def remember(content: str, name: str = "", domain: str = "", tags: str = "") -> tuple[bool, str]:
+    """把一条记忆写进 Ombre —— 走它自带的旁路 CLI（直接落 .md，不经 HTTP、不碰它的配置）。
+
+    ★ 为什么用 CLI：写口的正路是 MCP（要 OAuth），而它自己提供了这个
+      「API 不可用时的底圈」小工具，文件格式由它自己维护，省得我们抄第二份。
+    返回 (成功?, 一句说明)。
+    """
+    home = (os.environ.get("OMBRE_HOME") or "/root/Ombre-Brain").strip()
+    py = (os.environ.get("OMBRE_PYTHON") or os.path.join(home, ".venv", "bin", "python")).strip()
+    script = os.path.join(home, "src", "write_memory.py")
+    if not (os.path.isfile(py) and os.path.isfile(script)):
+        return False, "Ombre 的写入工具没找到（%s）" % script
+    argv = [py, script,
+            "--name", (name or content[:12]).strip() or "一条记忆",
+            "--content", content,
+            "--domain", (domain or "回忆").strip()]
+    if tags:
+        argv += ["--tags", tags]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv, cwd=home,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=20)
+    except Exception as e:                     # noqa: BLE001
+        return False, "写入没成功：%s" % e
+    if proc.returncode != 0:
+        return False, "写入没成功：%s" % (err or b"").decode("utf-8", "replace").strip()[:200]
+    return True, (out or b"").decode("utf-8", "replace").strip()[:200]

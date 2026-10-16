@@ -6,13 +6,20 @@
 
 ★ 边界：手只伸进自己家（这个 SQLite 库和 data/ 目录）。
   没有 shell、没有任意文件读写、没有网络 —— 那些不是「手」，是别人的房子。
+★ 有意破例（「记忆只归一处」）：`write_memory` / `search_memory` 这两只
+  **不再碰本库**，改成接 Ombre —— 一只走它自带的旁路 CLI（子进程，只写它的
+  buckets 目录），一只走本机 127.0.0.1:18001 的浮现读口。
+  破例只限这两只，别的工具一个字没变；关掉 OMBRE_INJECT 它们就只会说「没接上」。
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
 from pathlib import Path
+
+from .memory.ombre import recall as _ombre_recall, remember as _ombre_remember
 
 _store = None
 
@@ -30,10 +37,11 @@ def _t(name, desc, props, required):
 TOOLS = [
     _t("set_sign", "改你自己的签名（顶栏名字底下那一行小字）",
        {"text": {"type": "string", "description": "新签名，一句话"}}, ["text"]),
-    _t("write_memory", "把一件值得记住的事写进记忆库（聊到重要的事就记，别等人提醒）",
+    _t("write_memory", "把一件值得记住的事写进记忆库（只存一份，在 Ombre 里；聊到重要的事就记，别等人提醒）",
        {"content": {"type": "string"}, "layer": {"type": "string", "enum": ["L1", "L2", "L3"],
         "description": "L1 最近的事 / L2 重要的事 / L3 长期的事"}}, ["content"]),
-    _t("search_memory", "翻记忆库", {"q": {"type": "string"}}, ["q"]),
+    _t("search_memory", "唤起记忆库里这会儿该浮现的东西（这不是关键词检索 —— 想找某件具体的事就直接问，别指望 q）",
+       {"q": {"type": "string"}}, ["q"]),
     _t("post_moment", "在空间发一条动态", {"content": {"type": "string"}}, ["content"]),
     _t("pick_kaomoji", "从颜文字抽屉里挑一枚（心情好、逗趣、想让一句短话软一点的时候用；"
        "一条回复最多一枚，正经场合别用）",
@@ -201,11 +209,19 @@ async def execute(name: str, args: dict) -> dict:
         _store.set_setting("config", cfg)
         return {"ok": True, "sign": ai["sign"]}
     if name == "write_memory":
-        mid = _store.add_memory(Memory(content=str(args.get("content") or "")[:2000],
-                                       layer=args.get("layer") or "L1"))
-        return {"ok": True, "id": mid}
+        # ★ 记忆只归一处：这一笔写进 Ombre，不再进 lianhuan 自己的 memories 表。
+        content = str(args.get("content") or "")[:2000].strip()
+        if not content:
+            return {"ok": False, "err": "内容空的，没写"}
+        ok, info = await _ombre_remember(content=content, tags=str(args.get("layer") or ""))
+        return {"ok": True, "info": info} if ok else {"ok": False, "err": info}
     if name == "search_memory":
-        return {"items": [m.content for m in _store.search_memories(str(args.get("q") or ""), limit=8)]}
+        # ★ 记忆只归一处：翻的是 Ombre 的**浮现**读口 —— 它是「这会儿该浮现什么」，
+        #   不是关键词检索。q 只表示"他问过"，不参与过滤：别骗模型说按 q 查过了。
+        text = await asyncio.to_thread(_ombre_recall)     # 阻塞的 HTTP 挪到线程里，别冻住服务
+        if not text:
+            return {"items": [], "note": "记忆没接上，或者这会儿什么都没浮现。"}
+        return {"items": [x for x in text.split("\n") if x.strip()]}
     if name == "post_moment":
         _store.db.execute("INSERT INTO moments(author,content,ts) VALUES('ai',?,strftime('%s','now'))",
                           (str(args.get("content") or "")[:500],))
