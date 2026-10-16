@@ -221,7 +221,7 @@ async def speak_once(reason: str = "") -> str:
     # ‹…› 带内标记照聊天那条路走：落库前清掉（apply_marker 现在是通用剥标记，不再记账）
     try:
         from optional.homelife.routes import apply_marker
-        text, _ = apply_marker(text, "proactive")
+        text, _ = apply_marker(text)
     except Exception:
         pass
     # ★ 落在「你最近待的那扇窗」里（老行为是永远落主窗口）。它说的话跟界面

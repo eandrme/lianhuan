@@ -302,11 +302,9 @@ async def relay(ws) -> None:
                 whole = "|||".join(buf)
                 # ★ 0901：把 ‹…› 带内标记从正文里清掉（电话这条路原来漏了 ——
                 #   记号会留在库里，还可能被念出来）。
-                #   口径跟文字那边一样：这一轮对方的话里要是也带了这个记号，
-                #   就只清正文（靠比对文本鉴权是防不住会改写的一方的）。
                 try:
                     from optional.homelife.routes import apply_marker as _mark
-                    whole, _ = _mark(whole, "call", untrusted=("‹" in (text or "")))
+                    whole, _ = _mark(whole)
                 except Exception:
                     pass                          # homelife 没装就跳过，不是错
                 said.append(whole)

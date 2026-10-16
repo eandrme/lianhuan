@@ -199,8 +199,6 @@ class TestToneAndTags(unittest.TestCase):
         self.assertGreater(i, 0, "落库那一段不见了")
         seg = src[i:i + 900]
         self.assertIn("apply_marker", seg, "落库之前要把记号从正文里清掉")
-        self.assertIn("untrusted", seg,
-                      "口径要跟文字那边一样：对方的话里也带了记号就只清正文")
 
     def test_split_marker_becomes_a_pause_not_three_bars(self):
         from core import speech

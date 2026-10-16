@@ -176,7 +176,7 @@ import re as _re
 _MOOD_MARK = _re.compile(r"‹\s*(?:心情\s*)?([^›]+)›")
 
 
-def apply_marker(text: str, source: str = "chat", untrusted: bool = False):
+def apply_marker(text: str):
     """把回复里的 ‹…› 带内标记剥掉（只清洗，不落账）。返回（清洗后的正文, [])。"""
     applied = []
     cleaned = _MOOD_MARK.sub("", text or "").strip()

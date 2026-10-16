@@ -512,10 +512,7 @@ async def chat(req: Request):
             # ‹心情 开心+6:…› 这类带内标记（原项目留下的写法）：落库前从正文里清掉。
             # (照原项目:这一步在落库处做 —— 人关了页面，标记也不会留在库里)
             try:
-                from optional.homelife.routes import _MOOD_MARK as _MM
-                # 对方这一轮的话里也带了这个记号 → 只清正文（不认这段标记）
-                content, _marks = _home_mood_marker(
-                    content, "chat", untrusted=bool(_MM.search(msg)))
+                content, _marks = _home_mood_marker(content)
             except Exception as e:
                 print("[mood marker] fail:", e, flush=True)
             # ★ 这一轮他发的表情包：落成这条回复的附件，**排在正文之后**（末尾），
@@ -689,9 +686,7 @@ async def api_redo(req: Request):
         print("[redo] 重说期间档案换了，这条不落库", flush=True)
         return JSONResponse({"reply": None, "err": "刚才档案被换过了，这条我不敢往新档案上放 —— 再说一次吧。"})
     try:
-        from optional.homelife.routes import _MOOD_MARK as _MM
-        reply, _ = _home_mood_marker(
-            reply, "redo", untrusted=bool(_MM.search(user_msg + " " + bad)))
+        reply, _ = _home_mood_marker(reply)
     except Exception as e:
         print("[redo mood] fail:", e, flush=True)
     if not reply:
