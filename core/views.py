@@ -599,6 +599,8 @@ async def assistants_save(req: Request):
         # null / "all" ＝ 不限（所有连上的 MCP 都给）；数组 ＝ 只给这几个
         v = b.get("mcp")
         fields["mcp"] = None if v in (None, "all", "全部") else [str(x) for x in (v or [])]
+    if "memory" in b:
+        fields["memory"] = bool(b.get("memory"))
     if aid:
         out = _asst.save(_store, aid, **fields)
         if out is None:

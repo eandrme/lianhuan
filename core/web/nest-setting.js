@@ -167,6 +167,7 @@ try{
     secUsage(box);
     secEngine(box);
     secThink(box);
+    secMemory(box);
     secMcp(box);
     /* 助手管理（nest-assistant.js）—— 它不在就跳过，这一节别把整页带塌 */
     if(typeof window.nestAssistantSection==="function"){
@@ -1010,6 +1011,64 @@ try{
       const r=await jpost("/api/think",{mode:k});
       if(!r.ok){ cur=before; paint(); note.className="set-msg err"; note.textContent="没换成："+(r.err||"?"); return; }
       say("想多深：换成「"+NAMES[k]+"」了");
+      load();
+    }
+    load();
+  }
+
+  /* ═══ 记忆（Ombre 读口）—— 按助手 ═══
+     记忆只存一份（Ombre 的库），但「这位开不开」是**分人的**：
+     这儿改的是当前这个窗口所属的助手，别的助手各按各的。 */
+  async function secMemory(box){
+    const sec=el("div","set-sec");
+    sec.append(el("h4",null,"记忆"));
+    sec.append(el("div","sub","开场把该想起的带回来。记忆只存一份（在 Ombre 里），"
+      +"但开关是**按助手**的 —— 这里改的是当前这个窗口所属的那位。"));
+    const chips=el("div","set-chips");
+    const note=el("div","set-msg","读着…");
+    sec.append(chips,note);
+    box.append(sec);
+    let sid="main";
+    try{ sid=(typeof SID!=="undefined"&&SID)||localStorage.getItem("nest_sid")||"main"; }
+    catch(e){ sid="main"; }
+    let cur=null,on=true;
+    function paint(){
+      chips.innerHTML="";
+      if(cur===null)return;
+      [[true,"开"],[false,"关"]].forEach(function(o){
+        const b=el("button",(o[0]===on?"on":""),o[1]);
+        b.onclick=function(){ set(o[0]); };
+        chips.append(b);
+      });
+    }
+    async function load(){
+      try{
+        const j=await jget("/api/assistants/who?sid="+encodeURIComponent(sid));
+        cur=j.assistant||null;
+        if(cur===null){
+          note.className="set-msg";
+          note.textContent="这个窗口还没挂在哪位助手下面 —— 去「助手管理」里建一位、"
+            +"把窗口挂过去，记忆就跟着他走。";
+          paint(); return;
+        }
+        on=cur.memory!==false;
+        paint();
+        note.className="set-msg";
+        note.textContent="这位是「"+(cur.name||"（没名字）")+"」—— "
+          +(on?"现在开着：他开场会先想起该想起的事。":"现在关着：他开场不带记忆。")
+          +"（别的助手不受这里影响。）";
+      }catch(e){
+        note.className="set-msg err";
+        note.textContent="读不到："+e.message;
+      }
+    }
+    async function set(v){
+      if(cur===null)return;
+      const before=on; on=v; paint();
+      const r=await jpost("/api/assistants/save",{id:cur.id,memory:v});
+      if(!r.ok){ on=before; paint(); note.className="set-msg err";
+                 note.textContent="没存上："+(r.err||"?"); return; }
+      say("「"+(cur.name||"这位助手")+"」的记忆："+(v?"打开":"关掉")+"了");
       load();
     }
     load();

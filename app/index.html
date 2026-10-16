@@ -4000,15 +4000,6 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline-offset:1
           <!-- 功能包：让「待接」能一键接上。用内置的直接点，不用的写装配单 -->
           <button class="setrow" data-open="packspage"><div class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div><span>功能包<small>待接的在这儿接 · 或写进装配单自己做</small></span><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg></button>
           <button class="setrow" data-sub="日常补一句"><div class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg></div><span>日常补一句<small>每一轮都加在我脑子里</small></span><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg></button>
-          <div class="swrow">
-            <div style="display:flex;align-items:center;gap:12px">
-              <div class="ic" style="margin:0"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 8v4l2.5 1.5"/><path d="M16 4h5v5"/></svg></div>
-              <span>记忆<small>开场把该想起的带回来 · 关掉就当没这回事</small></span>
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:11px">
-              <input type="checkbox" id="ombreMem" style="width:22px;height:22px;accent-color:var(--ink);cursor:pointer">
-            </div>
-          </div>
         </div>
       </div>
 
@@ -5216,18 +5207,6 @@ const PREF = (function(){
   });
   document.getElementById('setbtn').addEventListener('click', function(){ open('setpage'); });
   document.getElementById('dset').addEventListener('click', function(){ drawerOpen(false); open('setpage'); });
-
-  /* ── 记忆阀门（/api/ombre）：开场把该想起的带回来。存库，立刻生效，不用重启。 */
-  (function(){
-    var mv = document.getElementById('ombreMem');
-    if (!mv) return;
-    fetch('/api/ombre', {cache:'no-store'}).then(function(r){ return r.json(); })
-      .then(function(d){ mv.checked = !!d.on; }).catch(function(){});
-    mv.onchange = function(){
-      fetch('/api/ombre', {method:'POST', headers:{'Content-Type':'application/json'},
-                           body: JSON.stringify({on: mv.checked})}).catch(function(){});
-    };
-  })();
 
   app.addEventListener('click', function(e){
     /* ★ 丝线的卡片、纸夹的纸、散摞的纸片自己有一套「点一下浮起、再点才进」，

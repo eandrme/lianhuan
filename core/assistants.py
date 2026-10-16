@@ -24,7 +24,7 @@ from typing import Any
 KEY = "assistants"
 
 #: 一位助手的字段。`mcp` 的 None 和 [] 是两件事：None＝不限，[]＝一个都不给。
-FIELDS = ("name", "sign", "avatar", "prompt", "mcp", "windows")
+FIELDS = ("name", "sign", "avatar", "prompt", "mcp", "windows", "memory")
 
 
 def norm_sid(sid) -> str:
@@ -56,6 +56,7 @@ def _clean(a: dict) -> dict:
         "prompt": str(a.get("prompt") or "")[:8000],
         "mcp": None if mcp is None else [str(x) for x in mcp if str(x).strip()],
         "windows": wins,
+        "memory": a.get("memory") is not False,
     }
     return out
 
@@ -195,6 +196,17 @@ def mcp_allow(store, sid) -> list[str] | None:
     if a is None:
         return None
     return a.get("mcp")
+
+
+def memory_on(store, sid) -> bool:
+    """这位助手的「记忆阀门」：开场要不要把 Ombre 的记忆带回来。
+
+    ★ 分人的：别的助手不受这里影响。没配过助手（老库）→ 开着，跟以前一样。
+    """
+    a = assistant_of(store, sid)
+    if a is None:
+        return True
+    return a.get("memory") is not False
 
 
 def persona_for(store, asst: dict | None) -> dict | None:

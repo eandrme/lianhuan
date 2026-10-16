@@ -400,8 +400,9 @@ async def chat(req: Request):
     #   配过之后：人设换成他这份、系统提示词换成他这份、工具按他的许可过滤。
     assistant = _asst.assistant_of(store, session_id)
     _bare_mode = _bare()
-    # ★ 记忆阀门（设置页那枚开关）：关掉就当没有记忆这回事 —— 出厂态和老行为都受它管。
-    _mem_on = bool(store.get_setting("ombre_memory", True))
+    # ★ 记忆阀门：**按助手**的（跟 MCP 一个规矩）—— 关掉就当没有记忆这回事，
+    #   出厂态和老行为都受它管。别的助手不受影响。
+    _mem_on = _asst.memory_on(store, session_id)
     if _bare_mode:
         # 出厂态（A）：人设 / 格式约定 / 助手署名一律不拼 —— 只发那一句 + Ombre 记忆浮现。
         _ombre = ombre_block(session_id) if _mem_on else ""
@@ -1530,21 +1531,6 @@ async def think_set(req: Request):
                             status_code=400)
     store.set_setting("think", mode)
     return {"ok": True, "mode": mode, "effort": _think.effort(mode)}
-
-#: Ombre 记忆阀门：库里一个开关，设置页里点。
-#: ★ 它只管「记忆那一段要不要注入」；能不能连上 Ombre 另由
-#:   OMBRE_INJECT / OMBRE_HOOK_TOKEN 决定（那是接线总闸）。
-@app.get("/api/ombre")
-def ombre_get():
-    return {"on": bool(store.get_setting("ombre_memory", True))}
-
-
-@app.post("/api/ombre")
-async def ombre_set(req: Request):
-    b = await req.json()
-    on = bool(b.get("on"))
-    store.set_setting("ombre_memory", on)
-    return {"ok": True, "on": on}
 
 
 # ══ Web Push ＋ 主动找你（0831 定的：主动消息也是有用的，要做）══

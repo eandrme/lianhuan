@@ -175,7 +175,7 @@ try{
         const n=windowsOf(a.id).length;
         mid.append(el("div","mt",(i===0?"第一位 · 默认":"")+(i===0&&n?" · ":"")
           +(n?(n+" 个窗口"):"（没有单独挂着窗口）")
-          +(a.mcp===null?" · MCP 不限":(a.mcp&&a.mcp.length?(" · MCP "+a.mcp.length+" 个"):" · MCP 一个都没给"))));
+          +(a.mcp===null?" · MCP 不限":(a.mcp&&a.mcp.length?(" · MCP "+a.mcp.length+" 个"):" · MCP 一个都没给"))+(a.memory===false?" · 记忆 关":" · 记忆 开")));
         row.append(mid);
         const ops=el("div","set-btns");
         const bM=el("button",null,"管理"); bM.onclick=()=>edit(a);
@@ -222,6 +222,7 @@ try{
       const isNew=!a;
       let avatar=(a&&a.avatar)||"";
       let mcp=(a&&a.mcp===null)||!a ? null : (a.mcp||[]);   /* null＝不限 */
+      let mem=!(a&&a.memory===false);            /* 记忆：缺省＝开 */
       sheet("管理："+((a&&a.name)||"新的助手"),(bx,close)=>{
         /* 头像 + 名字 + 小字 */
         const line=el("div","as-line");
@@ -280,6 +281,22 @@ try{
         });
         bx.append(mcpBox,mcpNote);
         if(!MCP.length) bx.append(el("div","set-msg","（还没登记过 MCP —— 上面「MCP 工具包」那一节里加）"));
+        /* 记忆（这位助手自己的阀门） */
+        bx.append(el("span","lb","他的记忆（分人的：别的助手不受这里影响）"));
+        const memBox=el("div","as-box");
+        const rowMem=el("label","as-chk");
+        const ckMem=el("input"); ckMem.type="checkbox";
+        rowMem.append(ckMem,el("span",null,"开场把该想起的带回来 —— 记忆只存一份，在 Ombre 里"));
+        memBox.append(rowMem);
+        const memNote=el("div","set-msg");
+        const paintMem=()=>{
+          ckMem.checked=mem;
+          memNote.textContent = mem
+            ? "现在开着：他开场会先想起该想起的事。"
+            : "现在关着：他开场不带记忆（别的助手各按各的来）。";
+        };
+        ckMem.onchange=()=>{ mem=ckMem.checked; paintMem(); };
+        bx.append(memBox,memNote); paintMem();
         paintMcp();
         /* 窗口 */
         bx.append(el("span","lb","挂在他名下的窗口"));
@@ -326,7 +343,7 @@ try{
           const wins=[...wBox.querySelectorAll("input[data-sid]")].filter(c=>c.checked).map(c=>c.dataset.sid);
           const body={name:nameI.value.trim()||"新的助手",sign:signI.value.trim(),
                       avatar:avatar,prompt:pr.value,
-                      mcp:(mcp===null?"all":mcp)};
+                      mcp:(mcp===null?"all":mcp),memory:mem};
           if(!isNew)body.id=a.id;
           bSave.disabled=true;
           const r=await jpost("/api/assistants/save",body);
