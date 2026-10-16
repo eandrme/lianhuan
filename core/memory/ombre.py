@@ -5,6 +5,7 @@
 - 同一个窗口在 TTL 内只问 Ombre 一次：既是「开场浮现」的语义，
   也避开它每来源 60 秒 10 次的限流。
 - `OMBRE_INJECT` 关掉就完全回到旧行为（这个文件立刻变成哑巴）。
+- 注入前剥掉 Ombre 的工程外壳：标签行不进上下文，只留正文。
 """
 
 import os
@@ -29,6 +30,27 @@ def enabled() -> bool:
     return _truthy(os.environ.get("OMBRE_INJECT"))
 
 
+def _strip_scaffold(text: str) -> str:
+    """把 Ombre 的工程外壳剥掉，只留下能当人话读的正文。"""
+    kept: list[str] = []
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if line.strip() in ("", "[Ombre Brain - 记忆浮现]"):
+            continue
+        if line.lstrip().startswith("💭"):
+            continue
+        if line.strip() == "---":
+            kept.append("")
+            continue
+        if line.startswith("📌 [核心准则] "):
+            line = line[len("📌 [核心准则] "):]
+        kept.append(line)
+    cleaned = "\n".join(kept).strip()
+    while "\n\n\n" in cleaned:
+        cleaned = cleaned.replace("\n\n\n", "\n\n")
+    return cleaned
+
+
 def _fetch() -> str:
     token = (os.environ.get("OMBRE_HOOK_TOKEN") or "").strip()
     if not token:
@@ -46,7 +68,10 @@ def _fetch() -> str:
             body = response.read().decode("utf-8", "replace")
     except Exception:
         return ""
-    return body.strip()[:_MAX_CHARS]
+    cleaned = _strip_scaffold(body)
+    if not cleaned:
+        return ""
+    return cleaned[:_MAX_CHARS]
 
 
 def block(session_id: str | None = None) -> str:
