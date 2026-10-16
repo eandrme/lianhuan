@@ -452,7 +452,7 @@ async def chat(req: Request):
     _notes = {}
     if getattr(_eng, "tools", None) is not None:
         _eng.tools = _hands.tools_for(_eng.tools, _allow)
-        _eng.exec_tool = _hands.exec_guard(_allow, (assistant or {}).get("id"), _notes)
+        _eng.exec_tool = _hands.exec_guard(_allow, _notes)
 
     turn = EngineTurn(message=msg_for_engine, system=system, history=history,
                       session_id=session_id, images=images, think=_think_mode)
@@ -509,11 +509,11 @@ async def chat(req: Request):
             return
         if said:
             content = SEP.join(said)
-            # ‹心情 开心+6:…› —— 他回复末尾自己记的,落库前抠出来记账、正文里清掉
-            # (照原项目:这一步在落库处做,人关了页面也不丢账)
+            # ‹心情 开心+6:…› 这类带内标记（原项目留下的写法）：落库前从正文里清掉。
+            # (照原项目:这一步在落库处做 —— 人关了页面，标记也不会留在库里)
             try:
                 from optional.homelife.routes import _MOOD_MARK as _MM
-                # 对方这一轮的消息里出现过心情标记 → 整轮不记账（只清正文）
+                # 对方这一轮的话里也带了这个记号 → 只清正文（不认这段标记）
                 content, _marks = _home_mood_marker(
                     content, "chat", untrusted=bool(_MM.search(msg)))
             except Exception as e:
@@ -652,7 +652,7 @@ def chat_active():
 async def api_redo(req: Request):
     """重说：上句回得不对 → 换个方式重答。照原项目 /api/redo 平移：
     带完整注入重答；**不自动记什么「教训」**（原项目 0830 亲手拆了那条流水线——
-    那是把他越积越压成应声虫的根）；他重说里写的 ‹心情› 照样记账、从正文清掉。"""
+    那是把他越积越压成应声虫的根）；他重说里写的 ‹…› 照样从正文清掉。"""
     b = await req.json()
     user_msg = (b.get("message") or "").strip()
     bad = (b.get("bad") or "").strip()
@@ -1588,7 +1588,7 @@ def _pick_engine_for_active():
             #   落库时没有附件那一栏 —— 所以那只手在这儿直接摘掉：不发，也不留个
             #   「贴上了」的假话。
             eng.tools = _hands.without(_hands.tools_for(eng.tools, allow), ["send_sticker"])
-        eng.exec_tool = _hands.exec_guard(allow, (asst or {}).get("id"))
+        eng.exec_tool = _hands.exec_guard(allow)
     except Exception as e:                                       # noqa: BLE001
         print("[assistant] 主动/离线那条筛工具失败（这一拍按不限走）:", e, flush=True)
     return eng

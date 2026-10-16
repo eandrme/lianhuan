@@ -94,7 +94,7 @@ class TestTheGuardKeepsItToOnePerTurn(unittest.TestCase):
     def test_one_sticker_per_turn(self):
         import asyncio
         notes = {}
-        guard = hands.exec_guard(None, None, notes)
+        guard = hands.exec_guard(None, notes)
         first = asyncio.run(guard("send_sticker", {"name": "猫猫歪头"}))
         self.assertTrue(first["ok"])
         self.assertEqual("猫猫歪头", notes["sticker"]["name"])
@@ -106,7 +106,7 @@ class TestTheGuardKeepsItToOnePerTurn(unittest.TestCase):
     def test_without_a_collector_it_refuses_instead_of_pretending(self):
         """主动消息 / 离线那两条路：没有地方放这张图 —— 那就别答应。"""
         import asyncio
-        guard = hands.exec_guard(None, None)
+        guard = hands.exec_guard(None)
         r = asyncio.run(guard("send_sticker", {"name": "猫猫歪头"}))
         self.assertFalse(r["ok"])
         self.assertIn("发不了", r["err"])

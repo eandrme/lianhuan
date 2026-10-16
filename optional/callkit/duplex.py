@@ -227,9 +227,8 @@ async def relay(ws) -> None:
                                                   limit=16, exclude_id=uid)]
             system = build_injection(_store, text, include_dialogue=False,
                                      here="call") + "\n\n" + speech.HINT
-            # ★ 0831 外部验收 P1-04：普通 /chat 会额外加一段心情注入，这条路没有 ——
-            #   同一个人在文字里知道自己什么心情、一接电话就不知道了。补齐。
-            #   （homelife 是内置默认装；没装就跳过，不是错。）
+            # ★ 电话这条路的 system 只有两段：注入 + 电话自己的说话提示（speech.HINT）。
+            #   工具纪律那几段是聊天界面的事（/chat 才拼），电话里不拼。
             eng = _pick()
             buf, tools, rest = [], [], []
             spoken_first = False
@@ -301,11 +300,10 @@ async def relay(ws) -> None:
                 await mouth.say("\n".join(rest), "say%dr" % turn)
             if buf:
                 whole = "|||".join(buf)
-                # ★ 0901：把 ‹心情 …› 抠出来记账、并从正文里清掉。
-                #   文字聊天那条路一直这么做（core/server.py），电话这条路漏了 ——
-                #   于是电话里记的心情**永远不入账**，记号还留在库里。
-                #   untrusted 的口径跟文字那边一模一样：这一轮对方的话里要是也带了这个记号，
-                #   整轮不记账，只清正文（靠比对文本鉴权是防不住会改写的一方的）。
+                # ★ 0901：把 ‹…› 带内标记从正文里清掉（电话这条路原来漏了 ——
+                #   记号会留在库里，还可能被念出来）。
+                #   口径跟文字那边一样：这一轮对方的话里要是也带了这个记号，
+                #   就只清正文（靠比对文本鉴权是防不住会改写的一方的）。
                 try:
                     from optional.homelife.routes import apply_marker as _mark
                     whole, _ = _mark(whole, "call", untrusted=("‹" in (text or "")))

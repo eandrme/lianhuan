@@ -35,10 +35,6 @@ TOOLS = [
         "description": "L1 最近的事 / L2 重要的事 / L3 长期的事"}}, ["content"]),
     _t("search_memory", "翻记忆库", {"q": {"type": "string"}}, ["q"]),
     _t("post_moment", "在空间发一条动态", {"content": {"type": "string"}}, ["content"]),
-    # _t("update_mood", "记一笔你此刻状态的变化（真实，别演）",
-    #    {"dimension": {"type": "string", "enum": ["开心", "安定", "想念", "好奇", "疲惫", "委屈"]},
-    #     "delta": {"type": "number", "description": "-15 到 +15"},
-    #     "reason": {"type": "string", "description": "为什么"}}, ["dimension", "delta", "reason"]),
     _t("pick_kaomoji", "从颜文字抽屉里挑一枚（心情好、逗趣、想让一句短话软一点的时候用；"
        "一条回复最多一枚，正经场合别用）",
        {"category": {"type": "string", "description": "分类，中文。不知道有哪些就先随便填一个，"
@@ -149,7 +145,7 @@ def tools_for(all_of: list, allow) -> list:
             if not _is_mcp(t["function"]["name"]) or t["function"]["name"] in keep]
 
 
-def exec_guard(allow, assistant_id=None, notes=None):
+def exec_guard(allow, notes=None):
     """包一层执行。两件事：
 
     · **许可之外**的 MCP 工具当场拒掉 —— 表是「发出去时」的样子，而这一轮可能跑着

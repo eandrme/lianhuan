@@ -218,7 +218,7 @@ async def speak_once(reason: str = "") -> str:
         print("[proactive] 想的时候档案换了，这句不落库", flush=True)
         return ""
 
-    # ‹心情› 标记照聊天那条路走：落库前清＋记账
+    # ‹…› 带内标记照聊天那条路走：落库前清掉（apply_marker 现在是通用剥标记，不再记账）
     try:
         from optional.homelife.routes import apply_marker
         text, _ = apply_marker(text, "proactive")
