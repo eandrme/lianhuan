@@ -31,6 +31,7 @@ from .engines.base import Turn as EngineTurn
 from .engines.echo import EchoEngine
 from .jobs import JobRegistry
 from .memory import build_injection
+from .memory.ombre import block as ombre_block
 from .protocol import DONE, SAY, SEP, THINK, sse, split_say
 from .store.base import Memory as StoredMemory, Turn as StoredTurn
 from .store.sqlite import SqliteStore
@@ -390,6 +391,9 @@ async def chat(req: Request):
     _sign = _asst.sign_line(assistant)
     if _sign:
         system += "\n\n" + _sign
+    _ombre = ombre_block(session_id)
+    if _ombre:
+        system = system + "\n" + _ombre
     # ★ 0831（GPT 三轮 P0-03）：真实模型出现过「没调用工具、库里没变化，
     #   却用完成语气回话」。产品这边把真实状态做可见了（工具脚注、失败明说），
     #   模型这边就靠这条硬规矩。
