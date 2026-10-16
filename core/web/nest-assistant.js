@@ -6,7 +6,7 @@
    两处：
      · **设置 › 助手管理**（`window.nestAssistantSection`，由 nest-setting.js 要一节）
        一位助手＝头像 + 名字 + 名字下面那行小字 + 系统提示词 + 它能用的 MCP +
-       挂在他名下的窗口 + 他写的信。
+       挂在他名下的窗口。
      · **聊天顶栏那颗身份牌**（`#nestAsstBadge`）—— 你现在这个窗口是谁在说话。
        点一下能看到他的小字、他名下的窗、以及通往助手管理的门。
 
@@ -62,11 +62,6 @@ try{
 .as-chk .tiny{font-size:11px;color:var(--dim2)}
 .as-box{border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;margin-top:4px;
   max-height:190px;overflow:auto;background:var(--panel2)}
-.as-mail{border-bottom:1px solid var(--line);padding:7px 0;font-size:13px}
-.as-mail:last-child{border-bottom:0}
-.as-mail .hd{font-size:11px;color:var(--dim2);display:flex;gap:8px;align-items:center}
-.as-mail .hd .sp{flex:1}
-.as-mail .tx{white-space:pre-wrap;margin-top:4px;line-height:1.6}
 #nestAsstBadge{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border-radius:999px;
   border:1px solid var(--line);color:var(--dim);max-width:44vw}
 #nestAsstBadge:hover{background:var(--panel2)}
@@ -128,7 +123,7 @@ try{
     const sec=el("div","set-sec"); sec.id="as-sec";
     sec.append(el("h4",null,"助手管理"));
     sec.append(el("div","sub","一位助手下面挂几扇窗。他自己有：头像 · 名字 · 名字下面那行小字 · "
-      +"系统提示词 · 他能用的 MCP · 他写的信。"
+      +"系统提示词 · 他能用的 MCP。"
       +"MCP 是**分人**的：新助手默认一个都不给，要哪个在下面手动勾 —— 别的助手不受影响。"));
     const head=el("div","set-btns");
     const bNew=el("button","pri");
@@ -165,7 +160,7 @@ try{
         ? ("现在有 "+ITEMS.length+" 位助手、"+WINDOWS.length+" 个窗口。"
            +"没挂到任何一位名下的窗口，算第一位（"+ITEMS[0].name+"）的。")
         : "还没建过助手 —— 现在整台机器是一位（全局那份人设）。建一位之后，"
-          +"人设、工具、信都按人分。";
+          +"人设、工具都按人分。";
       draw();
     }
     function windowsOf(id){ return WINDOWS.filter(w=>w.assistant===id); }
@@ -301,55 +296,6 @@ try{
         if(!WINDOWS.length) wBox.append(el("div","set-msg","（还没有别的窗口）"));
         bx.append(wBox);
         bx.append(el("div","set-msg","没勾的窗口算第一位的。一个窗口只能属于一位。"));
-        /* 信 */
-        bx.append(el("span","lb","他写的信"));
-        const mailBox=el("div","as-box");
-        const bWrite=el("button",null,"替他写一封");
-        bx.append(mailBox);
-        const mailRow=el("div","set-btns"); mailRow.append(bWrite);
-        bx.append(mailRow);
-        async function loadMail(){
-          mailBox.innerHTML="";
-          if(isNew){ mailBox.append(el("div","set-msg","（先把他建出来，信才有地方放）")); return; }
-          try{
-            const j=await jget("/api/letters?who="+encodeURIComponent(a.id));
-            const its=j.items||[];
-            if(!its.length){ mailBox.append(el("div","set-msg","（他还没写过信）")); return; }
-            its.forEach(m=>{
-              const d=el("div","as-mail");
-              const hd=el("div","hd");
-              hd.append(el("span",null,m.day||""));
-              hd.append(el("span","sp"));
-              const bd=el("button",null,"删");
-              bd.style.cssText="color:var(--err);font-size:11.5px";
-              bd.onclick=async()=>{
-                if(!confirm("删掉这封信？"))return;
-                const r=await jpost("/api/letters/"+m.id+"/del",{});
-                if(r.ok){ say("删了"); loadMail(); } else say("删不掉");
-              };
-              hd.append(bd);
-              d.append(hd,el("div","tx",m.content||""));
-              mailBox.append(d);
-            });
-          }catch(e){ mailBox.append(el("div","set-msg","读不到："+e.message)); }
-        }
-        bWrite.onclick=()=>{
-          const wrap=sheet("替他写一封",(bx2,close2)=>{
-            const t=el("textarea"); t.placeholder="以他的口吻写……";
-            const row2=el("div","set-btns");
-            const ok=el("button","pri","放进信箱"), no=el("button",null,"取消");
-            row2.append(ok,no); bx2.append(t,row2);
-            no.onclick=close2;
-            ok.onclick=async()=>{
-              const c=t.value.trim();
-              if(!c){ say("空的信寄不出去"); return; }
-              const r=await jpost("/api/letters",{content:c,who:a.id});
-              if(r.ok){ say("放进信箱了"); close2(); loadMail(); }
-              else say("没寄出去："+(r.err||"?"));
-            };
-          });
-        };
-        loadMail();
         /* 按钮 */
         const foot=el("div","set-btns");
         const bSave=el("button","pri","存下"), bCancel=el("button",null,"取消");

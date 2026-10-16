@@ -70,46 +70,6 @@ def _hm(ts): return datetime.fromtimestamp(ts or 0).strftime("%H:%M")
 def _md(ts): return datetime.fromtimestamp(ts or 0).strftime("%m-%d %H:%M")
 
 
-# ── 信 ────────────────────────────────────────────────────
-@router.get("/api/letters")
-def api_letters(who: str = ""):
-    """信箱。`?who=<助手 id>` 只看那位写的那一沓；不带＝全部。
-
-    ★ 一带 who 就**只回那一沓**（不把 who 为空的那堆也倒进来）—— 助手管理里要的是
-      「他写的信」，混进别人写的就不叫分类了。"""
-    sql, args = "SELECT * FROM letters", ()
-    if who.strip():
-        sql += " WHERE COALESCE(who,'')=?"
-        args = (who.strip(),)
-    rows = [{"id": r["id"], "tags": r["tags"] or "", "content": r["content"],
-             "day": r["day"] or _d(r["ts"]), "who": r["who"] or "", "src": "local"}
-            for r in _store.db.execute(sql + " ORDER BY id DESC LIMIT 200", args)]
-    return JSONResponse({"items": rows, "letters": rows})
-
-
-@router.post("/api/letters")
-async def api_letter_add(req: Request):
-    """自己写一封（不经过模型）。助手管理里「替他写一封」和「我写一封」都走这儿。"""
-    b = await req.json()
-    content = (b.get("content") or "").strip()
-    if not content:
-        return JSONResponse({"ok": False, "err": "空的信寄不出去"}, status_code=400)
-    cur = _store.db.execute(
-        "INSERT INTO letters(tags,content,day,ts,who) VALUES(?,?,?,?,?)",
-        (str(b.get("tags") or "")[:200], content[:8000],
-         str(b.get("day") or "") or _d(time.time()), time.time(),
-         str(b.get("who") or "")[:40]))
-    _store.db.commit()
-    return JSONResponse({"ok": True, "id": cur.lastrowid})
-
-
-@router.post("/api/letters/{lid}/del")
-def api_letter_del(lid: int):
-    _store.db.execute("DELETE FROM letters WHERE id=?", (lid,))
-    _store.db.commit()
-    return JSONResponse({"ok": True})
-
-
 # ── 空间（动态 ＋ 楼中回复，AI 会接话）──────────────────────
 def _moments_out():
     out = []

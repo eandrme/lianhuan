@@ -1,11 +1,9 @@
-"""助手 —— 一位助手下面挂几扇窗，各有各的口吻、工具、信。
+"""助手 —— 一位助手下面挂几扇窗，各有各的口吻、工具。
 
-★ 这一层的三条硬规矩（每一条都有真机上撞出来的理由）：
+★ 这一层的两条硬规矩（每一条都有真机上撞出来的理由）：
   ① **没配过助手＝老行为**：人设还是全局那份、工具照旧全给。老库升级不该被改脾气。
   ② **MCP 不同步**：第一位助手没勾过＝不限（老行为）；新建的助手＝一个都不给，
      要哪个在它的设置里手动勾。表筛过一遍还不够，执行那一步再拦一道。
-  ③ **信要分得清是谁写的**：`write_letter` 那只手自己不知道在哪个窗口说话，
-     由 exec_guard 把当前助手注进去 —— 让模型自己填，它填错了信就跑别人那沓去了。
 """
 from __future__ import annotations
 
@@ -138,7 +136,7 @@ class TestToolsAreFilteredPerAssistant(unittest.TestCase):
         self.assertNotIn("games__play", got)
         self.assertNotIn("notes__read", got)
         self.assertIn("write_memory", got, "内置的手是这台机器自己的功能，不该被一起收走")
-        self.assertIn("write_letter", got)
+        self.assertIn("post_moment", got)
 
     def test_only_the_allowed_servers(self):
         got = self.names(self.hands.tools_for(self.all, ["games"]))
@@ -152,24 +150,6 @@ class TestToolsAreFilteredPerAssistant(unittest.TestCase):
         out = asyncio.run(guard("games__play", {"game": "x"}))
         self.assertFalse(out["ok"])
         self.assertIn("没给这位助手开", out["err"])
-
-    def test_the_letter_is_stamped_with_the_assistant(self):
-        """write_letter 那只手不知道自己在哪个窗口——得有人替它标上是谁写的。"""
-        import asyncio
-        seen = {}
-
-        async def fake_exec(name, args):
-            seen.update(args or {})
-            return {"ok": True}
-
-        orig = self.hands.execute
-        self.hands.execute = fake_exec
-        self.addCleanup(lambda: setattr(self.hands, "execute", orig))
-        asyncio.run(self.hands.exec_guard(None, "a77")("write_letter", {"content": "嗨"}))
-        self.assertEqual("a77", seen.get("_who"))
-        # 模型自己填的会被盖掉
-        asyncio.run(self.hands.exec_guard(None, "a77")("write_letter", {"_who": "别人"}))
-        self.assertEqual("a77", seen.get("_who"))
 
 
 class TestTheApiAndTheChatWiring(unittest.TestCase):
@@ -365,20 +345,6 @@ class TestLettersBelongToAnAssistant(unittest.TestCase):
             return ""
         self.hl.bind(self.store, _say)
 
-    def test_letters_are_kept_apart_per_assistant(self):
-        self.c.post("/api/letters", json={"content": "阿澈写的信", "who": "a1"})
-        self.c.post("/api/letters", json={"content": "小满写的信", "who": "a2"})
-        self.c.post("/api/letters", json={"content": "没有署名的"})
-        self.assertEqual(["阿澈写的信"], [x["content"] for x in self.c.get("/api/letters?who=a1").json()["items"]])
-        self.assertEqual(3, len(self.c.get("/api/letters").json()["items"]), "不带 who ＝ 全部")
-        one = self.c.get("/api/letters?who=a2").json()["items"][0]
-        self.assertEqual("a2", one["who"])
-        self.assertTrue(self.c.post(f"/api/letters/{one['id']}/del").json()["ok"])
-        self.assertEqual([], self.c.get("/api/letters?who=a2").json()["items"])
-
-    def test_an_empty_letter_is_refused(self):
-        self.assertEqual(400, self.c.post("/api/letters", json={"content": "  "}).status_code)
-
 
 class TestTheUiIsWired(unittest.TestCase):
     def _read(self, name):
@@ -387,7 +353,7 @@ class TestTheUiIsWired(unittest.TestCase):
     def test_the_settings_page_loads_the_assistant_module(self):
         self.assertIn('src="/nest-assistant.js', self._read("nest.html"))
         js = self._read("nest-assistant.js")
-        for word in ("助手管理", "/api/assistants", "系统提示词", "头像", "那行小字", "他写的信"):
+        for word in ("助手管理", "/api/assistants", "系统提示词", "头像", "那行小字"):
             self.assertIn(word, js, word)
 
     def test_the_settings_pane_asks_for_the_section(self):

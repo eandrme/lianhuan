@@ -5,7 +5,7 @@
   这一层就是那个地方。一位助手＝
 
     名字 · 名字下面那行小字 · 头像 · 自己那份系统提示词 · 允许它用的 MCP ·
-    挂在他名下的窗口 · 他写的信
+    挂在他名下的窗口
 
 ★ 存法：settings 里一个 JSON（`assistants`），跟 persona / theme 一个规矩 ——
   搬家跟着走（在 `PORTABLE_SETTINGS` 里）。

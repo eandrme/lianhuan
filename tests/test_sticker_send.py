@@ -115,7 +115,7 @@ class TestTheGuardKeepsItToOnePerTurn(unittest.TestCase):
         tools = hands.TOOLS + [{"type": "function", "function": {"name": "games__x", "parameters": {}}}]
         left = {t["function"]["name"] for t in hands.without(tools, ["send_sticker"])}
         self.assertNotIn("send_sticker", left)
-        self.assertIn("write_letter", left, "只摘这一只，别的手不动")
+        self.assertIn("post_moment", left, "只摘这一只，别的手不动")
 
 
 class TestThePromptSaysTheRules(unittest.TestCase):

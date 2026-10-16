@@ -127,14 +127,11 @@ class TestTheTextBudgetIsCountedInBytes(unittest.TestCase):
 class TestOfflineDoesNotFakeSuccess(unittest.TestCase):
     """离线那一场没有「回复」可以挂图，也没有助手身份 —— 那两只手就该当场拒掉。"""
 
-    def test_sticker_and_letter_are_refused_offline(self):
+    def test_sticker_is_refused_offline(self):
         from core import offline
         r = asyncio.run(offline._exec_audited("send_sticker", {"name": "猫"}))
         self.assertFalse(r.get("ok"), "不许回 ok:true 却什么都没发生")
         self.assertIn("表情包", r.get("err", ""))
-        r2 = asyncio.run(offline._exec_audited("write_letter", {"content": "hi"}))
-        self.assertFalse(r2.get("ok"))
-        self.assertIn("信", r2.get("err", ""))
 
     def test_the_reason_is_written_into_the_audit_log(self):
         """拒了也要留痕：不然「它那时候到底动没动手」事后查不出来。"""

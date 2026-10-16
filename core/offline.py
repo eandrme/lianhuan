@@ -342,7 +342,6 @@ def _allowed_tools() -> list:
 #: 什么都不出现，正是 exec_guard 存在的理由（见 hands.exec_guard 那段注释）。
 _OFFLINE_NO_HOME = {
     "send_sticker": "这个窗口发不了表情包（自己的时间里没有能贴的地方）",
-    "write_letter": "自己的时间里写不了信（这封不知道该算谁写的）",
 }
 
 

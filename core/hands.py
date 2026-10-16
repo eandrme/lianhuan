@@ -85,9 +85,6 @@ TOOLS = [
        "挑不到合适的就不发，别硬凑。",
        {"name": {"type": "string",
                  "description": "表情包的名字（照 system 里那张表挑）"}}, ["name"]),
-    _t("write_letter", "写一封信放进信箱（认真写，别一句话糊弄）",
-       {"content": {"type": "string"}, "tags": {"type": "string", "description": "如 随笔/周报"}},
-       ["content"]),
     _t("add_calendar", "往你们的日历里加一条（日程或纪念日）",
        {"title": {"type": "string"}, "date": {"type": "string", "description": "YYYY-MM-DD"},
         "kind": {"type": "string", "description": "纪念日 或留空"},
@@ -119,7 +116,7 @@ TOOLS = [
 
 
 def all_tools() -> list:
-    """这一轮给引擎的全部工具：内置 24 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
+    """这一轮给引擎的全部工具：内置 23 只 ＋ 用户登记的 MCP 工具（动态并进来）。"""
     from . import mcp_client
     return TOOLS + mcp_client.openai_tools()
 
@@ -133,7 +130,7 @@ def without(all_of: list, names) -> list:
 def tools_for(all_of: list, allow) -> list:
     """按助手的许可过滤工具表。`allow=None` ＝ 不限（老行为一字不差）。
 
-    ★ 只筛 **MCP 那部分**：内置的手（写记忆 / 写信…）是这台机器自己的功能，
+    ★ 只筛 **MCP 那部分**：内置的手（写记忆 / 发动态…）是这台机器自己的功能，
       跟「这位助手能连哪几个 MCP server」是两件事，别一起收走。
       认一个 MCP 工具名靠它前面的 `server__` 前缀（`mcp_client` 就是这么拼的）。
     """
@@ -158,8 +155,6 @@ def exec_guard(allow, assistant_id=None, notes=None):
     · **许可之外**的 MCP 工具当场拒掉 —— 表是「发出去时」的样子，而这一轮可能跑着
       跑着用户把 MCP 关了，模型也可能自己编一个名字出来。凡是 MCP 的工具名
       （带 `server__` 前缀）而这位助手没开那个 server，就不给动。
-    · `write_letter` 时把**当前助手**注进去（`_who`）—— 信才分得清是谁写的。
-      这件事不能让模型自己填：它填错了，信就跑别人那沓去了。
     · `send_sticker` 收进 `notes["sticker"]`（这一轮的那一张），由调用方贴到回复末尾。
       **`notes` 是 None 就当场拒掉** —— 那边没有地方放这张图，回了「贴上了」而屏幕上
       什么都不出现，比不发还糟（挂电话/主动消息那两条路就是这样）。
@@ -191,9 +186,6 @@ def exec_guard(allow, assistant_id=None, notes=None):
             if isinstance(r, dict) and r.get("ok") and r.get("sticker"):
                 _notes["sticker"] = r["sticker"]
             return r
-        if assistant_id and name == "write_letter":
-            args = dict(args or {})
-            args["_who"] = assistant_id
         return await execute(name, args)
 
     return _run
@@ -387,17 +379,6 @@ async def execute(name: str, args: dict) -> dict:
                 "sticker": {"id": hit["id"], "name": hit["name"] or "表情",
                             "url": hit["url"], "tags": hit["tags"] or ""}}
 
-    if name == "write_letter":
-        import time as _tm
-        from datetime import date as _ddate
-        # ★ `_who`：这封信是哪位助手写的。**不是模型自己填的** —— 由 exec_guard
-        #   按当前窗口挂的那位助手注入（模型瞎填也盖掉）。空＝通用／主助手。
-        _store.db.execute("INSERT INTO letters(tags,content,day,ts,who) VALUES(?,?,?,?,?)",
-                          (str(args.get("tags") or ""), str(args.get("content") or "")[:8000],
-                           _ddate.today().isoformat(), _tm.time(),
-                           str(args.get("_who") or "")[:40]))
-        _store.db.commit()
-        return {"ok": True, "note": "放进信箱了"}
     if name == "add_calendar":
         import time as _tm
         if args.get("kind") == "纪念日":

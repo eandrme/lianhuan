@@ -253,8 +253,8 @@ PACKS = [
              "一抽屉基础颜文字。内置实现，装好就在用。",
      "contract": "docs/API.md。更全的颜文字抽屉见装配单（那是另一个人的开源项目）"},
     {"id": "writings", "name": "记事", "kind": "builtin",
-     "desc": "信、动态（一条条，可以回）。内置实现，装好就在用。",
-     "contract": "docs/API.md（letters / moments）—— 不想用内置的，照契约换成自己的"},
+     "desc": "动态（一条条，可以回）。内置实现，装好就在用。",
+     "contract": "docs/API.md（moments）—— 不想用内置的，照契约换成自己的"},
     {"id": "fish", "name": "钓鱼", "kind": "stub",
      "desc": "钓鱼的鱼篓和图鉴 —— 这儿只有壳子，玩法要自己接。\n"
              "想让他自己去钓鱼：找个钓鱼小游戏，按上面「他的外接工具」那一节接进来。",
