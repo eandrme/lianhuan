@@ -4000,6 +4000,15 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline-offset:1
           <!-- 功能包：让「待接」能一键接上。用内置的直接点，不用的写装配单 -->
           <button class="setrow" data-open="packspage"><div class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div><span>功能包<small>待接的在这儿接 · 或写进装配单自己做</small></span><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg></button>
           <button class="setrow" data-sub="日常补一句"><div class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/><path d="M13.5 6.5l4 4"/></svg></div><span>日常补一句<small>每一轮都加在我脑子里</small></span><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6l-6 6"/></svg></button>
+          <div class="swrow">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div class="ic" style="margin:0"><svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 8v4l2.5 1.5"/><path d="M16 4h5v5"/></svg></div>
+              <span>记忆<small>开场把该想起的带回来 · 关掉就当没这回事</small></span>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:11px">
+              <input type="checkbox" id="ombreMem" style="width:22px;height:22px;accent-color:var(--ink);cursor:pointer">
+            </div>
+          </div>
         </div>
       </div>
 
@@ -5207,6 +5216,18 @@ const PREF = (function(){
   });
   document.getElementById('setbtn').addEventListener('click', function(){ open('setpage'); });
   document.getElementById('dset').addEventListener('click', function(){ drawerOpen(false); open('setpage'); });
+
+  /* ── 记忆阀门（/api/ombre）：开场把该想起的带回来。存库，立刻生效，不用重启。 */
+  (function(){
+    var mv = document.getElementById('ombreMem');
+    if (!mv) return;
+    fetch('/api/ombre', {cache:'no-store'}).then(function(r){ return r.json(); })
+      .then(function(d){ mv.checked = !!d.on; }).catch(function(){});
+    mv.onchange = function(){
+      fetch('/api/ombre', {method:'POST', headers:{'Content-Type':'application/json'},
+                           body: JSON.stringify({on: mv.checked})}).catch(function(){});
+    };
+  })();
 
   app.addEventListener('click', function(e){
     /* ★ 丝线的卡片、纸夹的纸、散摞的纸片自己有一套「点一下浮起、再点才进」，
@@ -18088,5 +18109,1122 @@ window._kmMount = function(){
       mp.setLyrics((lrc || []).map(x => ({t: x.t, text: x.txt || x.text || ''})));
     },
   };
+})();
+</script>
+<!-- 离线自由时段标识 -->
+<script>
+(function () {
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:10px;right:14px;z-index:99999;' +
+    'padding:4px 12px;border-radius:999px;font-size:12px;line-height:1.7;' +
+    'background:rgba(22,22,28,.62);color:#fff;display:none;' +
+    'backdrop-filter:blur(8px);pointer-events:none;letter-spacing:.5px';
+  el.textContent = '🌙 它不在';
+  function mount() { if (!el.parentNode) document.body.appendChild(el); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  var URLS = ['/plays/_offline.json', '/_offline.json', '/api/offline/state'];
+  function poll(i) {
+    i = i || 0;
+    if (i >= URLS.length) return;
+    fetch(URLS[i], { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || typeof j.active !== 'boolean') return poll(i + 1);
+        el.style.display = (j.enabled && j.active) ? 'block' : 'none';
+      })
+      .catch(function () { poll(i + 1); });
+  }
+  setTimeout(function () { poll(0); }, 1500);
+  setInterval(function () { poll(0); }, 20000);
+})();
+</script>
+<!-- 离线自由时段标识 v2 -->
+<script>
+(function () {
+  var el = document.createElement('div');
+  el.id = 'offline-badge';
+  el.style.cssText = 'position:fixed;top:10px;right:14px;z-index:99999;' +
+    'padding:4px 12px;border-radius:999px;font-size:12px;line-height:1.7;' +
+    'color:#fff;display:none;backdrop-filter:blur(8px);' +
+    'pointer-events:none;letter-spacing:.5px;transition:opacity .4s';
+  function mount() { if (!el.parentNode) document.body.appendChild(el); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
+
+  function poll() {
+    fetch('/api/offline', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || !j.enabled) { el.style.display = 'none'; return; }
+        var now = Date.now() / 1000;
+        if (j.active) {
+          el.textContent = '🌙 它不在';
+          el.style.background = 'rgba(22,22,28,.62)';
+          el.style.opacity = '1';
+          el.style.display = 'block';
+        } else if (j.last && (now - j.last) < 1800) {
+          el.textContent = '🌙 它刚才有过一段自己的时间';
+          el.style.background = 'rgba(22,22,28,.30)';
+          el.style.opacity = '.78';
+          el.style.display = 'block';
+        } else {
+          el.style.display = 'none';
+        }
+      })
+      .catch(function () {});
+  }
+  setTimeout(poll, 1500);
+  setInterval(poll, 15000);
+})();
+</script>
+<!-- 记忆手工编辑面板 -->
+<script>
+(function () {
+  var btn = document.createElement('div');
+  btn.textContent = '✎ 改记忆';
+  btn.style.cssText = 'position:fixed;right:14px;bottom:86px;z-index:99998;padding:8px 14px;' +
+    'border-radius:999px;font-size:13px;cursor:pointer;background:rgba(30,30,36,.78);' +
+    'color:#fff;backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.25);user-select:none';
+
+  var mask = document.createElement('div');
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)';
+  mask.innerHTML =
+    '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);' +
+    'width:min(700px,92vw);max-height:84vh;overflow:auto;background:#fff;border-radius:16px;' +
+    'padding:18px;font-size:14px;line-height:1.7;box-shadow:0 12px 40px rgba(0,0,0,.35)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+        '<b style="font-size:16px">记忆库</b>' +
+        '<span><span id="memAdd" style="cursor:pointer;color:#c0392b;margin-right:16px">＋ 新增</span>' +
+        '<span id="memClose" style="cursor:pointer;color:#999">关闭</span></span>' +
+      '</div><div id="memList">加载中…</div></div>';
+
+  function mount() {
+    if (!btn.parentNode) document.body.appendChild(btn);
+    if (!mask.parentNode) document.body.appendChild(mask);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+    });
+  }
+
+  function rowHtml(it) {
+    return '<div data-id="' + it.id + '" style="border:1px solid #eee;border-radius:12px;' +
+      'padding:10px 12px;margin-bottom:10px;transition:border-color .3s">' +
+      '<div style="font-size:12px;color:#999;margin-bottom:6px">#' + it.id + ' · ' + esc(it.layer) + '</div>' +
+      '<textarea style="width:100%;min-height:64px;border:1px solid #ddd;border-radius:8px;' +
+      'padding:8px;font:inherit;box-sizing:border-box;resize:vertical">' + esc(it.content) + '</textarea>' +
+      '<div style="margin-top:8px;text-align:right">' +
+      '<button class="memDel" style="margin-right:8px;padding:5px 14px;border:1px solid #e5b4b4;' +
+      'background:#fff;color:#c0392b;border-radius:8px;cursor:pointer">删除</button>' +
+      '<button class="memSave" style="padding:5px 16px;border:0;background:#c0392b;color:#fff;' +
+      'border-radius:8px;cursor:pointer">保存</button></div></div>';
+  }
+
+  function load() {
+    var box = mask.querySelector('#memList');
+    box.innerHTML = '加载中…';
+    fetch('/api/memory/items', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var items = (j && j.items) || [];
+        box.innerHTML = items.length ? items.map(rowHtml).join('')
+                                     : '<div style="color:#999">还没有记忆</div>';
+      })
+      .catch(function (e) { box.innerHTML = '<div style="color:#c0392b">加载失败：' + esc(e) + '</div>'; });
+  }
+
+  function save(card) {
+    var id = card.getAttribute('data-id');
+    var content = card.querySelector('textarea').value;
+    fetch('/api/memory/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id ? Number(id) : 0, content: content })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('保存失败：' + (j.err || '')); return; }
+      if (!id) { load(); return; }
+      card.style.borderColor = '#7bbf7b';
+      setTimeout(function () { card.style.borderColor = '#eee'; }, 1200);
+    }).catch(function (e) { alert('保存出错：' + e); });
+  }
+
+  function del(card) {
+    var id = card.getAttribute('data-id');
+    if (!id) { card.remove(); return; }
+    if (!confirm('确定删掉这条记忆？')) return;
+    fetch('/api/memory/del', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: Number(id) })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('删除失败：' + (j.err || '')); return; }
+      card.remove();
+    }).catch(function (e) { alert('删除出错：' + e); });
+  }
+
+  mask.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t === mask) { mask.style.display = 'none'; return; }
+    if (t.id === 'memClose') { mask.style.display = 'none'; return; }
+    if (t.id === 'memAdd') {
+      var list = mask.querySelector('#memList');
+      var d = document.createElement('div');
+      d.innerHTML = rowHtml({ id: '', layer: 'L2', content: '' });
+      list.insertBefore(d.firstChild, list.firstChild);
+      return;
+    }
+    if (t.className === 'memSave') { save(t.closest('div[data-id]')); return; }
+    if (t.className === 'memDel') { del(t.closest('div[data-id]')); return; }
+  });
+
+  btn.addEventListener('click', function () { mask.style.display = 'block'; load(); });
+})();
+</script>
+<!-- 记忆手工编辑面板 v2（含层级切换） -->
+<script>
+(function () {
+  // ── 先清掉 v1 的界面，避免两个面板打架 ──
+  Array.prototype.slice.call(document.querySelectorAll('div')).forEach(function (d) {
+    var pos = d.style && d.style.position;
+    if (pos !== 'fixed') return;
+    var t = d.textContent || '';
+    if (t.trim() === '✎ 改记忆' || t.indexOf('＋ 新增') >= 0) {
+      try { d.remove(); } catch (e) {}
+    }
+  });
+
+  var LAYERS = ['L1', 'L2', 'L3'];
+
+  var btn = document.createElement('div');
+  btn.id = 'memBtn';
+  btn.textContent = '✎ 改记忆';
+  btn.style.cssText = 'position:fixed;right:14px;bottom:86px;z-index:99998;padding:8px 14px;' +
+    'border-radius:999px;font-size:13px;cursor:pointer;background:rgba(30,30,36,.78);' +
+    'color:#fff;backdrop-filter:blur(8px);box-shadow:0 4px 14px rgba(0,0,0,.25);user-select:none';
+
+  var mask = document.createElement('div');
+  mask.id = 'memMask';
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;display:none;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)';
+  mask.innerHTML =
+    '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);' +
+    'width:min(700px,92vw);max-height:84vh;overflow:auto;background:#fff;border-radius:16px;' +
+    'padding:18px;font-size:14px;line-height:1.7;box-shadow:0 12px 40px rgba(0,0,0,.35)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
+        '<b style="font-size:16px">记忆库</b>' +
+        '<span><span id="memAdd" style="cursor:pointer;color:#c0392b;margin-right:16px">＋ 新增</span>' +
+        '<span id="memClose" style="cursor:pointer;color:#999">关闭</span></span>' +
+      '</div><div id="memList">加载中…</div></div>';
+
+  function mount() {
+    if (!btn.parentNode) document.body.appendChild(btn);
+    if (!mask.parentNode) document.body.appendChild(mask);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c];
+    });
+  }
+
+  function layerSel(cur) {
+    return '<select class="memLayer" style="border:1px solid #ddd;border-radius:6px;' +
+      'padding:1px 6px;font:inherit;color:#666">' +
+      LAYERS.map(function (v) {
+        return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + v + '</option>';
+      }).join('') + '</select>';
+  }
+
+  function rowHtml(it) {
+    return '<div data-id="' + it.id + '" style="border:1px solid #eee;border-radius:12px;' +
+      'padding:10px 12px;margin-bottom:10px;transition:border-color .3s">' +
+      '<div style="font-size:12px;color:#999;margin-bottom:6px">#' + it.id + ' · ' +
+      layerSel(it.layer || 'L2') + '</div>' +
+      '<textarea style="width:100%;min-height:64px;border:1px solid #ddd;border-radius:8px;' +
+      'padding:8px;font:inherit;box-sizing:border-box;resize:vertical">' + esc(it.content) + '</textarea>' +
+      '<div style="margin-top:8px;text-align:right">' +
+      '<button class="memDel" style="margin-right:8px;padding:5px 14px;border:1px solid #e5b4b4;' +
+      'background:#fff;color:#c0392b;border-radius:8px;cursor:pointer">删除</button>' +
+      '<button class="memSave" style="padding:5px 16px;border:0;background:#c0392b;color:#fff;' +
+      'border-radius:8px;cursor:pointer">保存</button></div></div>';
+  }
+
+  function load() {
+    var box = mask.querySelector('#memList');
+    box.innerHTML = '加载中…';
+    fetch('/api/memory/items', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var items = (j && j.items) || [];
+        box.innerHTML = items.length ? items.map(rowHtml).join('')
+                                     : '<div style="color:#999">还没有记忆</div>';
+      })
+      .catch(function (e) { box.innerHTML = '<div style="color:#c0392b">加载失败：' + esc(e) + '</div>'; });
+  }
+
+  function save(card) {
+    var id = card.getAttribute('data-id');
+    var content = card.querySelector('textarea').value;
+    var sel = card.querySelector('select.memLayer');
+    var layer = sel ? sel.value : 'L2';
+    fetch('/api/memory/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id ? Number(id) : 0, content: content, layer: layer })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('保存失败：' + (j.err || '')); return; }
+      if (!id) { load(); return; }
+      card.style.borderColor = '#7bbf7b';
+      setTimeout(function () { card.style.borderColor = '#eee'; }, 1200);
+    }).catch(function (e) { alert('保存出错：' + e); });
+  }
+
+  function del(card) {
+    var id = card.getAttribute('data-id');
+    if (!id) { card.remove(); return; }
+    if (!confirm('确定删掉这条记忆？')) return;
+    fetch('/api/memory/del', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: Number(id) })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { alert('删除失败：' + (j.err || '')); return; }
+      card.remove();
+    }).catch(function (e) { alert('删除出错：' + e); });
+  }
+
+  mask.addEventListener('click', function (ev) {
+    var t = ev.target;
+    if (t === mask) { mask.style.display = 'none'; return; }
+    if (t.id === 'memClose') { mask.style.display = 'none'; return; }
+    if (t.id === 'memAdd') {
+      var list = mask.querySelector('#memList');
+      var d = document.createElement('div');
+      d.innerHTML = rowHtml({ id: '', layer: 'L2', content: '' });
+      list.insertBefore(d.firstChild, list.firstChild);
+      return;
+    }
+    if (t.className === 'memSave') { save(t.closest('div[data-id]')); return; }
+    if (t.className === 'memDel') { del(t.closest('div[data-id]')); return; }
+  });
+
+  btn.addEventListener('click', function () { mask.style.display = 'block'; load(); });
+})();
+</script>
+<!-- 改记忆按钮：可拖动 (v3) -->
+<script>
+(function () {
+  var KEY = 'memBtnPos';
+
+  function whenReady(cb) {
+    var n = 0;
+    var t = setInterval(function () {
+      var b = document.getElementById('memBtn');
+      if (b) { clearInterval(t); cb(b); return; }
+      if (++n > 60) clearInterval(t);
+    }, 300);
+  }
+
+  whenReady(function (btn) {
+    // 恢复上次拖到的位置
+    try {
+      var p = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (p && typeof p.left === 'number') {
+        btn.style.left = p.left + 'px';
+        btn.style.top = p.top + 'px';
+        btn.style.right = 'auto';
+        btn.style.bottom = 'auto';
+      }
+    } catch (e) {}
+
+    btn.style.touchAction = 'none';
+    btn.style.cursor = 'move';
+
+    var dragging = false, moved = false;
+    var sx = 0, sy = 0, ox = 0, oy = 0;
+
+    btn.addEventListener('pointerdown', function (ev) {
+      dragging = true; moved = false;
+      var r = btn.getBoundingClientRect();
+      sx = ev.clientX; sy = ev.clientY; ox = r.left; oy = r.top;
+      btn.style.left = r.left + 'px';
+      btn.style.top = r.top + 'px';
+      btn.style.right = 'auto';
+      btn.style.bottom = 'auto';
+      try { btn.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+
+    btn.addEventListener('pointermove', function (ev) {
+      if (!dragging) return;
+      var dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      var w = window.innerWidth, h = window.innerHeight;
+      var nl = Math.max(4, Math.min(w - btn.offsetWidth - 4, ox + dx));
+      var nt = Math.max(4, Math.min(h - btn.offsetHeight - 4, oy + dy));
+      btn.style.left = nl + 'px';
+      btn.style.top = nt + 'px';
+    });
+
+    btn.addEventListener('pointerup', function (ev) {
+      if (!dragging) return;
+      dragging = false;
+      try { btn.releasePointerCapture(ev.pointerId); } catch (e) {}
+      if (moved) {
+        try {
+          localStorage.setItem(KEY, JSON.stringify({
+            left: parseInt(btn.style.left, 10) || 0,
+            top: parseInt(btn.style.top, 10) || 0
+          }));
+        } catch (e) {}
+      }
+    });
+
+    // 拖动过 → 不要误触发"打开面板"
+    btn.addEventListener('click', function (ev) {
+      if (moved) { ev.stopPropagation(); ev.preventDefault(); moved = false; }
+    }, true);
+  });
+})();
+</script>
+<!-- 清理重复的「改记忆」按钮 (v4) -->
+<script>
+(function () {
+  function dedup() {
+    var keep = document.getElementById('memBtn');
+    var masks = 0;
+    Array.prototype.slice.call(document.querySelectorAll('div')).forEach(function (d) {
+      var pos = d.style && d.style.position;
+      if (pos !== 'fixed') return;
+      var t = (d.textContent || '').trim();
+
+      // 重复的按钮：只留 id=memBtn 那个（可拖动的）
+      if (t === '✎ 改记忆' && d !== keep) {
+        try { d.remove(); } catch (e) {}
+        return;
+      }
+      // 重复的面板遮罩：只留 id=memMask 那个
+      if (t.indexOf('＋ 新增') >= 0 && t.indexOf('记忆库') >= 0) {
+        masks++;
+        if (d.id !== 'memMask') { try { d.remove(); } catch (e) {} }
+      }
+    });
+  }
+  dedup();
+  var n = 0;
+  var t = setInterval(function () { dedup(); if (++n > 25) clearInterval(t); }, 400);
+  window.addEventListener('load', function () {
+    setTimeout(dedup, 600);
+    setTimeout(dedup, 1500);
+  });
+})();
+</script>
+<script>
+/* ===== MCP 开关面板（追加式，自包含，不依赖页面样式）===== */
+(function () {
+  if (window.__mcpPanel) return;
+  window.__mcpPanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#mcpBtn{position:fixed;right:12px;bottom:158px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:21px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#mcpPanel{position:fixed;right:12px;bottom:214px;z-index:9999;width:min(88vw,300px);max-height:62vh;overflow:auto;
+  background:#141821;color:#e2e8f4;border:1px solid #3a4360;border-radius:14px;padding:10px 12px;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);display:none;font-size:13px;line-height:1.45}
+#mcpPanel .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;cursor:move}
+#mcpPanel .hd b{font-size:13px;color:#9db0d4;font-weight:600}
+#mcpPanel .hd span{color:#7f8ba3;font-size:12px;padding:2px 6px;cursor:pointer}
+#mcpPanel .row{padding:8px 0;border-top:1px solid #242b3a}
+#mcpPanel .top{display:flex;align-items:center;gap:8px}
+#mcpPanel .nm{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mcpPanel .sub{color:#8b97ad;font-size:11px;margin-top:2px;word-break:break-all}
+#mcpPanel .ok{color:#7fd18b} #mcpPanel .bad{color:#e18a7c}
+#mcpPanel .sw{flex:0 0 auto;width:44px;height:24px;border-radius:12px;background:#39415a;position:relative;transition:.15s}
+#mcpPanel .sw.on{background:#3d8b5f}
+#mcpPanel .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#e8edf7;transition:.15s}
+#mcpPanel .sw.on i{left:23px}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'mcpBtn'; btn.textContent = '🔌'; btn.title = 'MCP 开关';
+  const panel = document.createElement('div');
+  panel.id = 'mcpPanel';
+  panel.innerHTML = '<div class="hd"><b>MCP 开关</b><span id="mcpReload">刷新</span></div><div id="mcpList">…</div>';
+  document.body.appendChild(btn); document.body.appendChild(panel);
+
+  const listEl = panel.querySelector('#mcpList');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+  function draw(items) {
+    if (!items || !items.length) {
+      listEl.innerHTML = '<div class="sub" style="padding:8px 0">还没有登记任何 MCP。</div>';
+      return;
+    }
+    listEl.innerHTML = items.map(s => {
+      const where = s.url || s.command || '';
+      const tools = (s.tools && s.tools.length)
+        ? '工具 ' + s.tools.length + '：' + esc(s.tools.slice(0, 4).join('、')) + (s.tools.length > 4 ? '…' : '')
+        : '没有工具';
+      const state = s.ok ? '<span class="ok">已连上</span>'
+        : (s.enabled ? '<span class="bad">连不上' + (s.err ? '：' + esc(String(s.err).slice(0, 60)) : '') + '</span>'
+                     : '<span style="color:#8b97ad">已关闭</span>');
+      return '<div class="row"><div class="top"><div class="nm">' + esc(s.name) + '</div>'
+        + '<div class="sw ' + (s.enabled ? 'on' : '') + '" data-name="' + esc(s.name) + '" data-on="' + (s.enabled ? 1 : 0) + '"><i></i></div></div>'
+        + '<div class="sub">' + esc(where) + ' · ' + esc(s.type) + '</div>'
+        + '<div class="sub">' + state + ' · ' + tools + '</div></div>';
+    }).join('');
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/mcp', { cache: 'no-store' });
+      const j = await r.json();
+      draw(j.servers || []);
+    } catch (e) {
+      listEl.innerHTML = '<div class="sub bad">读不到：' + esc(e.message) + '</div>';
+    }
+  }
+
+  btn.onclick = () => {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) load();
+  };
+  panel.querySelector('#mcpReload').onclick = load;
+
+  panel.addEventListener('click', async ev => {
+    const sw = ev.target.closest('.sw');
+    if (!sw) return;
+    const name = sw.dataset.name, on = sw.dataset.on !== '1';
+    sw.style.opacity = .5;
+    try {
+      const r = await fetch('/api/mcp/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, enabled: on })
+      });
+      const j = await r.json();
+      if (j.servers) draw(j.servers); else load();
+    } catch (e) { alert('切换失败：' + e.message); load(); }
+  });
+
+  /* 面板可拖动，位置记在 localStorage（想复位：localStorage.removeItem('mcpPanelPos')）*/
+  (function () {
+    const hd = panel.querySelector('.hd');
+    let ox = 0, oy = 0, dragging = false;
+    const saved = JSON.parse(localStorage.getItem('mcpPanelPos') || 'null');
+    if (saved) {
+      panel.style.left = saved.l + 'px'; panel.style.top = saved.t + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    }
+    const start = (x, y) => { dragging = true; const b = panel.getBoundingClientRect(); ox = x - b.left; oy = y - b.top; };
+    const move = (x, y) => {
+      if (!dragging) return;
+      panel.style.left = (x - ox) + 'px'; panel.style.top = (y - oy) + 'px';
+      panel.style.right = 'auto'; panel.style.bottom = 'auto';
+    };
+    const end = () => {
+      if (!dragging) return;
+      dragging = false;
+      const b = panel.getBoundingClientRect();
+      localStorage.setItem('mcpPanelPos', JSON.stringify({ l: b.left, t: b.top }));
+    };
+    hd.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    window.addEventListener('mouseup', end);
+    hd.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    hd.addEventListener('touchmove', e => { const t = e.touches[0]; move(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+    hd.addEventListener('touchend', end);
+  })();
+
+  console.log('[mcp] 开关面板已挂上');
+})();
+</script>
+<script>
+/* ===== 工具调用记录面板（追加式，自包含）===== */
+(function () {
+  if (window.__toolPanel) return;
+  window.__toolPanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#tlBtn{position:fixed;left:12px;bottom:104px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#tlBtn.bad{border-color:#a8503f}
+#tlPanel{position:fixed;left:12px;bottom:160px;z-index:9999;width:min(90vw,340px);max-height:60vh;overflow:auto;
+  background:#141821;color:#e2e8f4;border:1px solid #3a4360;border-radius:14px;padding:10px 12px;
+  box-shadow:0 12px 34px rgba(0,0,0,.55);display:none;font-size:12.5px;line-height:1.4}
+#tlPanel .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;cursor:move}
+#tlPanel .hd b{color:#9db0d4;font-size:13px}
+#tlPanel .hd span{color:#7f8ba3;font-size:12px;padding:2px 6px;cursor:pointer}
+#tlPanel .c{padding:7px 0;border-top:1px solid #242b3a}
+#tlPanel .l1{display:flex;align-items:center;gap:6px}
+#tlPanel .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#tlPanel .tm{color:#6f7b93;font-size:11px}
+#tlPanel .ok{color:#7fd18b} #tlPanel .bad{color:#e18a7c}
+#tlPanel .l2{color:#8b97ad;font-size:11px;margin-top:2px;word-break:break-all}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'tlBtn'; btn.textContent = '🔧'; btn.title = '工具调用记录';
+  const panel = document.createElement('div');
+  panel.id = 'tlPanel';
+  panel.innerHTML = '<div class="hd"><b>工具调用</b><span id="tlRefresh">刷新</span></div>'
+    + '<div style="margin:2px 0 4px"><label style="color:#8b97ad;font-size:12px">'
+    + '<input id="tlOnlyBad" type="checkbox"> 只看失败</label></div><div id="tlList">…</div>';
+  document.body.appendChild(btn); document.body.appendChild(panel);
+
+  const listEl = panel.querySelector('#tlList');
+  const onlyBad = panel.querySelector('#tlOnlyBad');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  let timer = null;
+
+  function draw(items) {
+    if (!items.length) { listEl.innerHTML = '<div class="l2" style="padding:8px 0">还没有调用记录。</div>'; return; }
+    listEl.innerHTML = items.map(c =>
+      '<div class="c"><div class="l1"><span class="' + (c.ok ? 'ok' : 'bad') + '">' + (c.ok ? '✅' : '❌') + '</span>'
+      + '<span class="nm">' + esc(c.tool) + '</span><span class="tm">' + esc(c.t)
+      + (c.ms ? ' · ' + c.ms + 'ms' : '') + '</span></div>'
+      + (c.args ? '<div class="l2">入参：' + esc(c.args) + '</div>' : '')
+      + (c.err ? '<div class="l2 bad">错误：' + esc(c.err) + '</div>'
+               : (c.res ? '<div class="l2">结果：' + esc(c.res) + '</div>' : ''))
+      + '</div>').join('');
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/tools/log?limit=40', { cache: 'no-store' });
+      const j = await r.json();
+      let items = j.calls || [];
+      btn.classList.toggle('bad', items.slice(0, 5).some(c => !c.ok));
+      if (onlyBad.checked) items = items.filter(c => !c.ok);
+      draw(items);
+    } catch (e) { listEl.innerHTML = '<div class="l2 bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  btn.onclick = () => {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (timer) { clearInterval(timer); timer = null; }
+    if (!open) { load(); timer = setInterval(load, 5000); }
+  };
+  panel.querySelector('#tlRefresh').onclick = load;
+  onlyBad.onchange = load;
+
+  /* 可拖动（记住位置；复位：localStorage.removeItem('tlPanelPos')）*/
+  (function () {
+    const hd = panel.querySelector('.hd');
+    let ox = 0, oy = 0, d = false;
+    const saved = JSON.parse(localStorage.getItem('tlPanelPos') || 'null');
+    if (saved) { panel.style.left = saved.l + 'px'; panel.style.top = saved.t + 'px'; panel.style.bottom = 'auto'; }
+    const s0 = (x, y) => { d = true; const b = panel.getBoundingClientRect(); ox = x - b.left; oy = y - b.top; };
+    const m0 = (x, y) => { if (!d) return; panel.style.left = (x - ox) + 'px'; panel.style.top = (y - oy) + 'px'; panel.style.bottom = 'auto'; };
+    const e0 = () => { if (!d) return; d = false; const b = panel.getBoundingClientRect(); localStorage.setItem('tlPanelPos', JSON.stringify({ l: b.left, t: b.top })); };
+    hd.addEventListener('mousedown', e => s0(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => m0(e.clientX, e.clientY));
+    window.addEventListener('mouseup', e0);
+    hd.addEventListener('touchstart', e => { const t = e.touches[0]; s0(t.clientX, t.clientY); }, { passive: true });
+    hd.addEventListener('touchmove', e => { const t = e.touches[0]; m0(t.clientX, t.clientY); e.preventDefault(); }, { passive: false });
+    hd.addEventListener('touchend', e0);
+  })();
+
+  console.log('[toollog] 面板已挂上');
+})();
+</script>
+<script>
+/* ===== 实时活动面板：思考 / 在干嘛 / 工具调用（拦 SSE 流；追加式，自包含）===== */
+(function () {
+  if (window.__livePanel) return;
+  window.__livePanel = 1;
+
+  const st = document.createElement('style');
+  st.textContent = `
+#lvPill{position:fixed;left:50%;transform:translateX(-50%);top:6px;z-index:10000;max-width:92vw;
+  background:#151a24;color:#dfe6f3;border:1px solid #3a4360;border-radius:999px;padding:5px 12px;
+  font-size:12.5px;line-height:1.3;box-shadow:0 6px 20px rgba(0,0,0,.45);display:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+#lvBtn{position:fixed;left:12px;bottom:158px;z-index:9998;width:46px;height:46px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;
+  justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.45);cursor:pointer}
+#lvPanel{position:fixed;left:50%;transform:translateX(-50%);top:44px;z-index:10001;
+  width:min(92vw,430px);max-height:56vh;overflow:auto;background:#141821;color:#e2e8f4;
+  border:1px solid #3a4360;border-radius:14px;padding:10px 12px;box-shadow:0 12px 34px rgba(0,0,0,.55);
+  display:none;font-size:12.5px;line-height:1.5}
+#lvPanel h5{margin:0 0 6px;font-size:12.5px;color:#9db0d4;font-weight:600}
+#lvPanel .sec{margin-top:8px;border-top:1px solid #242b3a;padding-top:8px}
+#lvPanel .think{white-space:pre-wrap;color:#a9b6cd;max-height:22vh;overflow:auto;
+  background:#11151d;border-radius:8px;padding:6px 8px;font-size:12px}
+#lvPanel .trow{display:flex;gap:6px;align-items:baseline;margin-top:3px}
+#lvPanel .tname{flex:0 0 auto;font-weight:600}
+#lvPanel .targs{color:#8b97ad;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lvPanel .ok{color:#7fd18b} #lvPanel .bad{color:#e18a7c} #lvPanel .run{color:#e0c07a}
+#lvPanel .raw{color:#6f7b93;font-size:11px;word-break:break-all}`;
+  document.head.appendChild(st);
+
+  const pill = document.createElement('div'); pill.id = 'lvPill';
+  const btn = document.createElement('div'); btn.id = 'lvBtn'; btn.textContent = '🧠'; btn.title = '看它在干嘛';
+  const panel = document.createElement('div'); panel.id = 'lvPanel';
+  panel.innerHTML = '<h5>这一轮</h5><div id="lvStage" class="raw">（空）</div>'
+    + '<div class="sec"><h5>思考</h5><div id="lvThink" class="think">（还没有）</div></div>'
+    + '<div class="sec"><h5>工具</h5><div id="lvTools" class="raw">（还没有）</div></div>'
+    + '<div class="sec"><h5>原始事件（调试用，字段名对不上时把它截图给我）</h5><div id="lvRaw" class="raw">—</div></div>';
+  document.body.appendChild(pill); document.body.appendChild(btn); document.body.appendChild(panel);
+
+  let stage = '', think = '', tools = [], lastRaw = '', hideTimer = null;
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const cut = (s, n) => { s = typeof s === 'string' ? s : JSON.stringify(s); s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
+  const pick = (o, keys) => { for (const k of keys) { if (o[k] != null && o[k] !== '') return o[k]; } return ''; };
+  const el = id => document.getElementById(id);
+
+  function reset() { stage = ''; think = ''; tools = []; render(); }
+
+  function addTool(name, note, cls) {
+    const i = tools.findIndex(t => t.name === name && t.cls === 'run');
+    if (i >= 0) {
+      tools[i].note = note || tools[i].note;
+      tools[i].cls = cls || tools[i].cls;
+      tools[i].mark = cls === 'bad' ? '❌' : cls === 'ok' ? '✅' : '⏳';
+      return;
+    }
+    tools.push({ name: name || '?', note: note || '', cls: cls || 'run',
+                 mark: cls === 'bad' ? '❌' : cls === 'ok' ? '✅' : '⏳' });
+  }
+
+  function render() {
+    if (el('lvStage')) el('lvStage').textContent = stage || '（空）';
+    if (el('lvThink')) { el('lvThink').textContent = think || '（还没有）'; el('lvThink').scrollTop = 1e6; }
+    if (el('lvTools')) {
+      el('lvTools').innerHTML = tools.length ? tools.map(t =>
+        '<div class="trow"><span class="' + t.cls + '">' + t.mark + '</span>'
+        + '<span class="tname">' + esc(t.name) + '</span>'
+        + '<span class="targs">' + esc(cut(t.note, 90)) + '</span></div>').join('') : '（还没有）';
+    }
+    if (el('lvRaw')) el('lvRaw').textContent = cut(lastRaw, 220) || '—';
+
+    const running = tools.filter(t => t.cls === 'run').length;
+    const bad = tools.filter(t => t.cls === 'bad').length;
+    const bits = [];
+    if (stage) bits.push('🎬 ' + stage);
+    if (running) bits.push('🔧 ' + running + ' 个工具在跑');
+    else if (tools.length) bits.push('🔧 ' + tools.length + ' 个工具' + (bad ? '（' + bad + ' 失败）' : ' ✅'));
+    if (!tools.length && think) bits.push('🧠 在想…');
+    if (!bits.length) bits.push('⏳ 出手中…');
+    pill.textContent = bits.join(' · ');
+    pill.style.display = 'block';
+    pill.style.borderColor = bad ? '#a8503f' : '#3a4360';
+
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { pill.style.display = 'none'; }, 20000);
+  }
+
+  function onEvent(d, raw) {
+    lastRaw = raw;
+    const t = d.type;
+    if (t === 'recv') { reset(); }
+    else if (t === 'stage') { stage = String(pick(d, ['text', 't', 'msg', 's', 'content', 'stage']) || ''); }
+    else if (t === 'os') {
+      const x = pick(d, ['text', 'delta', 'content', 's', 'os', 't']);
+      if (x) { think += String(x); if (think.length > 20000) think = think.slice(-20000); }
+    }
+    else if (t === 'tool_live') {
+      addTool(String(pick(d, ['name', 'tool', 'fn', 'function']) || '?'), '启动…', 'run');
+    }
+    else if (t === 'tool') {
+      const n = String(pick(d, ['name', 'tool', 'fn', 'function']) || '?');
+      const a = pick(d, ['args', 'arg', 'params', 'arguments']);
+      addTool(n, a ? cut(a, 90) : '跑着…', 'run');
+    }
+    else if (t === 'tool_done') {
+      const n = String(pick(d, ['name', 'tool', 'fn', 'function']) || '?');
+      const bad = !!(d.err || d.error || d.fail || d.failed || d.isError)
+                || d.ok === 0 || d.ok === false || d.success === false;
+      const ms = d.ms || d.dur || d.elapsed || d.duration || '';
+      const note = (ms ? ms + 'ms' : '') + (d.err ? ' ' + cut(d.err, 60) : '');
+      const i = tools.findIndex(x => x.name === n && x.cls === 'run');
+      if (i >= 0) { tools[i].cls = bad ? 'bad' : 'ok'; tools[i].mark = bad ? '❌' : '✅'; tools[i].note = note || tools[i].note; }
+      else addTool(n, note, bad ? 'bad' : 'ok');
+    }
+    render();
+  }
+
+  /* ---- 拦流：只挑 text/event-stream 的响应，其它一律原样放行 ---- */
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const res = await _fetch(input, init);
+    try {
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('text/event-stream') && res.body && typeof res.body.tee === 'function') {
+        const [forUs, forThem] = res.body.tee();
+        pump(forUs);
+        return new Response(forThem, { status: res.status, statusText: res.statusText, headers: res.headers });
+      }
+    } catch (e) { /* 出任何问题都不打断聊天 */ }
+    return res;
+  };
+
+  async function pump(stream) {
+    const rd = stream.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    try {
+      for (;;) {
+        const { value, done } = await rd.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, i).trim();
+          buf = buf.slice(i + 1);
+          if (!line.startsWith('data:')) continue;
+          const raw = line.slice(5).trim();
+          if (!raw) continue;
+          try { onEvent(JSON.parse(raw), raw); } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+
+  function toggle() {
+    const open = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) render();
+  }
+  pill.onclick = toggle;
+  btn.onclick = toggle;
+  console.log('[live] 活动面板已挂上');
+})();
+</script>
+<script>
+/* ===== 控制台（追加式全屏浮层）：把散落的小气泡收成一处 ===== */
+(function () {
+  if (window.__console) return;
+  window.__console = 1;
+
+  /* 把老的浮层按钮收掉（功能都搬进来了） */
+  ['mcpBtn', 'mcpPanel', 'tlBtn', 'tlPanel', 'lvBtn', 'lvPill', 'lvPanel', 'memBtn', 'memBtnPanel']
+    .forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  document.querySelectorAll('[id^="memBtn"], [id^="tlBtn"], [id^="mcpBtn"], [id^="lvBtn"], [id^="lvPill"]')
+    .forEach(e => e.remove());
+
+  const st = document.createElement('style');
+  st.textContent = `
+#conBtn{position:fixed;right:12px;bottom:104px;z-index:10050;width:48px;height:48px;border-radius:50%;
+  background:#1e2330;color:#cfd8ea;border:1px solid #3a4360;display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:0 4px 16px rgba(0,0,0,.5);cursor:pointer}
+#con{position:fixed;inset:0;z-index:10060;background:#0f1218;color:#e3e9f5;display:none;font-size:13.5px;line-height:1.5}
+#con .hd{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #232a38;background:#12161f}
+#con .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#con .chip{padding:4px 10px;border:1px solid #39415a;border-radius:999px;color:#9db0d4;cursor:pointer;font-size:12.5px}
+#con .chip.on{background:#2b3550;color:#eaf0ff;border-color:#54648f}
+#con .x{padding:4px 12px;cursor:pointer;color:#9db0d4;font-size:16px}
+#con .body{padding:12px 14px 40px;overflow:auto;height:calc(100vh - 50px)}
+#con .card{background:#141924;border:1px solid #262e3e;border-radius:12px;padding:10px 12px;margin-bottom:10px}
+#con .row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #212838}
+#con .row:first-child{border-top:0}
+#con .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#con .sub{color:#8b97ad;font-size:11.5px;word-break:break-all}
+#con .ok{color:#7fd18b} #con .bad{color:#e18a7c} #con .run{color:#e0c07a}
+#con .sw{flex:0 0 auto;width:44px;height:24px;border-radius:12px;background:#39415a;position:relative;transition:.15s;cursor:pointer}
+#con .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#e8edf7;transition:.15s}
+#con .sw.on{background:#3d8b5f} #con .sw.on i{left:23px}
+#con button{background:#27304a;color:#dbe4f7;border:1px solid #3d4a6b;border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;margin-right:8px}
+#con .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+#con .kv{display:flex;gap:8px;padding:3px 0}
+#con .kv b{color:#9db0d4;font-weight:600;min-width:92px;flex:0 0 auto}`;
+  document.head.appendChild(st);
+
+  const btn = document.createElement('div');
+  btn.id = 'conBtn'; btn.textContent = '🧰'; btn.title = '控制台';
+  const box = document.createElement('div');
+  box.id = 'con';
+  box.innerHTML = '<div class="hd"><b>控制台</b><div class="chips">'
+    + '<span class="chip on" data-v="mcp">MCP</span>'
+    + '<span class="chip" data-v="tools">工具记录</span>'
+    + '<span class="chip" data-v="offline">离线时段</span>'
+    + '<span class="chip" data-v="about">说明</span></div><span class="x" id="conX">✕</span></div>'
+    + '<div class="body" id="conBody"></div>';
+  document.body.appendChild(btn); document.body.appendChild(box);
+
+  const body = box.querySelector('#conBody');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const cut = (s, n) => { s = typeof s === 'string' ? s : JSON.stringify(s); s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; };
+  const api = async (u, o) => (await fetch(u, o || { cache: 'no-store' })).json();
+  let view = 'mcp', timer = null;
+
+  async function viewMcp() {
+    try {
+      const j = await api('/api/mcp');
+      const items = j.servers || [];
+      if (!items.length) { body.innerHTML = '<div class="card">还没有登记任何 MCP。<div class="sub">下一步这里会有「登记表单」（stdio / Streamable HTTP / SSE + 自定义请求头）。现在也可以手写 data/mcp.json。</div></div>'; return; }
+      body.innerHTML = '<div class="card">' + items.map(s => {
+        const where = s.url || s.command || '';
+        const tools = (s.tools && s.tools.length) ? ('工具 ' + s.tools.length + '：' + esc(s.tools.slice(0, 6).join('、')) + (s.tools.length > 6 ? '…' : '')) : '没有工具';
+        const state = s.ok ? '<span class="ok">已连上</span>'
+          : (s.enabled ? '<span class="bad">连不上' + (s.err ? '：' + esc(cut(s.err, 80)) : '') + '</span>' : '<span class="sub">已关闭</span>');
+        return '<div class="row"><div style="flex:1;min-width:0"><div class="nm">' + esc(s.name) + '</div>'
+          + '<div class="sub">' + esc(where) + ' · ' + esc(s.type) + '</div>'
+          + '<div class="sub">' + state + ' · ' + tools + '</div></div>'
+          + '<div class="sw ' + (s.enabled ? 'on' : '') + '" data-name="' + esc(s.name) + '" data-on="' + (s.enabled ? 1 : 0) + '"><i></i></div></div>';
+      }).join('') + '</div>';
+    } catch (e) { body.innerHTML = '<div class="card bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  async function viewTools() {
+    body.innerHTML = '<div class="bar"><button id="tR">刷新</button>'
+      + '<label class="sub"><input id="tB" type="checkbox"> 只看失败</label>'
+      + '<span class="sub">最近 100 条 · data/tool_calls.jsonl</span></div><div class="card" id="tL">读取中…</div>';
+    const draw = async () => {
+      try {
+        const j = await api('/api/tools/log?limit=100');
+        let items = j.calls || [];
+        if (body.querySelector('#tB').checked) items = items.filter(c => !c.ok);
+        body.querySelector('#tL').innerHTML = items.length ? items.map(c =>
+          '<div class="row"><div style="flex:1;min-width:0">'
+          + '<div class="nm">' + (c.ok ? '<span class="ok">✅</span> ' : '<span class="bad">❌</span> ') + esc(c.tool)
+          + '<span class="sub"> ' + esc(c.t) + (c.ms ? ' · ' + c.ms + 'ms' : '') + '</span></div>'
+          + (c.args && c.args !== '{}' ? '<div class="sub">入参：' + esc(c.args) + '</div>' : '')
+          + (c.err ? '<div class="sub bad">错误：' + esc(c.err) + '</div>'
+                   : (c.res ? '<div class="sub">结果：' + esc(cut(c.res, 180)) + '</div>' : ''))
+          + '</div></div>').join('') : '<div class="sub">还没有记录</div>';
+      } catch (e) { body.querySelector('#tL').innerHTML = '<span class="bad">读不到：' + esc(e.message) + '</span>'; }
+    };
+    body.querySelector('#tR').onclick = draw;
+    body.querySelector('#tB').onchange = draw;
+    await draw();
+  }
+
+  async function viewOffline() {
+    try {
+      const j = await api('/api/offline');
+      const d = j.state || j.data || j || {};
+      const t = v => { const n = Number(v); if (!n) return '—'; return new Date((n > 1e11 ? n / 1000 : n) * 1000).toLocaleString(); };
+      body.innerHTML = '<div class="card">'
+        + '<div class="kv"><b>开关</b><span>' + (d.enabled ? '已启用' : '未启用') + '</span></div>'
+        + '<div class="kv"><b>状态</b><span>' + (d.active ? '<span class="run">正在自由</span>' : '空闲') + '</span></div>'
+        + '<div class="kv"><b>本场开始</b><span>' + t(d.started) + '</span></div>'
+        + '<div class="kv"><b>上次结束</b><span>' + t(d.last) + '</span></div>'
+        + '<div class="kv"><b>下次可跑</b><span>' + t(d.next_due) + '</span></div>'
+        + '<div class="kv"><b>静默门槛</b><span>' + (d.idle_min || '?') + ' 分钟</span></div>'
+        + '<div class="kv"><b>单场上限</b><span>' + (d.max_min || '?') + ' 分钟</span></div>'
+        + '<div class="kv"><b>上次成绩</b><span>' + (d.turns != null ? (d.turns + ' 轮 · ' + (d.chars || 0) + ' 字 · ' + (d.dur || 0) + ' 秒') : '—') + '</span></div></div>'
+        + '<div class="bar"><button id="oD">试跑一场（不留痕）</button><button id="oR">真跑一场</button>'
+        + '<span class="sub">真跑会占掉「这一轮离开」的名额</span></div>';
+      body.querySelector('#oD').onclick = async () => { await api('/api/offline/run?dry=1', { method: 'POST' }); alert('已开跑（试跑）'); };
+      body.querySelector('#oR').onclick = async () => { if (confirm('真跑一场？会写进私密库，并占掉这一轮离开的名额。')) { await api('/api/offline/run', { method: 'POST' }); alert('已开跑'); } };
+    } catch (e) { body.innerHTML = '<div class="card bad">读不到：' + esc(e.message) + '</div>'; }
+  }
+
+  function viewAbout() {
+    body.innerHTML = '<div class="card">'
+      + '<div class="kv"><b>这是什么</b><span>把散落的浮层收成一处：MCP 开关 / 工具记录 / 离线时段。</span></div>'
+      + '<div class="kv"><b>下一步</b><span>MCP 登记表单（stdio · Streamable HTTP · SSE + 自定义请求头）、记忆增删改、聊天里的实时「思考 + 工具」。</span></div>'
+      + '<div class="kv"><b>说明</b><span>老的 🔌 / 🔧 / 🧠 按钮已被接管（还在文件里，但不再显示）。</span></div></div>';
+  }
+
+  async function paint() {
+    clearInterval(timer); timer = null;
+    if (view === 'mcp') { await viewMcp(); timer = setInterval(viewMcp, 15000); }
+    else if (view === 'tools') { await viewTools(); }
+    else if (view === 'offline') { await viewOffline(); timer = setInterval(viewOffline, 10000); }
+    else viewAbout();
+  }
+
+  box.querySelectorAll('.chip').forEach(c => {
+    c.onclick = () => {
+      box.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      c.classList.add('on'); view = c.dataset.v; paint();
+    };
+  });
+  box.querySelector('#conX').onclick = () => { box.style.display = 'none'; clearInterval(timer); };
+  btn.onclick = () => { box.style.display = 'block'; paint(); };
+
+  body.addEventListener('click', async ev => {
+    const sw = ev.target.closest && ev.target.closest('.sw');
+    if (!sw || view !== 'mcp') return;
+    sw.style.opacity = .5;
+    try {
+      await api('/api/mcp/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: sw.dataset.name, enabled: sw.dataset.on !== '1' })
+      });
+      await viewMcp();
+    } catch (e) { alert('切换失败：' + e.message); }
+  });
+
+  console.log('[console] 控制台已挂上');
+})();
+</script>
+<script>
+/* ===== 控制台·实时板块：思考链 + 工具 + 诊断（追加式）===== */
+(function () {
+  if (window.__liveBoard) return;
+  window.__liveBoard = 1;
+
+  const con = document.getElementById('con');
+  if (!con) { console.warn('[live] 没找到控制台（先把 🧰 那段粘上）'); return; }
+  const chips = con.querySelector('.chips');
+  const body = con.querySelector('#conBody');
+
+  const st = document.createElement('style');
+  st.textContent = '#con .think-box{white-space:pre-wrap;color:#a9b6cd;max-height:34vh;overflow:auto;'
+    + 'background:#11151d;border-radius:8px;padding:6px 8px;font-size:12px;word-break:break-word}';
+  document.head.appendChild(st);
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+
+  const events = [], reqs = [];
+  function note(type, text) { events.push({ t: new Date().toLocaleTimeString(), type: type, text: String(text).slice(0, 3000) }); if (events.length > 300) events.shift(); }
+  function noteReq(m, url, ct, how) { reqs.push({ t: new Date().toLocaleTimeString(), m: m, url: url, ct: ct, how: how }); if (reqs.length > 80) reqs.shift(); }
+
+  /* 认识 protocol.py 里那套事件 */
+  function handleLine(raw, how) {
+    let line = String(raw || '').trim();
+    if (!line) return;
+    if (line.startsWith('data:')) line = line.slice(5).trim();
+    if (line[0] !== '{') return;
+    let d; try { d = JSON.parse(line); } catch (e) { return; }
+    if (!d || !d.type) return;
+    const t = d.type;
+    if (t === 'recv') { events.length = 0; note('recv', '（新请求）'); return; }
+    if (t === 'stage') { note('stage', d.text || ''); return; }
+    if (t === 'os') { note('think', d.delta || d.text || ''); return; }
+    if (t === 'tool_live') { note('tool', '▶ ' + (d.name || '?')); return; }
+    if (t === 'tool') { note('tool', '🔧 ' + (d.name || '?') + ' ' + String(d.args || d.params || '').slice(0, 140)); return; }
+    if (t === 'tool_done') { note('tool', (d.err ? '❌ ' : '✅ ') + (d.name || '?') + (d.ms ? ' ' + d.ms + 'ms' : '') + (d.err ? ' ' + d.err : '')); return; }
+    if (t === 'say') { note('say', String(d.text || '').slice(0, 140)); return; }
+    if (t === 'error') { note('error', String(d.text || d.error || '').slice(0, 300)); return; }
+    note(t, JSON.stringify(d).slice(0, 200));
+  }
+  function handleBlock(text, how) { String(text || '').split('\n').forEach(l => handleLine(l, how)); }
+
+  /* ── 钩子 1：fetch ── */
+  if (window.fetch) {
+    const _f = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      const res = await _f(input, init);
+      try {
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        noteReq((init && init.method) || 'GET', url, ct, 'fetch');
+        if (res.body && typeof res.body.tee === 'function' &&
+            (ct.includes('event-stream') || ct.includes('ndjson') || ct.includes('text/plain'))) {
+          const pair = res.body.tee();
+          pumpLines(pair[0], 'fetch');
+          return new Response(pair[1], { status: res.status, statusText: res.statusText, headers: res.headers });
+        }
+      } catch (e) {}
+      return res;
+    };
+  }
+  async function pumpLines(stream, how) {
+    const rd = stream.getReader(); const dec = new TextDecoder(); let buf = '';
+    try {
+      for (;;) {
+        const r = await rd.read(); if (r.done) break;
+        buf += dec.decode(r.value, { stream: true });
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) { handleLine(buf.slice(0, i), how); buf = buf.slice(i + 1); }
+        if (buf.length > 100000) buf = '';
+      }
+      if (buf.trim()) handleLine(buf, how);
+    } catch (e) {}
+  }
+
+  /* ── 钩子 2：XHR ── */
+  (function () {
+    const _open = XMLHttpRequest.prototype.open, _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u) { try { this.__lm = { m: m, u: u, n: 0 }; } catch (e) {} return _open.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () {
+      try {
+        const tap = () => {
+          try {
+            if (this.responseType && this.responseType !== 'text') return;
+            const t = this.responseText || '';
+            const cut = t.lastIndexOf('\n');
+            const from = (this.__lm && this.__lm.n) || 0;
+            if (cut <= from) return;
+            handleBlock(t.slice(from, cut), 'xhr');
+            if (this.__lm) this.__lm.n = cut + 1;
+          } catch (e) {}
+        };
+        this.addEventListener('progress', tap);
+        this.addEventListener('load', () => {
+          try { noteReq((this.__lm && this.__lm.m) || '?', (this.__lm && this.__lm.u) || '', this.getResponseHeader('content-type') || '', 'xhr'); } catch (e) {}
+          tap();
+        });
+      } catch (e) {}
+      return _send.apply(this, arguments);
+    };
+  })();
+
+  /* ── 钩子 3：WebSocket ── */
+  if (window.WebSocket) {
+    const _W = window.WebSocket;
+    const W = function (url, p) {
+      const ws = new _W(url, p);
+      try { noteReq('WS', String(url), '', 'websocket'); ws.addEventListener('message', ev => handleBlock(String(ev.data), 'ws')); } catch (e) {}
+      return ws;
+    };
+    W.prototype = _W.prototype;
+    ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'].forEach(k => { try { W[k] = _W[k]; } catch (e) {} });
+    window.WebSocket = W;
+  }
+
+  /* ── 钩子 4：ServiceWorker 转发过来的消息 ── */
+  if (navigator.serviceWorker) {
+    try { navigator.serviceWorker.addEventListener('message', ev => { try { handleBlock(JSON.stringify(ev.data), 'sw'); } catch (e) {} }); } catch (e) {}
+  }
+
+  /* ── 画板子 ── */
+  function draw() {
+    const think = events.filter(e => e.type === 'think').map(e => e.text).join('').slice(-6000);
+    const others = events.filter(e => e.type !== 'think').slice(-40);
+    body.innerHTML =
+      '<div class="card"><div class="sub">思考链（' + think.length + ' 字）</div>'
+      + '<div class="think-box">' + esc(think || '（还没有。如果一直是空的，看下面「捕获的请求」）') + '</div></div>'
+      + '<div class="card"><div class="sub">其他事件（stage / tool / say / error）</div>'
+      + (others.map(e => '<div class="row"><div style="flex:1;min-width:0"><div class="nm">'
+          + esc(e.type) + ' <span class="sub">' + esc(e.t) + '</span></div><div class="sub">' + esc(e.text) + '</div></div></div>').join('')
+         || '<div class="sub">还没有</div>') + '</div>'
+      + '<div class="card"><div class="sub">捕获的请求（诊断：一直空 = 流在 Worker 内部）</div>'
+      + (reqs.slice().reverse().map(r => '<div class="row"><div style="flex:1;min-width:0"><div class="nm">'
+          + esc(r.m) + ' <span class="sub">' + esc(r.how) + ' · ' + esc(r.t) + '</span></div>'
+          + '<div class="sub">' + esc(r.url) + ' · ' + esc(r.ct) + '</div></div></div>').join('')
+         || '<div class="sub">还没有</div>') + '</div>'
+      + '<div class="bar"><button id="lvRe">刷新</button><button id="lvClr">清空</button>'
+      + '<span class="sub">换一句聊天后回来点「刷新」</span></div>';
+    const r = body.querySelector('#lvRe'); if (r) r.onclick = draw;
+    const c = body.querySelector('#lvClr'); if (c) c.onclick = () => { events.length = 0; reqs.length = 0; draw(); };
+  }
+
+  const chip = document.createElement('span');
+  chip.className = 'chip'; chip.textContent = '实时';
+  chip.onclick = () => {
+    con.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+    chip.classList.add('on');
+    const ab = con.querySelector('.chip[data-v="about"]');
+    if (ab) ab.click();                 /* 借它把别的板块轮询停掉 */
+    setTimeout(draw, 0);
+  };
+  chips.appendChild(chip);
+
+  window.__liveDump = () => ({ events: events.slice(-60), reqs: reqs.slice(-20) });
+  console.log('[live] 实时板块已挂上');
+})();
+</script>
+<script>
+/* 紧急卸载：把我们加过的副作用全撤回，页面恢复原样 */
+(function () {
+  try { delete window.fetch; } catch (e) {}          /* 交还给浏览器原生 fetch */
+  try { delete window.WebSocket; } catch (e) {}      /* 交还给原生 WebSocket */
+  window.__console = 1; window.__liveBoard = 1;      /* 防止旧脚本重新装 */
+  ['conBtn', 'con', 'lvBtn', 'lvPill', 'lvPanel', 'tlBtn', 'tlPanel', 'mcpBtn', 'mcpPanel',
+   'memBtn', 'memBtnPanel'].forEach(id => { const e = document.getElementById(id); if (e) e.remove(); });
+  document.querySelectorAll('[id^="tlBtn"], [id^="mcpBtn"], [id^="lvBtn"], [id^="lvPill"], [id^="conBtn"]')
+    .forEach(e => e.remove());
+  console.log('[kill] 已卸载');
 })();
 </script>

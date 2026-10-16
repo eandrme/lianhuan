@@ -50,6 +50,20 @@ app = FastAPI(title="连环 · 开源版")
 store = SqliteStore(_datadir.home_db())
 jobs = JobRegistry()
 
+
+# ── 出厂态（LIANHUAN_BARE）─────────────────────────────────
+# 只发一句极简 system，其余注入一律不发：人设 / 记忆 / 今日 / 近聊 / 表情包 /
+# 〔〕格式约定 / 助手署名 / 工具三条规矩 / 「想多深」那句话 / Ombre 浮现。
+# 跟 `tone` 那种最小应用一个样子 —— 不加戏、不摆客服脸。
+# ★ 代码里默认**关**：跑测试、老部署行为一字不变；
+#   真机在 .env 里写 LIANHUAN_BARE=1 打开，写 0 就退回旧的拼装。
+_BARE_SYSTEM = "你是一个中文 AI 助手。正常回话就行。"
+
+
+def _bare() -> bool:
+    return (os.environ.get("LIANHUAN_BARE", "") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 # ── 门（0830 加的，默认整个不生效）────────────────────────────
 # 只听 127.0.0.1 的时候一行都不拦；开了 --lan 才装上（见 core/gate.py 里那张表）。
 # ★ 会起进程的接口：纯本机可用；开门后默认全关，明确声明直连本机时才开。
@@ -385,19 +399,27 @@ async def chat(req: Request):
     # ★ 没配过助手（老库 / 刚装好）→ assistant 是 None，下面三处一个字都不改。
     #   配过之后：人设换成他这份、系统提示词换成他这份、工具按他的许可过滤。
     assistant = _asst.assistant_of(store, session_id)
-    system = build_injection(store, msg, exclude_id=uid, include_dialogue=False, here=channel,
-                             persona=_asst.persona_for(store, assistant),
-                             session_id=session_id)
-    _sign = _asst.sign_line(assistant)
-    if _sign:
-        system += "\n\n" + _sign
-    _ombre = ombre_block(session_id)
-    if _ombre:
-        system = system + "\n" + _ombre
+    _bare_mode = _bare()
+    # ★ 记忆阀门（设置页那枚开关）：关掉就当没有记忆这回事 —— 出厂态和老行为都受它管。
+    _mem_on = bool(store.get_setting("ombre_memory", True))
+    if _bare_mode:
+        # 出厂态（A）：人设 / 格式约定 / 助手署名一律不拼 —— 只发那一句 + Ombre 记忆浮现。
+        _ombre = ombre_block(session_id) if _mem_on else ""
+        system = _BARE_SYSTEM + (("\n\n" + _ombre) if _ombre else "")
+    else:
+        system = build_injection(store, msg, exclude_id=uid, include_dialogue=False, here=channel,
+                                 persona=_asst.persona_for(store, assistant),
+                                 session_id=session_id)
+        _sign = _asst.sign_line(assistant)
+        if _sign:
+            system += "\n\n" + _sign
+        _ombre = ombre_block(session_id) if _mem_on else ""
+        if _ombre:
+            system = system + "\n" + _ombre
     # ★ 0831（GPT 三轮 P0-03）：真实模型出现过「没调用工具、库里没变化，
     #   却用完成语气回话」。产品这边把真实状态做可见了（工具脚注、失败明说），
     #   模型这边就靠这条硬规矩。
-    if getattr(pick_engine(), "tools", None):
+    if not _bare_mode and getattr(pick_engine(), "tools", None):
             # ── 巢：MCP 接上后模型逮啥调啥，补一条「什么时候别用工具」──
         system += ("\n\n〔少动手〕工具不是每句话都要用。闲聊、回应情绪、说感受、"
                "回答你已经知道的事 —— 这些时候一次工具都别调；"
@@ -445,7 +467,7 @@ async def chat(req: Request):
     #      认这个字段的家（DeepSeek V4、o 系那类）是真会少想/多想的
     # ★ 只管聊天这条路：主动消息 / 离线那几条不读它（用户拨的是聊天界面那枚）。
     _think_mode = _think.mode(store)
-    _think_nudge = _think.nudge(_think_mode)
+    _think_nudge = "" if _bare_mode else _think.nudge(_think_mode)
     if _think_nudge:
         system = system + "\n\n" + _think_nudge
     # ── MCP：这位助手能用的那几个（第一位的 None＝不限，老行为一字不差）──
@@ -669,7 +691,9 @@ async def api_redo(req: Request):
         f"（不用写什么『教训』、不用总结分寸——你不是要记一条规则去更顺着说，"
         f"是当下用你的判断把话说对。）〕"
     )
-    system = build_injection(store, user_msg, session_id=session_id)
+    # ★ 出厂态：连重说也走那句极简 system —— 否则一按「重新生成」就穿帮。
+    system = (_BARE_SYSTEM if _bare() else
+              build_injection(store, user_msg, session_id=session_id))
     history = [{"role": t.role, "content": t.content} for t in store.recent_turns(25)]
     turn = EngineTurn(message=redo_prompt, system=system, history=history, session_id=session_id)
     eng = pick_engine()
@@ -1506,6 +1530,21 @@ async def think_set(req: Request):
                             status_code=400)
     store.set_setting("think", mode)
     return {"ok": True, "mode": mode, "effort": _think.effort(mode)}
+
+#: Ombre 记忆阀门：库里一个开关，设置页里点。
+#: ★ 它只管「记忆那一段要不要注入」；能不能连上 Ombre 另由
+#:   OMBRE_INJECT / OMBRE_HOOK_TOKEN 决定（那是接线总闸）。
+@app.get("/api/ombre")
+def ombre_get():
+    return {"on": bool(store.get_setting("ombre_memory", True))}
+
+
+@app.post("/api/ombre")
+async def ombre_set(req: Request):
+    b = await req.json()
+    on = bool(b.get("on"))
+    store.set_setting("ombre_memory", on)
+    return {"ok": True, "on": on}
 
 
 # ══ Web Push ＋ 主动找你（0831 定的：主动消息也是有用的，要做）══
