@@ -94,6 +94,10 @@ def _fts5_works(conn) -> bool:
 # 跟着「搬家」走的用户账本。设备订阅、密钥、缓存和本机文件故意不在这里：
 # `push_subs` 绑具体浏览器，`secrets.json` 根本不在数据库，上传文件另行搬。
 # 名单写死而不是遍历 sqlite_master，避免将来某个临时表悄悄混进导出。
+# ★ 名单里留着已删模块的表（notes / diary / letters / timeline_events / mood_state / mood_log）：
+#   export_all 按名单导出；这些表在当前库里可能已无内容、甚至已无建表语句，
+#   但**不能从名单里摘** —— 否则旧版导出的 house 会带这些表，导入时被预校验
+#   「house 里有不认识的表」整批拒绝。
 PORTABLE_TABLES = (
     "notes", "diary", "letters", "moments", "moment_comments", "timeline_events",
     "mood_state", "mood_log", "memes", "workbook", "trips", "calendar",
@@ -452,8 +456,13 @@ class SqliteStore(Store):
                 self.db.execute("DELETE FROM turns")
                 self.db.execute("DELETE FROM memories")   # fts 由触发器跟着删
                 for table in reversed(PORTABLE_TABLES):
-                    if table in house:
-                        self.db.execute(f'DELETE FROM "{table}"')
+                    if table not in house:
+                        continue
+                    # ★ 本机没有这张表（已删模块留下的：mood_state / mood_log …）就当场说清，
+                    #   别让下面那条 DELETE 抛原始的 `no such table` —— merge 那条路报的就是这句。
+                    if not self.db.execute(f'PRAGMA table_info("{table}")').fetchall():
+                        raise ValueError(f"当前版本没有 house.{table}")
+                    self.db.execute(f'DELETE FROM "{table}"')
                 self.db.execute(
                     f'DELETE FROM settings WHERE k IN ({",".join("?" for _ in PORTABLE_SETTINGS)})',
                     PORTABLE_SETTINGS)

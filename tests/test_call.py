@@ -177,7 +177,7 @@ class TestToneAndTags(unittest.TestCase):
         self.assertIn("[whispers]", out)
 
     def test_the_mood_marker_is_never_spoken_aloud(self):
-        """★ 0901 抓到的：‹心情 …› 是**记账用的**，从来不是要说出口的话。
+        """★ 0901 抓到的：‹心情 …› 这类带内标记，从来不是要说出口的话。
 
         文字聊天那条路上 apply_marker 会先把它抠走，所以一直没人发现这儿漏了 ——
         电话那条路不走 apply_marker，于是它被原样念了出来（字幕上也是原文）。
@@ -191,16 +191,16 @@ class TestToneAndTags(unittest.TestCase):
             self.assertNotIn("+5", out, engine + "：分数被念出去了")
             self.assertIn("我在这儿呢", out, engine + "：正文不该被一起吃掉")
 
-    def test_the_call_path_still_books_that_mood(self):
-        """不念出口是一半，另一半是**得记上** —— 电话里记的心情原来永不入账。"""
+    def test_the_call_path_still_strips_the_mood_marker(self):
+        """不念出口是一半，另一半是**落库前得清掉** —— 电话那条路原来漏了这一步。"""
         src = (Path(__file__).resolve().parent.parent
                / "optional/callkit/duplex.py").read_text(encoding="utf-8")
         i = src.find('whole = "|||".join(buf)')
         self.assertGreater(i, 0, "落库那一段不见了")
         seg = src[i:i + 900]
-        self.assertIn("apply_marker", seg, "落库之前要把心情抠出来记账")
+        self.assertIn("apply_marker", seg, "落库之前要把记号从正文里清掉")
         self.assertIn("untrusted", seg,
-                      "口径要跟文字那边一样：对方的话里也带了记号就整轮不记账")
+                      "口径要跟文字那边一样：对方的话里也带了记号就只清正文")
 
     def test_split_marker_becomes_a_pause_not_three_bars(self):
         from core import speech
