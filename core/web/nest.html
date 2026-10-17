@@ -635,18 +635,22 @@ function thinkEl(text){
   const p=el("pre");p.textContent=text||"";
   d.append(s,p);return d;
 }
+/* ★ 工具名翻成人话：库里记的是真名（write_memory…），界面上要让「他到底动没动手」一眼看懂。
+   没登记的原样显示 —— 不猜。 */
+const TNAME={write_memory:"记了一条记忆",search_memory:"翻了翻记忆",set_sign:"改了签名",post_moment:"发了条动态",pick_kaomoji:"挑了个颜文字",send_sticker:"发了个表情包",add_meme:"收了个梗",install_pack:"装了个功能包"};
 function toolEl(name,state,ms,err,args){
   const d=el("div","tool");d.dataset.state=state||"run";d.dataset.name=name||"";
   const h=el("div","thead");
   const _t=el("span","ticon"); _t.append(nestIcon(state==="ok"?"check":(state==="err"?"close":"clock"),15));
   h.append(_t);
-  h.append(el("span","tname",name||"tool"));
+  h.append(el("span","tname",TNAME[name]||name||"tool"));
   if(ms!=null)h.append(el("span","tms",ms+"ms"));
   h.append(el("span","tcar","▾"));
   const b=el("div","tbody");
   if(args){const a=el("pre","targ");a.textContent=args;b.append(a);}
   if(err){const e=el("pre","terr");e.textContent=err;b.append(e);}
-  if(!args&&!err)b.append(el("pre","targ","（点开看参数）"));
+  /* ★ 历史这笔账只记了 name/ok/err，没有参数 —— 别写「点开看参数」骗人点。 */
+  if(!args&&!err)b.append(el("pre","targ","只记了成败，这一步没留参数"));
   d.append(h,b);
   h.onclick=()=>d.classList.toggle("open");
   return d;
